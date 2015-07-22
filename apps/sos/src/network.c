@@ -29,8 +29,8 @@
 #include <nfs/nfs.h>
 #include <lwip/init.h>
 #include <netif/etharp.h>
-#include <ethdrivers/lwip_iface.h>
-#include <ethdrivers/imx6EthernetCard.h>
+#include <ethdrivers/lwip.h>
+#include <ethdrivers/imx6.h>
 #include <cspace/cspace.h>
 
 #include "dma.h"
@@ -58,14 +58,13 @@ extern const seL4_BootInfo* _boot_info;
 static struct net_irq {
     int irq;
     seL4_IRQHandler cap;
-} *_net_irqs = NULL;
-static int _nirqs = 0;
+} _net_irqs[1];
 
 static seL4_CPtr _irq_ep;
 
 fhandle_t mnt_point = { { 0 } };
 
-struct netif *_netif;
+lwip_iface_t *lwip_iface;
 
 /*******************
  ***  OS support ***
@@ -92,7 +91,7 @@ sos_usleep(int usecs) {
     }
 
     /* Handle pending network traffic */
-    while(ethif_input(_netif));
+    ethif_lwip_poll(lwip_iface);
 }
 
 /*******************
@@ -100,18 +99,15 @@ sos_usleep(int usecs) {
  *******************/
 void 
 network_irq(void) {
+    int err;
     int i;
     /* skip if the network was not initialised */
     if(_irq_ep == seL4_CapNull){
         return;
     }
-    /* Loop through network irqs until we find a match */
-    for(i = 0; i < _nirqs; i++){
-        int err;
-        ethif_handleIRQ(_netif, _net_irqs[i].irq);
-        err = seL4_IRQHandler_Ack(_net_irqs[i].cap);
-        assert(!err);
-    }
+    ethif_lwip_handle_irq(lwip_iface, 150);
+    err = seL4_IRQHandler_Ack(_net_irqs[0].cap);
+    assert(!err);
 }
 
 static seL4_CPtr
@@ -141,10 +137,10 @@ network_prime_arp(struct ip_addr *gw){
     struct ip_addr* ip;
     while(timeout > 0){
         /* Send an ARP request */
-        etharp_request(_netif, gw);
+        etharp_request(lwip_iface->netif, gw);
         /* Wait for the response */
         sos_usleep(ARP_PRIME_RETRY_DELAY_MS * 1000);
-        if(etharp_find_addr(_netif, gw, &eth, &ip) == -1){
+        if(etharp_find_addr(lwip_iface->netif, gw, &eth, &ip) == -1){
             timeout += ARP_PRIME_RETRY_DELAY_MS;
         }else{
             return;
@@ -155,8 +151,6 @@ network_prime_arp(struct ip_addr *gw){
 void 
 network_init(seL4_CPtr interrupt_ep) {
     struct ip_addr netmask, ipaddr, gw;
-    struct eth_driver* eth_driver;
-    const int* irqs;
     int err;
     int i;
 
@@ -194,26 +188,22 @@ network_init(seL4_CPtr interrupt_ep) {
     printf("\n");
 
     /* low level initialisation */
-    eth_driver = ethif_imx6_init(0, io_ops);
-    assert(eth_driver);
+    lwip_iface = ethif_new_lwip_driver(io_ops, NULL, ethif_imx6_init, NULL);
+    assert(lwip_iface);
 
     /* Initialise IRQS */
-    irqs = ethif_enableIRQ(eth_driver, &_nirqs);
-    _net_irqs = (struct net_irq*)calloc(_nirqs, sizeof(*_net_irqs));
-    for(i = 0; i < _nirqs; i++){
-        _net_irqs[i].irq = irqs[i];
-        _net_irqs[i].cap = enable_irq(irqs[i], _irq_ep);
-    }
+    _net_irqs[0].irq = 150;
+    _net_irqs[0].cap = enable_irq(150, _irq_ep);
 
     /* Setup the network interface */
     lwip_init();
-    _netif = (struct netif*)malloc(sizeof(*_netif));
-    assert(_netif != NULL);
-    _netif = netif_add(_netif, &ipaddr, &netmask, &gw, 
-                       eth_driver, ethif_init, ethernet_input);
-    assert(_netif != NULL);
-    netif_set_up(_netif);
-    netif_set_default(_netif);
+    struct netif *netif = malloc(sizeof(*netif));
+    assert(netif);
+    lwip_iface->netif = netif_add(netif, &ipaddr, &netmask, &gw,
+                         lwip_iface, ethif_get_ethif_init(lwip_iface), ethernet_input);
+    assert(lwip_iface->netif != NULL);
+    netif_set_up(lwip_iface->netif);
+    netif_set_default(lwip_iface->netif);
 
     /*
      * LWIP does not queue packets while waiting for an ARP response 
