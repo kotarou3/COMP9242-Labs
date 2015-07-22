@@ -1,0 +1,75 @@
+[core]
+	repositoryformatversion = 0
+	filemode = true
+	bare = false
+	logallrefupdates = true
+[remote "stree-kernel"]
+	url = https://www.github.com/seL4/seL4.git
+	fetch = +refs/heads/experimental:refs/remotes/stree-kernel/experimental
+[stree "kernel"]
+	prefix = kernel
+	branch = experimental
+	latest-sync = 27cdce4
+[remote "stree-libcpio"]
+	url = https://www.github.com/seL4/libcpio.git
+	fetch = +refs/heads/master:refs/remotes/stree-libcpio/master
+[stree "libcpio"]
+	prefix = libs/libcpio
+	branch = master
+	latest-sync = 9faa0ad
+[remote "stree-libelf"]
+	url = https://www.github.com/seL4/libelf.git
+	fetch = +refs/heads/master:refs/remotes/stree-libelf/master
+[stree "libelf"]
+	prefix = libs/libelf
+	branch = master
+	latest-sync = a510374
+[remote "stree-libethdrivers"]
+	url = https://www.github.com/seL4/libethdrivers.git
+	fetch = +refs/heads/master:refs/remotes/stree-libethdrivers/master
+[stree "libethdrivers"]
+	prefix = libs/libethdrivers
+	branch = master
+	latest-sync = d14cbce
+[remote "stree-libmuslc"]
+	url = https://www.github.com/seL4/libmuslc.git
+	fetch = +refs/heads/master:refs/remotes/stree-libmuslc/master
+[stree "libmuslc"]
+	prefix = libs/libmuslc
+	branch = master
+	latest-sync = 88bc16c
+[remote "stree-libplatsupport"]
+	url = https://www.github.com/seL4/libplatsupport.git
+	fetch = +refs/heads/master:refs/remotes/stree-libplatsupport/master
+[stree "libplatsupport"]
+	prefix = libs/libplatsupport
+	branch = master
+	latest-sync = 57a07ad
+[remote "stree-libutils"]
+	url = https://www.github.com/seL4/libutils.git
+	fetch = +refs/heads/master:refs/remotes/stree-libutils/master
+[stree "libutils"]
+	prefix = libs/libutils
+	branch = master
+	latest-sync = 97e2cdf
+[remote "stree-kbuild-tool"]
+	url = https://www.github.com/seL4/kbuild-tool.git
+	fetch = +refs/heads/master:refs/remotes/stree-kbuild-tool/master
+[stree "kbuild-tool"]
+	prefix = tools/kbuild
+	branch = master
+	latest-sync = 13e2680
+[remote "stree-elfloader-tool"]
+	url = https://www.github.com/seL4/elfloader-tool.git
+	fetch = +refs/heads/master:refs/remotes/stree-elfloader-tool/master
+[stree "elfloader-tool"]
+	prefix = tools/elfloader
+	branch = master
+	latest-sync = 6b8e359
+[remote "stree-common-tool"]
+	url = https://www.github.com/seL4/common-tool.git
+	fetch = +refs/heads/master:refs/remotes/stree-common-tool/master
+[stree "common-tool"]
+	prefix = tools/common
+	branch = master
+	latest-sync = 1fc8927
