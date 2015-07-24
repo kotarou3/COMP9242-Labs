@@ -43,12 +43,10 @@ typedef int st_type_t;
 typedef struct {
   st_type_t st_type;    /* file type */
   fmode_t   st_fmode;   /* access mode */
-  size_t    st_size;    /* file size in bytes */
+  unsigned  st_size;    /* file size in bytes */
   long      st_ctime;   /* file creation time (ms since booting) */
   long      st_atime;   /* file last access (open) time (ms since booting) */
 } sos_stat_t;
-
-typedef int fildes_t;
 
 typedef int pid_t;
 
@@ -61,7 +59,7 @@ typedef struct {
 
 /* I/O system calls */
 
-fildes_t sos_sys_open(const char *path, fmode_t mode);
+int sos_sys_open(const char *path, fmode_t mode);
 /* Open file and return file descriptor, -1 if unsuccessful
  * (too many open files, console already open for reading).
  * A new file should be created if 'path' does not already exist.
@@ -71,18 +69,18 @@ fildes_t sos_sys_open(const char *path, fmode_t mode);
  * "path" is file name, "mode" is one of O_RDONLY, O_WRONLY, O_RDWR.
  */
 
-int sos_sys_close(fildes_t file);
+int sos_sys_close(int file);
 /* Closes an open file. Returns 0 if successful, -1 if not (invalid "file").
  */
 
-int sos_sys_read(fildes_t file, char *buf, size_t nbyte);
+int sos_sys_read(int file, char *buf, size_t nbyte);
 /* Read from an open file, into "buf", max "nbyte" bytes.
  * Returns the number of bytes read.
  * Will block when reading from console and no input is presently
  * available. Returns -1 on error (invalid file).
  */
 
-int sos_sys_write(fildes_t file, const char *buf, size_t nbyte);
+int sos_sys_write(int file, const char *buf, size_t nbyte);
 /* Write to an open file, from "buf", max "nbyte" bytes.
  * Returns the number of bytes written. <nbyte disk is full.
  * Returns -1 on error (invalid file).
