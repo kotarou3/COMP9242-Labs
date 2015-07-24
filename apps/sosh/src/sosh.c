@@ -190,7 +190,6 @@ static int dir(int argc, char **argv) {
         } else if (!r) {
             break;
         }
-        printf("dirent(%d): \"%s\"\n", i, buf);
         r = sos_stat(buf, &sbuf);
         if (r < 0) {
             printf("stat(%s) failed: %d\n", buf, r);
