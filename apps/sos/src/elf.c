@@ -59,6 +59,32 @@ static int load_segment_into_vspace(seL4_ARM_PageDirectory dest_as,
                                     char *src, unsigned long segment_size,
                                     unsigned long file_size, unsigned long dst,
                                     unsigned long permissions) {
+
+    /* Overview of ELF segment loading
+
+       dst: destination base virtual address of the segment being loaded
+       segment_size: obvious
+       
+       So the segment range to "load" is [dst, dst + segment_size).
+
+       The content to load is either zeros or the content of the ELF
+       file itself, or both.
+
+       The split between file content and zeros is a follows.
+
+       File content: [dst, dst + file_size)
+       Zeros:        [dst + file_size, dst + segment_size)
+
+       Note: if file_size == segment_size, there is no zero-filled region.
+       Note: if file_size == 0, the whole segment is just zero filled.
+
+       The code below relies on seL4's frame allocator already
+       zero-filling a newly allocated frame.
+
+    */
+
+
+
     assert(file_size <= segment_size);
 
     unsigned long pos;
