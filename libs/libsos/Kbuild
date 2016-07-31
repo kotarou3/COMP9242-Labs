@@ -9,4 +9,4 @@
 #
 libs-$(CONFIG_LIB_SOS) += libsos
 
-libsos: libutils common
+libsos: libutils libsel4 common
