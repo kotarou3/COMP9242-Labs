@@ -28,7 +28,6 @@
 
 #include <sys/types.h>
 #include <sys/syscall.h>
-#include "ttyout.h"
 
 #define STDIN_FD 0
 #define STDOUT_FD 1
@@ -63,15 +62,8 @@ sys_writev(va_list ap)
         return 0;
     }
 
-    /* Write the buffer to console if the fd is for stdout or stderr. */
-    if (fildes == STDOUT_FD || fildes == STDERR_FD) {
-        for (int i = 0; i < iovcnt; i++) {
-            ret += sos_write(iov[i].iov_base, iov[i].iov_len);
-        }
-    } else {
-        for (int i = 0; i < iovcnt; i++) {
-            ret += sos_sys_write(fildes, iov[i].iov_base, iov[i].iov_len);
-        }
+    for (int i = 0; i < iovcnt; i++) {
+        ret += sos_sys_write(fildes, iov[i].iov_base, iov[i].iov_len);
     }
 
     return ret;

@@ -19,6 +19,7 @@
 #include <nfs/nfs.h>
 #include <elf/elf.h>
 #include <serial/serial.h>
+#include <sos.h>
 
 #include "network.h"
 #include "elf.h"
@@ -72,11 +73,6 @@ struct {
 } tty_test_process;
 
 
-/*
- * A dummy starting syscall
- */
-#define SOS_SYSCALL0 0
-
 seL4_CPtr _sos_ipc_ep_cap;
 seL4_CPtr _sos_interrupt_ep_cap;
 
@@ -86,36 +82,27 @@ seL4_CPtr _sos_interrupt_ep_cap;
 extern fhandle_t mnt_point;
 
 
-void handle_syscall(seL4_Word badge, int num_args) {
-    seL4_Word syscall_number;
-    seL4_CPtr reply_cap;
-
-
-    syscall_number = seL4_GetMR(0);
-
-    /* Save the caller */
-    reply_cap = cspace_save_reply_cap(cur_cspace);
-    assert(reply_cap != CSPACE_NULL);
-
+void handle_syscall(seL4_Word badge, uint32_t argc) {
     /* Process system call */
+    seL4_Word syscall_number = seL4_GetMR(0);
     switch (syscall_number) {
-    case SOS_SYSCALL0:
-        dprintf(0, "syscall: thread made syscall 0!\n");
+    case SOS_SYS_SERIAL_WRITE: {
+        static struct serial *serial;
+        if (!serial)
+            serial = serial_init();
+
+        int sent = serial_send(serial, (char *)&seL4_GetIPCBuffer()->msg[1], argc);
 
         seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
-        seL4_SetMR(0, 0);
-        seL4_Send(reply_cap, reply);
-
+        seL4_SetMR(0, sent);
+        seL4_Reply(reply);
         break;
+    }
 
     default:
         printf("Unknown syscall %d\n", syscall_number);
         /* we don't want to reply to an unknown syscall */
-
     }
-
-    /* Free the saved reply cap */
-    cspace_free_slot(cur_cspace, reply_cap);
 }
 
 void syscall_loop(seL4_CPtr ep) {
