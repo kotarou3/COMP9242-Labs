@@ -39,4 +39,3 @@ int64_t sos_sys_time_stamp(void) {
     assert(!"You need to implement this");
     return -1;
 }
-

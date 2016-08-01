@@ -165,11 +165,11 @@ static void print_bootinfo(const seL4_BootInfo* info) {
     dprintf(1,"\nCap details:\n");
     dprintf(1,"Type              Start      End\n");
     dprintf(1,"Empty             0x%08x 0x%08x\n", info->empty.start, info->empty.end);
-    dprintf(1,"Shared frames     0x%08x 0x%08x\n", info->sharedFrames.start, 
+    dprintf(1,"Shared frames     0x%08x 0x%08x\n", info->sharedFrames.start,
                                                    info->sharedFrames.end);
-    dprintf(1,"User image frames 0x%08x 0x%08x\n", info->userImageFrames.start, 
+    dprintf(1,"User image frames 0x%08x 0x%08x\n", info->userImageFrames.start,
                                                    info->userImageFrames.end);
-    dprintf(1,"User image PTs    0x%08x 0x%08x\n", info->userImagePTs.start, 
+    dprintf(1,"User image PTs    0x%08x 0x%08x\n", info->userImagePTs.start,
                                                    info->userImagePTs.end);
     dprintf(1,"Untypeds          0x%08x 0x%08x\n", info->untyped.start, info->untyped.end);
 
@@ -229,7 +229,7 @@ void start_first_process(char* app_name, seL4_CPtr fault_ep) {
 
     /* Create a VSpace */
     tty_test_process.vroot_addr = ut_alloc(seL4_PageDirBits);
-    conditional_panic(!tty_test_process.vroot_addr, 
+    conditional_panic(!tty_test_process.vroot_addr,
                       "No memory for new Page Directory");
     err = cspace_ut_retype_addr(tty_test_process.vroot_addr,
                                 seL4_ARM_PageDirectoryObject,
@@ -256,7 +256,7 @@ void start_first_process(char* app_name, seL4_CPtr fault_ep) {
     user_ep_cap = cspace_mint_cap(tty_test_process.croot,
                                   cur_cspace,
                                   fault_ep,
-                                  seL4_AllRights, 
+                                  seL4_AllRights,
                                   seL4_CapData_Badge_new(TTY_EP_BADGE));
     /* should be the first slot in the space, hack I know */
     assert(user_ep_cap == 1);
@@ -341,7 +341,7 @@ static void _sos_ipc_init(seL4_CPtr* ipc_ep, seL4_CPtr* async_ep){
     /* Create an endpoint for user application IPC */
     ep_addr = ut_alloc(seL4_EndpointBits);
     conditional_panic(!ep_addr, "No memory for endpoint");
-    err = cspace_ut_retype_addr(ep_addr, 
+    err = cspace_ut_retype_addr(ep_addr,
                                 seL4_EndpointObject,
                                 seL4_EndpointBits,
                                 cur_cspace,
@@ -417,5 +417,3 @@ int main(void) {
     /* Not reached */
     return 0;
 }
-
-
