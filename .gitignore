@@ -1,3 +1,6 @@
+/libs/libc++/*
+/libs/libmuslc-updated/*
+
 /.config
 /.config.old
 

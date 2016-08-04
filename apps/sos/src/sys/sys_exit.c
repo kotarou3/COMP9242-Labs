@@ -68,6 +68,21 @@ sys_getpid(va_list ap)
 }
 
 long
+sys_set_tid_address(va_list ap)
+{
+    printf("Ignoring call to %s\n", __FUNCTION__);
+    return sys_gettid(ap);
+}
+
+long
+sys_tkill(va_list ap)
+{
+    printf("%s assuming self kill\n", __FUNCTION__);
+    sel4_abort();
+    return 0;
+}
+
+long
 sys_tgkill(va_list ap)
 {
     printf("%s assuming self kill\n", __FUNCTION__);

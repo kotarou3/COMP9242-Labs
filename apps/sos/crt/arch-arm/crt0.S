@@ -25,7 +25,7 @@ _start:
 /*
  * Symbols required for libgcc.
  */
-.global raise
+/*.global raise
 //.global __aeabi_unwind_cpp_pr0
 .global __aeabi_unwind_cpp_pr1
 .global __aeabi_unwind_cpp_pr2
@@ -33,7 +33,7 @@ raise:
 //__aeabi_unwind_cpp_pr0:
 __aeabi_unwind_cpp_pr1:
 __aeabi_unwind_cpp_pr2:
-    b       raise
+    b       raise*/
 
 /* .text Literal Pool */
 .pool

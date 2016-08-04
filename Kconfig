@@ -19,7 +19,8 @@ menu "seL4 Kernel"
 endmenu
 
 menu "seL4 Libraries"
-    source "libs/libmuslc/Kconfig"
+    source "libs/libmuslc-updated/Kconfig"
+    source "libs/libc++/Kconfig"
     source "libs/libsel4/Kconfig"
     source "libs/libsel4cspace/Kconfig"
     source "libs/liblwip/Kconfig"

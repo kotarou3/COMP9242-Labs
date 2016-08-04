@@ -40,6 +40,11 @@ sys_getpid(va_list ap) {
 }
 
 long
+sys_set_tid_address(va_list ap) {
+    return sys_gettid(ap);
+}
+
+long
 sys_exit(va_list ap)
 {
     abort();
@@ -50,6 +55,13 @@ long
 sys_exit_group(va_list ap)
 {
     abort();
+    return 0;
+}
+
+long
+sys_tkill(va_list ap)
+{
+    sel4_abort();
     return 0;
 }
 

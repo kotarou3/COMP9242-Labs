@@ -1,0 +1,143 @@
+diff --git a/Makefile b/Makefile
+index 229e4ed..0a69a3c 100644
+--- a/Makefile
++++ b/Makefile
+@@ -18,7 +18,7 @@ includedir = $(prefix)/include
+ libdir = $(prefix)/lib
+ syslibdir = /lib
+ 
+-SRCS = $(sort $(wildcard ${SOURCE_DIR}/src/*/*.c ${SOURCE_DIR}/arch/$(ARCH)/src/*.c))
++SRCS = $(filter-out ${SOURCE_DIR}/src/thread/__set_thread_area.c,$(sort $(wildcard ${SOURCE_DIR}/src/*/*.c ${SOURCE_DIR}/arch/$(ARCH)/src/*.c)))
+ OBJS = $(patsubst ${SOURCE_DIR}/%.c,%.o,$(SRCS))
+ LOBJS = $(OBJS:.o=.lo)
+ GENH = include/bits/alltypes.h
+diff --git a/arch/arm/pthread_arch.h b/arch/arm/pthread_arch.h
+index 4a4dd09..10576f4 100644
+--- a/arch/arm/pthread_arch.h
++++ b/arch/arm/pthread_arch.h
+@@ -1,10 +1,11 @@
+ #if ((__ARM_ARCH_6K__ || __ARM_ARCH_6ZK__) && !__thumb__) \
+  || __ARM_ARCH_7A__ || __ARM_ARCH_7R__ || __ARM_ARCH >= 7
+ 
++extern void *__thread_area;
++
+ static inline pthread_t __pthread_self()
+ {
+-	char *p;
+-	__asm__ __volatile__ ( "mrc p15,0,%0,c13,c0,3" : "=r"(p) );
++	char *p = __thread_area;
+ 	return (void *)(p+8-sizeof(struct pthread));
+ }
+ 
+diff --git a/arch/arm_sel4/src/__set_thread_area.c b/arch/arm_sel4/src/__set_thread_area.c
+index fbabe57..e4a1334 100644
+--- a/arch/arm_sel4/src/__set_thread_area.c
++++ b/arch/arm_sel4/src/__set_thread_area.c
+@@ -1,5 +1,8 @@
++void *__thread_area;
++
+ int __set_thread_area(void *p)
+ {
+     /* no support for TLS on seL4 at the moment */
++    __thread_area = p;
+     return 0;
+ }
+diff --git a/arch/arm_sel4/src/syscall.c b/arch/arm_sel4/src/syscall.c
+new file mode 100644
+index 0000000..be82805
+--- /dev/null
++++ b/arch/arm_sel4/src/syscall.c
+@@ -0,0 +1,35 @@
++/* @LICENSE(MUSLC_MIT) */
++
++/* The system call distribut interface. */
++
++#include <assert.h>
++#include <stddef.h>
++#include <bits/syscall.h>
++#include "syscall_stubs_sel4.h"
++
++#define SYSCALL_MUSLC_NUM 378
++
++typedef long (*muslc_syscall_t)(va_list);
++typedef muslc_syscall_t muslc_syscall_array_t[378];
++extern muslc_syscall_array_t *__muslc_syscall_ptr_table;
++
++muslc_syscall_array_t *__muslc_syscall_ptr_table;
++
++long __stub_syscall(long n, ...)
++{
++    long ret = 0;
++    va_list ap;
++    va_start(ap, n);
++
++    if (!__muslc_syscall_ptr_table)
++        SET_MUSLC_SYSCALL_TABLE;
++
++    assert (n >=0 && n < SYSCALL_MUSLC_NUM);
++    assert((*__muslc_syscall_ptr_table)[n]);
++
++    ret = (*__muslc_syscall_ptr_table)[n](ap);
++
++    va_end(ap);
++
++    return ret;
++}
+diff --git a/crt/crt1.c b/crt/crt1.c
+index af02af9..dbfc7ee 100644
+--- a/crt/crt1.c
++++ b/crt/crt1.c
+@@ -12,7 +12,11 @@ _Noreturn int __libc_start_main(int (*)(), int, char **,
+ 
+ void _start_c(long *p)
+ {
++	/* TODO: Uncomment when creating processes with arguments is implemented
+ 	int argc = p[0];
+ 	char **argv = (void *)(p+1);
++	*/
++	int argc = 0;
++	char *argv[] = {0, 0, 0};
+ 	__libc_start_main(main, argc, argv, _init, _fini, 0);
+ }
+diff --git a/src/env/__libc_start_main.c b/src/env/__libc_start_main.c
+index d1f6a5e..1359168 100644
+--- a/src/env/__libc_start_main.c
++++ b/src/env/__libc_start_main.c
+@@ -1,4 +1,5 @@
+ #include <elf.h>
++#include <limits.h>
+ #include <poll.h>
+ #include <fcntl.h>
+ #include <signal.h>
+@@ -6,6 +7,7 @@
+ #include "atomic.h"
+ #include "libc.h"
+ 
++long __stub_syscall(long n, ...);
+ void __init_tls(size_t *);
+ 
+ #ifndef SHARED
+@@ -34,6 +36,11 @@ void __init_libc(char **envp, char *pn)
+ 	__sysinfo = aux[AT_SYSINFO];
+ 	libc.page_size = aux[AT_PAGESZ];
+ 
++	if (!__sysinfo)
++		__sysinfo = __stub_syscall;
++	if (!libc.page_size)
++		libc.page_size = PAGE_SIZE;
++
+ 	if (pn) {
+ 		__progname = __progname_full = pn;
+ 		for (i=0; pn[i]; i++) if (pn[i]=='/') __progname = pn+i+1;
+diff --git a/src/internal/libc.c b/src/internal/libc.c
+index 2e10942..0ad57d6 100644
+--- a/src/internal/libc.c
++++ b/src/internal/libc.c
+@@ -6,5 +6,7 @@ size_t __hwcap;
+ size_t __sysinfo;
+ char *__progname=0, *__progname_full=0;
+ 
++void *__dso_handle;
++
+ weak_alias(__progname, program_invocation_short_name);
+ weak_alias(__progname_full, program_invocation_name);

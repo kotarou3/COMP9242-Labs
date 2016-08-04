@@ -7,7 +7,17 @@
 #
 # @TAG(NICTA_BSD)
 #
-libc=libmuslc-updated
 
--include $(wildcard libs/*/Kbuild)
--include $(wildcard apps/*/Kbuild)
+menuconfig LIB_MUSL_C
+    bool "libmuslc"
+    default y
+    select HAVE_LIBC
+    select HAVE_CRT
+    help
+        Musl C standard library.
+
+config HAVE_LIBC
+    bool
+
+config HAVE_CRT
+    bool

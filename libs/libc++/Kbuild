@@ -1,0 +1,2 @@
+libs-$(CONFIG_LIB_CXX) += libc++ libc++abi libunwind
+libc++: $(libc) libsel4 libsos

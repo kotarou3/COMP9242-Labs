@@ -76,7 +76,7 @@ ENDGROUP := -Wl,--end-group
 
 ifeq (${CONFIG_USER_CFLAGS},)
     CFLAGS += $(WARNINGS:%=-W%) -nostdinc -std=gnu11
-    CXXFLAGS += $(WARNINGS:%=-W%) -nostdinc -std=gnu++98
+    CXXFLAGS += $(WARNINGS:%=-W%) -nostdinc -std=c++14 -I$(SEL4_INCLUDEDIR)/c++/v1
 
     ifeq (${CONFIG_USER_OPTIMISATION_Os},y)
         CFLAGS += -Os
@@ -149,7 +149,7 @@ LDFLAGS += -e ${ENTRY_POINT}
 ASFLAGS += $(NK_ASFLAGS)
 
 # Object files
-OBJFILES = $(ASMFILES:%.S=%.o) $(CFILES:%.c=%.o) $(CXXFILES:%.cxx=%.o) $(OFILES)
+OBJFILES = $(ASMFILES:%.S=%.o) $(CFILES:%.c=%.o) $(CXXFILES:%.cpp=%.o) $(OFILES)
 
 # Define standard crt files if are building against a C library that has them
 ifeq (${CONFIG_HAVE_CRT},y)
@@ -172,7 +172,7 @@ vpath %.a $(SEL4_LIBDIR)
 
 # Where to find the sources
 vpath %.c $(SOURCE_DIR)
-vpath %.cxx $(SOURCE_DIR)
+vpath %.cpp $(SOURCE_DIR)
 vpath %.S $(SOURCE_DIR)
 
 # Default is to build/install all targets
@@ -231,7 +231,7 @@ else
 	$(Q)$(call make-depend,$<,$@,$(patsubst %.o,%.d,$@))
 	$(Q)$(CC) -x c $(CFLAGS) $(CPPFLAGS) -c $< -o $@
 endif
-%.o: %.cxx $(HFILES) | install-headers
+%.o: %.cpp $(HFILES) | install-headers
 	@echo " [CXX] $@"
 	$(Q)mkdir -p $(dir $@)
 	$(Q)$(call make-cxx-depend,$<,$@,$(patsubst %.o,%.d,$@))
@@ -286,7 +286,7 @@ $(TARGETS): $(LIBS:%=-l%)
 # (Default is .LIBPATTERNS = lib%.so lib%.a)
 .LIBPATTERNS = lib%.a
 
-DEPS = $(patsubst %.c,%.d,$(CFILES)) $(patsubst %.cxx,%.d,$(CXXFILES)) $(patsubst %.S,%.d,$(ASMFILES))
+DEPS = $(patsubst %.c,%.d,$(CFILES)) $(patsubst %.cpp,%.d,$(CXXFILES)) $(patsubst %.S,%.d,$(ASMFILES))
 
 ifneq "$(MAKECMDGOALS)" "clean"
   -include ${DEPS}

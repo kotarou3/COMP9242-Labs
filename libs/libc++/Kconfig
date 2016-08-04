@@ -1,0 +1,4 @@
+config LIB_CXX
+    bool "Build libc++"
+    depends on HAVE_LIBC
+    default y
