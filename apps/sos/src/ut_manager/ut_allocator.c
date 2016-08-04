@@ -18,7 +18,7 @@
 #define verbose 1
 #include <sys/debug.h>
 #include <sys/panic.h>
- 
+
 #define FLOOR14(x) ((x) & ~((1 << 14) - 1))
 #define CEILING14(x) FLOOR14((x) + (1 << 14) - 1)
 
@@ -111,7 +111,7 @@ static seL4_Word do_ut_alloc_from_bitfield(int sizebits){
 
     /* Select the appropriate pool */
     switch(sizebits){
-    case 14: 
+    case 14:
         pool = _pool14;
         break;
     case 12:
@@ -419,6 +419,3 @@ void ut_free(seL4_Word addr, int sizebits){
         assert(!"ut_free received invalid size");
     }
 }
-
-
-

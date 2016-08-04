@@ -64,7 +64,7 @@ static int load_segment_into_vspace(seL4_ARM_PageDirectory dest_as,
 
        dst: destination base virtual address of the segment being loaded
        segment_size: obvious
-       
+
        So the segment range to "load" is [dst, dst + segment_size).
 
        The content to load is either zeros or the content of the ELF
@@ -118,11 +118,11 @@ static int load_segment_into_vspace(seL4_ARM_PageDirectory dest_as,
         conditional_panic(sos_cap == 0, "Failed to copy frame cap");
 
         /* Map the frame into tty_test address spaces */
-        err = map_page(tty_cap, dest_as, vpage, permissions, 
+        err = map_page(tty_cap, dest_as, vpage, permissions,
                        seL4_ARM_Default_VMAttributes);
         conditional_panic(err, "Failed to map to tty address space");
         /* Map the frame into sos address spaces */
-        err = map_page(sos_cap, seL4_CapInitThreadPD, kvpage, seL4_AllRights, 
+        err = map_page(sos_cap, seL4_CapInitThreadPD, kvpage, seL4_AllRights,
                        seL4_ARM_Default_VMAttributes);
         conditional_panic(err, "Failed to map sos address space");
 

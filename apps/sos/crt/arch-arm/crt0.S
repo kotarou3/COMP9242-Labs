@@ -44,4 +44,3 @@ __aeabi_unwind_cpp_pr2:
 _stack_bottom:
 .space  8192
 _stack_top:
-

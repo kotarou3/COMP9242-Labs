@@ -95,7 +95,7 @@ backtrace_helper (struct _Unwind_Context *ctx, void *a)
   if (++arg->cnt == arg->size) {
     return _URC_END_OF_STACK;
   }
-  
+
   return _URC_NO_REASON;
 }
 
@@ -135,5 +135,3 @@ libc_freeres_fn (free_mem)
     }
 }
 #endif
-
-

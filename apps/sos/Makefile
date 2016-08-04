@@ -19,7 +19,7 @@ ASMFILES := $(patsubst $(SOURCE_DIR)/%,%,$(wildcard $(SOURCE_DIR)/crt/arch-${ARC
 CFILES   += $(patsubst $(SOURCE_DIR)/%,%,$(wildcard $(SOURCE_DIR)/crt/arch-${ARCH}/*.c))
 OFILES   := archive.o
 
-INCLUDE_DIRS  += $(SOURCE_DIR)/src 
+INCLUDE_DIRS  += $(SOURCE_DIR)/src
 
 # Libraries required to build the target
 LIBS := sel4 elf muslc cpio lwip ethdrivers \

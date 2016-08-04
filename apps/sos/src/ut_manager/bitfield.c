@@ -107,8 +107,8 @@ static inline int _bf_find_next_free_byte(char* field, int next, int size){
     return -1;
 }
 
-/* 
- * find a bit that is clear 
+/*
+ * find a bit that is clear
  * @pre the byte must have a free bit
  */
 static inline int _bf_find_next_free_bit(char field){
@@ -137,7 +137,7 @@ int bf_set_next_free(bitfield_t* bf){
             offset = (byte * BITS_PER_BYTE) + bit;
 
             /* mark and return */
-            bf_set(bf, offset); 
+            bf_set(bf, offset);
             bf->next_free = offset + 1;
             if(bf->next_free > bf->size){
                 bf->next_free = 0;
@@ -196,5 +196,3 @@ int bf_get(const bitfield_t* bf, int offset){
     assert(byte < CEILING(bf->size)/BITS_PER_BYTE);
     return (bf->b[byte] & bitmask) != 0;
 }
-
-

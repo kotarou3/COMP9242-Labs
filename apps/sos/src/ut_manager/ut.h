@@ -14,7 +14,7 @@
 #include <sel4/sel4.h>
 
 
-/* 
+/*
  * To abstract the details of untyped objects, we must restrict the
  * minimum size_bits of untyped objects such that any object can be
  * allocated provided that the address is aligned correctly
@@ -96,4 +96,3 @@ seL4_Word ut_alloc(int sizebits);
 void ut_free(seL4_Word addr, int sizebits);
 
 #endif /* _UT_H_ */
-

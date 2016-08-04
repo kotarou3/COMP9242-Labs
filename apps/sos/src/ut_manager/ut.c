@@ -69,7 +69,7 @@ static inline void _strip_max(int max_bits){
 }
 
 static int __ut_cmp(const void* _a, const void* _b){
-    return  _bi->untypedPaddrList[*(int*)_a] - 
+    return  _bi->untypedPaddrList[*(int*)_a] -
             _bi->untypedPaddrList[*(int*)_b];
 }
 static inline void _sort_table(void){
@@ -127,7 +127,7 @@ static inline void _print_table(void){
                        "| ut(bi) |    start   ->    end     | size bits |\n"
                        "|-----------------------------------------------|\n");
     for(i = 0; i < _ut.count; i++){
-        dprintf(0,     "| %2d(%2d) | 0x%08x -> 0x%08x | %9d |\n", 
+        dprintf(0,     "| %2d(%2d) | 0x%08x -> 0x%08x | %9d |\n",
                 i, _ut.map[i], UT_PSTART(i), UT_PEND(i), UT_SIZEBITS(i));
         if(i != _ut.count - 1 && UT_PEND(i) != UT_PSTART(i + 1)){
             dprintf(0, "|-----------------------------------------------|\n");
@@ -136,7 +136,7 @@ static inline void _print_table(void){
     dprintf(0,         "+-----------------------------------------------+\n");
 }
 
-static int ut_translate_device(seL4_Word addr, seL4_Untyped* ret_cptr, 
+static int ut_translate_device(seL4_Word addr, seL4_Untyped* ret_cptr,
                                seL4_Word* ret_offset){
     int i = _bi->untyped.end - _bi->untyped.start;
     const seL4_Word* paddr = &_bi->untypedPaddrList[i];
@@ -216,4 +216,3 @@ seL4_Word ut_steal_mem(int sizebits){
 
     return paddr;
 }
-

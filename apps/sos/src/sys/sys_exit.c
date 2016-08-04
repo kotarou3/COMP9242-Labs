@@ -74,4 +74,3 @@ sys_tgkill(va_list ap)
     sel4_abort();
     return 0;
 }
-

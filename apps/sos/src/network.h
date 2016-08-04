@@ -18,7 +18,7 @@ extern fhandle_t mnt_point;
 
 /**
  * Initialises the network stack
- * @param[in] interrupt_ep The asynchronous endpoint that the 
+ * @param[in] interrupt_ep The asynchronous endpoint that the
  *                         driver should use for registering IRQs
  */
 extern void network_init(seL4_CPtr interrupt_ep);

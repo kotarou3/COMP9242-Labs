@@ -10,17 +10,17 @@
 
 menuconfig APP_SOS
     bool "SeL4 Simple Operating System (SOS)"
-    select LIB_SEL4 
+    select LIB_SEL4
     select LIB_MUSL_C
     select LIB_ELF
     select LIB_CPIO
-    select LIB_SEL4_CSPACE 
+    select LIB_SEL4_CSPACE
     select LIB_IXP400_XSCALE_SW if IXP400
     select LIB_IXP_OSAL if IXP400
     select LIB_ETHIF
-    select LIB_LWIP 
-    select LIB_NFS 
-    select LIB_SERIAL 
+    select LIB_LWIP
+    select LIB_NFS
+    select LIB_SERIAL
     select LIB_CLOCK
     select LIB_SOS
     select LIB_PLATSUPPORT
