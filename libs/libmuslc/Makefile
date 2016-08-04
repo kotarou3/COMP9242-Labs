@@ -6,7 +6,7 @@ TARGETS := libmuslc.a
 # Source files required to build the target
 CFILES := $(patsubst $(SOURCE_DIR)/%,%,$(wildcard ${SOURCE_DIR}/src/*/*.c))
 
-ifeq ($(ARCH),x86_64) 
+ifeq ($(ARCH),x86_64)
 $(error x86_64 not supported)
 endif
 
@@ -21,14 +21,14 @@ ifdef CONFIG_X86_64
 endif
 
 # ASM files require to build the target
-#$(patsubst $(SOURCE_DIR)/%,%,$(wildcard ${SOURCE_DIR}/src/internal/$(ARCH)/*.S)) 
+#$(patsubst $(SOURCE_DIR)/%,%,$(wildcard ${SOURCE_DIR}/src/internal/$(ARCH)/*.S))
 ASMFILES :=  $(patsubst $(SOURCE_DIR)/%,%,$(wildcard ${SOURCE_DIR}/src/thread/$(MARCH)/*.S)) \
             $(patsubst $(SOURCE_DIR)/%,%,$(wildcard ${SOURCE_DIR}/src/ldso/$(MARCH)/*.S)) \
             $(patsubst $(SOURCE_DIR)/%,%,$(wildcard ${SOURCE_DIR}/src/setjmp/$(MARCH)/*.S)) \
             $(patsubst $(SOURCE_DIR)/%,%,$(wildcard ${SOURCE_DIR}/src/signal/$(MARCH)/*.S)) \
 	    $(patsubst $(SOURCE_DIR)/%,%,$(wildcard ${SOURCE_DIR}/src/fenv/$(MARCH)/*.S)) \
 	    $(patsubst $(SOURCE_DIR)/%,%,$(wildcard ${SOURCE_DIR}/src/string/$(MARCH)/*.S)) \
-	    $(patsubst $(SOURCE_DIR)/%,%,$(wildcard ${SOURCE_DIR}/src/math/$(MARCH)/*.S)) 
+	    $(patsubst $(SOURCE_DIR)/%,%,$(wildcard ${SOURCE_DIR}/src/math/$(MARCH)/*.S))
 
 ifdef CONFIG_X86_64
 	MARCH = ia32

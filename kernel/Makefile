@@ -26,7 +26,7 @@ ifndef SOURCE_ROOT
     export SOURCE_ROOT
 endif
 
-# we don't ARCH or PLAT for the style target, but other 
+# we don't ARCH or PLAT for the style target, but other
 # targets fail -- so just bluff.
 ifeq (${MAKECMDGOALS}, style)
 ARCH:=x86
@@ -68,7 +68,7 @@ endif
 ifeq ($V, 1)
 	BUILD_VERBOSE = 1
 	MAKE_SILENT = -s
-	quiet = 
+	quiet =
 	Q =
 else
 ifeq ($V, 2)

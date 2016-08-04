@@ -53,7 +53,7 @@ include/sel4/invocation.h: ${SOURCE_DIR}/include/interfaces/sel4.xml
 	@${CHANGED_PATH} $@ python ${INVOCATION_ID_GEN_PATH} \
 		--xml $< --libsel4 --dest $@
 
-arch_include/${ARCH}/sel4/arch/invocation.h: ${SOURCE_DIR}/arch_include/${ARCH}/interfaces/sel4arch.xml 
+arch_include/${ARCH}/sel4/arch/invocation.h: ${SOURCE_DIR}/arch_include/${ARCH}/interfaces/sel4arch.xml
 	@echo " [GEN] $@"
 	@mkdir -p $(dir $@)
 	@${CHANGED_PATH} ${SOURCE_DIR}/$@ python ${INVOCATION_ID_GEN_PATH} \
@@ -61,7 +61,7 @@ arch_include/${ARCH}/sel4/arch/invocation.h: ${SOURCE_DIR}/arch_include/${ARCH}/
 
 # Header generator
 include/sel4/syscall.h: ${SOURCE_DIR}/include/api/syscall.xsd \
-						${SOURCE_DIR}/include/api/syscall.xml 
+						${SOURCE_DIR}/include/api/syscall.xml
 	@echo " [GEN] $@"
 	@mkdir -p $(dir $@)
 	@${XMLLINT_PATH} --noout --schema $^

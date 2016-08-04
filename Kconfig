@@ -46,4 +46,3 @@ menu "Tools"
 endmenu
 
 source "$COMMON_PATH/Kconfig"
-

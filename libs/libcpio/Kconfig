@@ -13,4 +13,3 @@ config LIB_CPIO
     default y
     help
         Library for parsing ".cpio" file headers.
-

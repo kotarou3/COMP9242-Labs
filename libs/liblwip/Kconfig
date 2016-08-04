@@ -14,4 +14,3 @@ config LIB_LWIP
     default y
     help
         Lighweight TPC/IP network stack library.
-

@@ -18,4 +18,4 @@ ARCH_C_SOURCES += object/interrupt.c \
                   object/vcpu.c \
                   object/ipi.c
 
-ARCH_C_SOURCES += object/iospace.c 
+ARCH_C_SOURCES += object/iospace.c

@@ -56,6 +56,3 @@ docs: common
 	  $(MAKE) --directory "libs/$$doc" docs;   \
 	  cp "libs/$$doc/docs/$$doc.pdf" ./docs;   \
 	done
-
-
-

@@ -25,7 +25,7 @@ silentoldconfig: $(obj)/conf
 	if [ -f $@ ] ; \
 	then $(Q)$< --defconfig=$@ $(Kconfig); \
 	else $(Q)$< --defconfig=configs/$@ $(Kconfig); \
-	fi 
+	fi
 
 # Help text used by make help
 help:

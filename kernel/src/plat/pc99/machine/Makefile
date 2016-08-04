@@ -23,4 +23,4 @@ ifdef RELEASE_PRINTF
     PLAT_C_SOURCES += machine/io.c
 endif
 
-PLAT_C_SOURCES += machine/intel-vtd.c 
+PLAT_C_SOURCES += machine/intel-vtd.c

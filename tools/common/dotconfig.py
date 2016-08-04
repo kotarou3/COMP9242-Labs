@@ -64,7 +64,7 @@ class Timestamp(Line):
         self.timestamp = timestamp
     def __repr__(self):
         return '# %s' % self.timestamp.strftime(TIMESTAMP_FORMAT)
-        
+
 class Option(Line):
     '''
     A Kconfig option value or unset option. These will generally be the lines

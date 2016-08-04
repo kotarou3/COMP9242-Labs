@@ -12,7 +12,7 @@
 #
 #  To create a LaTeX diff against the CVS HEAD revision, use the target
 #  "diff" (or "viewdiff").
-#  To use a revision other than HEAD, speciff DIFF=x on the 
+#  To use a revision other than HEAD, speciff DIFF=x on the
 #  make command line to choose the revision x.
 #
 
@@ -34,7 +34,7 @@ GnuPlot	   = gnuplot
 Eps2Pdf	   = epstopdf --outfile
 PdfView	   = xpdf
 #PdfView    = open -a preview
-#PdfView    = acroread 
+#PdfView    = acroread
 Lpr 	   = lpr
 mv	   = mv
 awk	   = awk
@@ -198,7 +198,7 @@ references.bib: $(addsuffix .tex, $(Targets)) env.tex
 		echo "====> Building references.bib"; \
 		$(BibTexEnv) ./tools/bibexport.sh -t -o references.bib tmp.aux > /dev/null 2> /dev/null; \
 		cp tmp.aux references.aux; \
-	fi; 
+	fi;
 	${Q}rm all_refs.aux tmp.aux references.diff
 
 %.pdf: %.tex references.bib $(Figures) Makefile
@@ -215,8 +215,8 @@ references.bib: $(addsuffix .tex, $(Targets)) env.tex
 	${Q}grep "dimension:" $*.log || echo "None."
 
 ##############################################################################
-# Generate a list of FIXMEs 
-fixmes: 
+# Generate a list of FIXMEs
+fixmes:
 	${Q}for i in $(Tex); do \
 		echo "FIXMEs in $$i:"; \
 		nl -b a $$i | grep "FIXME{" | nl -b a; \

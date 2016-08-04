@@ -41,4 +41,3 @@ config EXPORT_VCNT_USER
         frequency registers of the generic timer.
         WARNING: selecting this option opens a timing
         channel
-

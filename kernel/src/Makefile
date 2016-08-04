@@ -18,4 +18,3 @@ C_SOURCES += src/inlines.c \
              src/assert.c \
              src/util.c \
              src/string.c
-

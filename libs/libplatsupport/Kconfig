@@ -34,5 +34,3 @@ choice
     config LIB_PLAT_SUPPORT_SERIAL_TEXT_EGA
        bool "80x25 text mode EGA screen"
 endchoice
-
-

@@ -27,5 +27,3 @@ docs/libsel4cspace.pdf: docs/Doxyfile include/cspace/cspace.h
 	doxygen docs/Doxyfile
 	$(MAKE) --directory=docs/latex
 	cp docs/latex/refman.pdf docs/libsel4cspace.pdf
-
-
