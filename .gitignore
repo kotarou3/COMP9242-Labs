@@ -1,10 +1,10 @@
-.config
-.config.old
+/.config
+/.config.old
 
-include
-null.i
-null.s
+/include
+/null.i
+/null.s
 
-build
-stage
-images
+/build
+/stage
+/images
