@@ -59,4 +59,3 @@ tsc_get_timer(pstimer_t *timeout_timer)
 
     return tsc_timer;
 }
-

@@ -77,4 +77,3 @@ static inline int omap_get_gpt_irq(int n)
 #define CLK_FREQ 13000000 /* TODO Check this is correct */
 
 #endif /* __PLAT_SUPPORT_IMX31_H */
-

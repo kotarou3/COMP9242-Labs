@@ -28,5 +28,3 @@
 
 
 #define MAPCHECK(a, v) assert(((uintptr_t)(a) & 0xfff) == (v))
-
-

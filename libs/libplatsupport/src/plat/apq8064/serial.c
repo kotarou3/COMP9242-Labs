@@ -103,4 +103,3 @@ int uart_init(const struct dev_defn* defn,
 
     return 0;
 }
-

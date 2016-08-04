@@ -374,6 +374,3 @@ acpi_init(ps_io_mapper_t io_mapper)
 
     return acpi;
 }
-
-
-

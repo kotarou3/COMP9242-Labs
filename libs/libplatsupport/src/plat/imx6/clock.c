@@ -706,5 +706,3 @@ freq_t ps_freq_default[] = {
     [CLK_CLKO1]    =  66 * MHZ,
     [CLK_CLKO2]    = 528 * MHZ,
 };
-
-

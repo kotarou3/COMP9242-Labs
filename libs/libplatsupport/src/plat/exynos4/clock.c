@@ -374,4 +374,3 @@ freq_t ps_freq_default[] = {
     [CLK_SCLKMPLL]       =  800 * MHZ,
     [CLK_SCLKMPLL_USERC] =  800 * MHZ,
 };
-

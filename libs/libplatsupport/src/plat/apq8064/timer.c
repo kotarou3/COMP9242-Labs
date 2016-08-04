@@ -730,5 +730,3 @@ ps_get_timer(enum timer_id id, timer_config_t *config)
 
     return timer;
 }
-
-

@@ -300,6 +300,3 @@ exynos_tmu_set_alarms_falling(tmu_t* tmu,
     regs->int_enable = int_enable;
     return 0;
 }
-
-
-

@@ -1034,4 +1034,3 @@ freq_t ps_freq_default[] = {
     [CLK_FPGA_PL2]  =    50 * MHZ,
     [CLK_FPGA_PL3]  =    50 * MHZ,
 };
-
