@@ -104,3 +104,8 @@ map_device(void* paddr, int size){
     }
     return (void*)vstart;
 }
+
+void
+unmap_device(void* paddr){
+    // TODO: Actually unmap
+}

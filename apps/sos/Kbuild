@@ -16,7 +16,7 @@ sos-components=$(addprefix $(STAGE_BASE)/bin/, $(sos-components-y))
 
 sos: export COMPONENTS=${sos-components}
 sos: ${sos-components-y} \
-     libsel4 libelf $(libc) libcpio \
+     libsel4 libelf $(libc) libc++ libcpio \
      libsel4cspace libserial libclock \
      liblwip libnfs libethdrivers \
      libsos libplatsupport

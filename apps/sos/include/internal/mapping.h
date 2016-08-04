@@ -37,4 +37,11 @@ int map_page(seL4_CPtr frame_cap, seL4_ARM_PageDirectory pd, seL4_Word vaddr,
  */
 void* map_device(void* paddr, int size);
 
+ /**
+ * Undoes map_device()
+ *
+ * @param paddr the physical address of the device (as given to map_device())
+ */
+void unmap_device(void* paddr);
+
 #endif /* _MAPPING_H_ */
