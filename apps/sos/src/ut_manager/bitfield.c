@@ -8,15 +8,15 @@
  * @TAG(NICTA_BSD)
  */
 
-#include "bitfield.h"
+#include "internal/ut_manager/bitfield.h"
 
 #include <assert.h>
 #include <stdlib.h>
 #include <string.h>
 
 #define verbose 0
-#include <sys/debug.h>
-#include <sys/panic.h>
+#include "internal/sys/debug.h"
+#include "internal/sys/panic.h"
 
 #define BITS_PER_BYTE 8
 #define FLOOR(x)      ((x) & ~(BITS_PER_BYTE - 1))

@@ -21,18 +21,18 @@
 #include <serial/serial.h>
 #include <sos.h>
 
-#include "network.h"
-#include "elf.h"
+#include "internal/network.h"
+#include "internal/elf.h"
 
-#include "ut_manager/ut.h"
-#include "vmem_layout.h"
-#include "mapping.h"
+#include "internal/ut_manager/ut.h"
+#include "internal/vmem_layout.h"
+#include "internal/mapping.h"
 
 #include <autoconf.h>
 
 #define verbose 5
-#include <sys/debug.h>
-#include <sys/panic.h>
+#include "internal/sys/debug.h"
+#include "internal/sys/panic.h"
 
 /* This is the index where a clients syscall enpoint will
  * be stored in the clients cspace. */

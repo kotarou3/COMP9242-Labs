@@ -18,7 +18,7 @@
  *
  ****************************************************************************/
 
-#include "network.h"
+#include "internal/network.h"
 
 #include <autoconf.h>
 
@@ -33,13 +33,13 @@
 #include <ethdrivers/imx6.h>
 #include <cspace/cspace.h>
 
-#include "dma.h"
-#include "mapping.h"
-#include "ut_manager/ut.h"
+#include "internal/dma.h"
+#include "internal/mapping.h"
+#include "internal/ut_manager/ut.h"
 
 #define verbose 0
-#include <sys/debug.h>
-#include <sys/panic.h>
+#include "internal/sys/debug.h"
+#include "internal/sys/panic.h"
 
 
 #ifndef SOS_NFS_DIR

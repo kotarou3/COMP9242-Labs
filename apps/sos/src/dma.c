@@ -21,14 +21,14 @@
 
 #include <sel4/types.h>
 #include <cspace/cspace.h>
-#include <dma.h>
-#include <mapping.h>
-#include <ut_manager/ut.h>
-#include <vmem_layout.h>
+#include "internal/dma.h"
+#include "internal/mapping.h"
+#include "internal/ut_manager/ut.h"
+#include "internal/vmem_layout.h"
 
 #define verbose 5
-#include <sys/debug.h>
-#include <sys/panic.h>
+#include "internal/sys/debug.h"
+#include "internal/sys/panic.h"
 
 #define DMA_SIZE     (_dma_pend - _dma_pstart)
 #define DMA_PAGES    (DMA_SIZE >> seL4_PageBits)

@@ -14,15 +14,15 @@
 #include <assert.h>
 #include <cspace/cspace.h>
 
-#include "elf.h"
+#include "internal/elf.h"
 
-#include <vmem_layout.h>
-#include <ut_manager/ut.h>
-#include <mapping.h>
+#include "internal/vmem_layout.h"
+#include "internal/ut_manager/ut.h"
+#include "internal/mapping.h"
 
 #define verbose 0
-#include <sys/debug.h>
-#include <sys/panic.h>
+#include "internal/sys/debug.h"
+#include "internal/sys/panic.h"
 
 /* Minimum of two values. */
 #define MIN(a,b) (((a)<(b))?(a):(b))

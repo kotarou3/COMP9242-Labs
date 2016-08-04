@@ -8,14 +8,14 @@
  * @TAG(NICTA_BSD)
  */
 
-#include "mapping.h"
+#include "internal/mapping.h"
 
-#include <ut_manager/ut.h>
-#include "vmem_layout.h"
+#include "internal/ut_manager/ut.h"
+#include "internal/vmem_layout.h"
 
 #define verbose 0
-#include <sys/panic.h>
-#include <sys/debug.h>
+#include "internal/sys/panic.h"
+#include "internal/sys/debug.h"
 #include <cspace/cspace.h>
 
 extern const seL4_BootInfo* _boot_info;

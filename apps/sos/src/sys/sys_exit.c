@@ -12,7 +12,7 @@
 #include <stdlib.h>
 #include <sel4/sel4.h>
 
-#include "execinfo.h" /*for backtrace()*/
+#include "internal/sys/execinfo.h" /*for backtrace()*/
 
 static void sel4_abort(void) {
     printf("seL4 root server aborted\n");

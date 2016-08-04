@@ -8,7 +8,7 @@
  * @TAG(NICTA_BSD)
  */
 
-#include "ut.h"
+#include "internal/ut_manager/ut.h"
 #include <cspace/cspace.h>
 #include <stdlib.h>
 #include <assert.h>
@@ -16,7 +16,7 @@
 #include <autoconf.h>
 
 #define verbose 0
-#include <sys/debug.h>
+#include "internal/sys/debug.h"
 
 #define ALIGN(x, base)     ((x) & ~((base) - 1))
 #define ALIGN_TOP(x, base) (ALIGN((x) + ((base) - 1), base))
