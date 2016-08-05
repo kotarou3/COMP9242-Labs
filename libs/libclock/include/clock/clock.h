@@ -11,6 +11,8 @@
 #ifndef _CLOCK_H_
 #define _CLOCK_H_
 
+#include <stdint.h>
+
 #include <sel4/sel4.h>
 
 /*
@@ -43,6 +45,7 @@ int start_timer(seL4_CPtr interrupt_ep);
  * Returns 0 on failure, otherwise an unique ID for this timeout
  */
 uint32_t register_timer(uint64_t delay, timer_callback_t callback, void *data);
+uint32_t register_recurring_timer(uint64_t delay, timer_callback_t callback, void *data);
 
 /*
  * Remove a previously registered callback by its ID
