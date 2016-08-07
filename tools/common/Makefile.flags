@@ -9,7 +9,7 @@
 #
 
 CFLAGS :=
-CPPFLAGS :=
+CPPFLAGS := -Wall -Wextra
 ASFLAGS :=
 CXXFLAGS :=
 

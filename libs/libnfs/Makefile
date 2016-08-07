@@ -17,9 +17,6 @@ CFILES := $(patsubst $(SOURCE_DIR)/%,%,$(wildcard $(SOURCE_DIR)/src/*.c))
 # Header files/directories this library provides
 RHDRFILES := '$(wildcard $(SOURCE_DIR)/include/*) nfs'
 
-# Extra flags for c compliler
-CFLAGS := -Wall -Werror
-
 include $(SEL4_COMMON)/common.mk
 
 .PHONY: docs
