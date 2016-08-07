@@ -122,7 +122,7 @@ void syscall_loop(seL4_CPtr ep) {
 
         }else if(label == seL4_VMFault){
             /* Page fault */
-            dprintf(0, "vm fault at 0x%08x, pc = 0x%08x, %s\n", seL4_GetMR(1),
+            kprintf(0, "vm fault at 0x%08x, pc = 0x%08x, %s\n", seL4_GetMR(1),
                     seL4_GetMR(0),
                     seL4_GetMR(2) ? "Instruction Fault" : "Data fault");
 
@@ -142,49 +142,49 @@ static void print_bootinfo(const seL4_BootInfo* info) {
     int i;
 
     /* General info */
-    dprintf(1, "Info Page:  %p\n", info);
-    dprintf(1,"IPC Buffer: %p\n", info->ipcBuffer);
-    dprintf(1,"Node ID: %d (of %d)\n",info->nodeID, info->numNodes);
-    dprintf(1,"IOPT levels: %d\n",info->numIOPTLevels);
-    dprintf(1,"Init cnode size bits: %d\n", info->initThreadCNodeSizeBits);
+    kprintf(1, "Info Page:  %p\n", info);
+    kprintf(1,"IPC Buffer: %p\n", info->ipcBuffer);
+    kprintf(1,"Node ID: %d (of %d)\n",info->nodeID, info->numNodes);
+    kprintf(1,"IOPT levels: %d\n",info->numIOPTLevels);
+    kprintf(1,"Init cnode size bits: %d\n", info->initThreadCNodeSizeBits);
 
     /* Cap details */
-    dprintf(1,"\nCap details:\n");
-    dprintf(1,"Type              Start      End\n");
-    dprintf(1,"Empty             0x%08x 0x%08x\n", info->empty.start, info->empty.end);
-    dprintf(1,"Shared frames     0x%08x 0x%08x\n", info->sharedFrames.start,
+    kprintf(1,"\nCap details:\n");
+    kprintf(1,"Type              Start      End\n");
+    kprintf(1,"Empty             0x%08x 0x%08x\n", info->empty.start, info->empty.end);
+    kprintf(1,"Shared frames     0x%08x 0x%08x\n", info->sharedFrames.start,
                                                    info->sharedFrames.end);
-    dprintf(1,"User image frames 0x%08x 0x%08x\n", info->userImageFrames.start,
+    kprintf(1,"User image frames 0x%08x 0x%08x\n", info->userImageFrames.start,
                                                    info->userImageFrames.end);
-    dprintf(1,"User image PTs    0x%08x 0x%08x\n", info->userImagePTs.start,
+    kprintf(1,"User image PTs    0x%08x 0x%08x\n", info->userImagePTs.start,
                                                    info->userImagePTs.end);
-    dprintf(1,"Untypeds          0x%08x 0x%08x\n", info->untyped.start, info->untyped.end);
+    kprintf(1,"Untypeds          0x%08x 0x%08x\n", info->untyped.start, info->untyped.end);
 
     /* Untyped details */
-    dprintf(1,"\nUntyped details:\n");
-    dprintf(1,"Untyped Slot       Paddr      Bits\n");
+    kprintf(1,"\nUntyped details:\n");
+    kprintf(1,"Untyped Slot       Paddr      Bits\n");
     for (i = 0; i < info->untyped.end-info->untyped.start; i++) {
-        dprintf(1,"%3d     0x%08x 0x%08x %d\n", i, info->untyped.start + i,
+        kprintf(1,"%3d     0x%08x 0x%08x %d\n", i, info->untyped.start + i,
                                                    info->untypedPaddrList[i],
                                                    info->untypedSizeBitsList[i]);
     }
 
     /* Device untyped details */
-    dprintf(1,"\nDevice untyped details:\n");
-    dprintf(1,"Untyped Slot       Paddr      Bits\n");
+    kprintf(1,"\nDevice untyped details:\n");
+    kprintf(1,"Untyped Slot       Paddr      Bits\n");
     for (i = 0; i < info->deviceUntyped.end-info->deviceUntyped.start; i++) {
-        dprintf(1,"%3d     0x%08x 0x%08x %d\n", i, info->deviceUntyped.start + i,
+        kprintf(1,"%3d     0x%08x 0x%08x %d\n", i, info->deviceUntyped.start + i,
                                                    info->untypedPaddrList[i + (info->untyped.end - info->untyped.start)],
                                                    info->untypedSizeBitsList[i + (info->untyped.end-info->untyped.start)]);
     }
 
-    dprintf(1,"-----------------------------------------\n\n");
+    kprintf(1,"-----------------------------------------\n\n");
 
     /* Print cpio data */
-    dprintf(1,"Parsing cpio data:\n");
-    dprintf(1,"--------------------------------------------------------\n");
-    dprintf(1,"| index |        name      |  address   | size (bytes) |\n");
-    dprintf(1,"|------------------------------------------------------|\n");
+    kprintf(1,"Parsing cpio data:\n");
+    kprintf(1,"--------------------------------------------------------\n");
+    kprintf(1,"| index |        name      |  address   | size (bytes) |\n");
+    kprintf(1,"|------------------------------------------------------|\n");
     for(i = 0;; i++) {
         unsigned long size;
         const char *name;
@@ -192,12 +192,12 @@ static void print_bootinfo(const seL4_BootInfo* info) {
 
         data = cpio_get_entry(_cpio_archive, i, &name, &size);
         if(data != NULL){
-            dprintf(1,"| %3d   | %16s | %p | %12d |\n", i, name, data, size);
+            kprintf(1,"| %3d   | %16s | %p | %12d |\n", i, name, data, size);
         }else{
             break;
         }
     }
-    dprintf(1,"--------------------------------------------------------\n");
+    kprintf(1,"--------------------------------------------------------\n");
 }
 
 void start_first_process(char* app_name, seL4_CPtr fault_ep) {
@@ -268,7 +268,7 @@ void start_first_process(char* app_name, seL4_CPtr fault_ep) {
 
 
     /* parse the cpio image */
-    dprintf(1, "\nStarting \"%s\"...\n", app_name);
+    kprintf(1, "\nStarting \"%s\"...\n", app_name);
     elf_base = cpio_get_file(_cpio_archive, app_name, &elf_size);
     conditional_panic(!elf_base, "Unable to locate cpio header");
 
@@ -387,7 +387,7 @@ static inline seL4_CPtr badge_irq_ep(seL4_CPtr ep, seL4_Word badge) {
  */
 int main(void) {
 
-    dprintf(0, "\nSOS Starting...\n");
+    kprintf(0, "\nSOS Starting...\n");
 
     _sos_init(&_sos_ipc_ep_cap, &_sos_interrupt_ep_cap);
 
@@ -398,7 +398,7 @@ int main(void) {
     start_first_process(TTY_NAME, _sos_ipc_ep_cap);
 
     /* Wait on synchronous endpoint for IPC */
-    dprintf(0, "\nSOS entering syscall loop\n");
+    kprintf(0, "\nSOS entering syscall loop\n");
     syscall_loop(_sos_ipc_ep_cap);
 
     /* Not reached */
