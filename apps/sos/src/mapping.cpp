@@ -8,15 +8,19 @@
  * @TAG(NICTA_BSD)
  */
 
-#include "internal/mapping.h"
+#include <unordered_map>
 
-#include "internal/ut_manager/ut.h"
-#include "internal/vmem_layout.h"
+extern "C" {
+    #include <cspace/cspace.h>
 
-#define verbose 0
-#include "internal/sys/panic.h"
-#include "internal/sys/debug.h"
-#include <cspace/cspace.h>
+    #include "internal/mapping.h"
+    #include "internal/ut_manager/ut.h"
+    #include "internal/vmem_layout.h"
+
+    #define verbose 0
+    #include "internal/sys/panic.h"
+    #include "internal/sys/debug.h"
+};
 
 extern const seL4_BootInfo* _boot_info;
 
@@ -73,8 +77,11 @@ map_page(seL4_CPtr frame_cap, seL4_ARM_PageDirectory pd, seL4_Word vaddr,
     return err;
 }
 
+std::unordered_map<void*, void*> devices;
+
 void*
 map_device(void* paddr, int size){
+    if (devices.count(paddr) > 0) return devices[paddr];
     static seL4_Word virt = DEVICE_START;
     seL4_Word phys = (seL4_Word)paddr;
     seL4_Word vstart = virt;
@@ -92,20 +99,23 @@ map_device(void* paddr, int size){
                                     &frame_cap);
         conditional_panic(err, "Unable to retype device memory");
         /* Map in the page */
-        err = map_page(frame_cap,
+        err = (seL4_Error)map_page(frame_cap,
                        seL4_CapInitThreadPD,
                        virt,
                        seL4_AllRights,
-                       0);
+                       (seL4_ARM_VMAttributes)0);
         conditional_panic(err, "Unable to map device");
         /* Next address */
         phys += (1 << seL4_PageBits);
         virt += (1 << seL4_PageBits);
     }
+    devices[paddr] = (void*)vstart;
     return (void*)vstart;
 }
 
 void
-unmap_device(void* paddr){
-    // TODO: Actually unmap
+unmap_device(void* paddr) {
+    // don't bother actually unmapping. Just re-use the same virtual address for the same physical address
+    // assume that they still own rights to use whatever cap they used before
+    // fix this in milestone 2 when we implement proper frame table
 }
