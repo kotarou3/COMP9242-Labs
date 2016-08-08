@@ -15,6 +15,7 @@
 
 #include <cspace/cspace.h>
 
+#include <clock/clock.h>
 #include <cpio/cpio.h>
 #include <nfs/nfs.h>
 #include <elf/elf.h>
@@ -44,7 +45,8 @@
 #define IRQ_EP_BADGE         (1 << (seL4_BadgeBits - 1))
 /* All badged IRQs set high bet, then we use uniq bits to
  * distinguish interrupt sources */
-#define IRQ_BADGE_NETWORK (1 << 0)
+#define IRQ_BADGE_NETWORK   (1 << 0)
+#define IRQ_BADGE_TIMER     (1 << 1)
 
 #define TTY_NAME             CONFIG_SOS_STARTUP_APP
 #define TTY_PRIORITY         (0)
@@ -119,7 +121,9 @@ void syscall_loop(seL4_CPtr ep) {
             if (badge & IRQ_BADGE_NETWORK) {
                 network_irq();
             }
-
+            if (badge & IRQ_BADGE_TIMER) {
+                assert(timer_interrupt() == CLOCK_R_OK);
+            }
         }else if(label == seL4_VMFault){
             /* Page fault */
             kprintf(0, "vm fault at 0x%08x, pc = 0x%08x, %s\n", seL4_GetMR(1),
@@ -382,6 +386,30 @@ static inline seL4_CPtr badge_irq_ep(seL4_CPtr ep, seL4_Word badge) {
     return badged_cap;
 }
 
+uint64_t start_time;
+
+static void timer_test1(uint32_t id, void* data) {
+    kprintf(0, "%s got id = %u, time since start = %llu\n", __func__, id, time_stamp() - start_time);
+}
+
+int ints_count = 0;
+static void timer_recurring_test(uint32_t id, void *data) {
+    unsigned long long average = (time_stamp() - start_time) / ++ints_count;
+    kprintf(0, "%s (id #%d) averages delay of %llu\n", __func__, id, average);
+    if (ints_count == 600) assert(remove_timer(id) == CLOCK_R_OK);
+}
+
+int manual_ints_count = 0;
+static void timer_manual_recurring_test(uint32_t id, void *data) {
+    unsigned long long average = (time_stamp() - start_time) / ++manual_ints_count;
+    kprintf(0, "%s (id #%d) averages delay of %llu\n", __func__, id, average);
+    if (manual_ints_count == 600) {
+        assert(remove_timer(id) == CLOCK_R_OK);
+    } else {
+        register_timer(100000, timer_manual_recurring_test, (void*)0x0f0f0f0f);
+    }
+}
+
 /*
  * Main entry point - called by crt.
  */
@@ -394,8 +422,47 @@ int main(void) {
     /* Initialise the network hardware */
     network_init(badge_irq_ep(_sos_interrupt_ep_cap, IRQ_BADGE_NETWORK));
 
+    seL4_CPtr badged_ep = badge_irq_ep(_sos_interrupt_ep_cap, IRQ_BADGE_TIMER);
+
+    /* Test that initialising and de-initialising the timer works correctly */
+    assert(stop_timer() == CLOCK_R_UINT);
+    assert(register_timer(1, timer_test1, (void*)0x0f0f0f0f) == CLOCK_R_UINT);
+    assert(remove_timer(1) == CLOCK_R_UINT);
+//    kprintf(0, "Initialising clock\n");
+    assert(start_timer(badged_ep) == CLOCK_R_OK);
+
+//    kprintf(0, "Creating timers\n");
+    register_timer(100000, timer_test1, (void*)0x0f0f0f0f);
+
+//    kprintf(0, "Deinitialising clock\n");
+    assert(stop_timer() == CLOCK_R_OK);
+
+    /* Initialise the timer */
+//    kprintf(0, "Reinitialising clock\n");
+    assert(start_timer(badged_ep) == CLOCK_R_OK);
+
+//    kprintf(0, "Reinitialised clock\n");
     /* Start the user application */
     start_first_process(TTY_NAME, _sos_ipc_ep_cap);
+
+    /* Test our timer */
+    // test overflow. 5000 and 5500 seconds respectively
+    register_timer(5000000000ULL, timer_test1, (void*)0xdeadbeef);
+    register_timer(5500000000ULL, timer_test1, (void*)0xdeadbeef);
+
+    start_time = time_stamp();
+
+    /* Test recurring timers - both manual and automatic */
+    register_recurring_timer(100000, timer_recurring_test, (void*)0x0f0f0f0f);
+    register_timer(100000, timer_manual_recurring_test, (void*)0x0f0f0f0f);
+
+    register_timer(0, timer_test1, (void*)0x12345678);
+    // 5 seconds in
+    register_timer(5000000, timer_test1, (void*)0xdeadbeef);
+
+    uint32_t id = register_timer(2000000, timer_test1, (void*)0x87654321);
+    assert(remove_timer(id) == CLOCK_R_OK);
+    assert(remove_timer(1000000) == CLOCK_R_FAIL);
 
     /* Wait on synchronous endpoint for IPC */
     kprintf(0, "\nSOS entering syscall loop\n");
