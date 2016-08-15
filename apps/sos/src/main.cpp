@@ -8,31 +8,38 @@
  * @TAG(NICTA_BSD)
  */
 
+#include <exception>
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <assert.h>
 #include <string.h>
 
-#include <cspace/cspace.h>
+extern "C" {
+    #include <cspace/cspace.h>
 
-#include <cpio/cpio.h>
-#include <nfs/nfs.h>
-#include <elf/elf.h>
-#include <serial/serial.h>
-#include <sos.h>
+    #include <cpio/cpio.h>
+    #include <nfs/nfs.h>
+    #include <elf/elf.h>
+    #include <serial/serial.h>
+    #include <sos.h>
 
-#include "internal/network.h"
-#include "internal/elf.h"
+    #include "internal/network.h"
+    #include "internal/elf.h"
 
-#include "internal/ut_manager/ut.h"
-#include "internal/vmem_layout.h"
-#include "internal/mapping.h"
+    #include "internal/ut_manager/ut.h"
+    #include "internal/vmem_layout.h"
+    #include "internal/mapping.h"
 
-#include <autoconf.h>
+    #include <autoconf.h>
 
-#define verbose 5
-#include "internal/sys/debug.h"
-#include "internal/sys/panic.h"
+    #define verbose 5
+    #include "internal/sys/debug.h"
+    #include "internal/sys/panic.h"
+}
+
+#include "internal/memory/FrameTable.h"
+#include "internal/memory/PageDirectory.h"
 
 /* This is the index where a clients syscall enpoint will
  * be stored in the clients cspace. */
@@ -269,7 +276,7 @@ void start_first_process(char* app_name, seL4_CPtr fault_ep) {
 
     /* parse the cpio image */
     kprintf(1, "\nStarting \"%s\"...\n", app_name);
-    elf_base = cpio_get_file(_cpio_archive, app_name, &elf_size);
+    elf_base = (char*)cpio_get_file(_cpio_archive, app_name, &elf_size);
     conditional_panic(!elf_base, "Unable to locate cpio header");
 
     /* load the elf image */
@@ -337,7 +344,7 @@ static void _sos_ipc_init(seL4_CPtr* ipc_ep, seL4_CPtr* async_ep){
 }
 
 
-static void _sos_init(seL4_CPtr* ipc_ep, seL4_CPtr* async_ep){
+static void _sos_init(seL4_CPtr* ipc_ep, seL4_CPtr* async_ep) try {
     seL4_Word dma_addr;
     seL4_Word low, high;
     int err;
@@ -367,6 +374,9 @@ static void _sos_init(seL4_CPtr* ipc_ep, seL4_CPtr* async_ep){
                                      malloc, free);
     conditional_panic(err, "Failed to initialise the c space\n");
 
+    /* Initialise the frame table. Requires cspace to be initialised first */
+    memory::FrameTable::init(low, high);
+
     /* Initialise DMA memory */
     err = dma_init(dma_addr, DMA_SIZE_BITS);
     conditional_panic(err, "Failed to intiialise DMA memory\n");
@@ -374,6 +384,9 @@ static void _sos_init(seL4_CPtr* ipc_ep, seL4_CPtr* async_ep){
     /* Initialiase other system compenents here */
 
     _sos_ipc_init(ipc_ep, async_ep);
+} catch (const std::exception& e) {
+    kprintf(0, "Caught: %s\n", e.what());
+    panic("Caught exception during initialisation\n");
 }
 
 static inline seL4_CPtr badge_irq_ep(seL4_CPtr ep, seL4_Word badge) {
@@ -393,6 +406,75 @@ int main(void) {
 
     /* Initialise the network hardware */
     network_init(badge_irq_ep(_sos_interrupt_ep_cap, IRQ_BADGE_NETWORK));
+
+    {
+        using namespace memory;
+
+        /* Allocate 10 pages and make sure you can touch them all */
+        vaddr_t vaddr = 0x20000000; // Pick a hardcoded location for testing
+        size_t i = 0;
+        for (; i < 10000; i++) {
+            /* Allocate a page */
+            Page page = memory::FrameTable::alloc();
+            sosPageDirectory.map(std::move(page), vaddr, Attributes{.read = true, .write = true});
+
+            if (i % 1000 == 0)
+                kprintf(0, "(1) Page #%zu allocated at %08zx\n", i, vaddr);
+
+            /* Test you can touch the page */
+            size_t* p = reinterpret_cast<size_t*>(vaddr);
+            *p = 0x37;
+            assert(*p == 0x37);
+
+            vaddr += 1 << seL4_PageBits;
+        }
+
+        /* Test that you never run out of memory if you always free frames. */
+        for (size_t j = i; j < i + 10000; j++) {
+            /* Allocate a page */
+            Page page = memory::FrameTable::alloc();
+            sosPageDirectory.map(std::move(page), vaddr, Attributes{.read = true, .write = true});
+
+            /* Test you can touch the page */
+            size_t* p = reinterpret_cast<size_t*>(vaddr);
+            *p = j;
+            assert(*p == j);
+
+            if (j % 1000 == 0)
+                kprintf(0, "(2) Page #%zu allocated at %08zx\n", j, vaddr);
+
+            sosPageDirectory.unmap(vaddr);
+        }
+
+        /* Test that you eventually run out of memory gracefully,
+           and doesn't crash */
+        try {
+            for (; ; i++) {
+                /* Allocate a page */
+                Page page = memory::FrameTable::alloc();
+                sosPageDirectory.map(std::move(page), vaddr, Attributes{.read = true, .write = true});
+
+                if (i % 1000 == 0)
+                    kprintf(0, "(3) Page #%zu allocated at %08zx\n", i, vaddr);
+
+                /* Test you can touch the page */
+                size_t* p = reinterpret_cast<size_t*>(vaddr);
+                *p = i;
+                assert(*p == i);
+
+                vaddr += 1 << seL4_PageBits;
+            }
+        } catch (const std::exception& e) {
+            kprintf(0, "Caught %s\n", e.what());
+        }
+
+        kprintf(0, "Allocated %zu units\n", i);
+
+        while (i --> 0) {
+            vaddr -= 1 << seL4_PageBits;
+            sosPageDirectory.unmap(vaddr);
+        }
+    }
 
     /* Start the user application */
     start_first_process(TTY_NAME, _sos_ipc_ep_cap);
