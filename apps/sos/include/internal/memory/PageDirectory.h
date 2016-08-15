@@ -3,6 +3,8 @@
 #include <unordered_map>
 #include <vector>
 
+#include "internal/memory/FrameTable.h"
+
 extern "C" {
     #include <sel4/sel4.h>
 }
@@ -20,7 +22,6 @@ struct Attributes {
 
 class PageTable;
 class MappedPage;
-class Page;
 
 class PageDirectory {
     public:

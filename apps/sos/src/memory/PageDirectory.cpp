@@ -32,7 +32,7 @@ std::vector<std::reference_wrapper<const MappedPage>> PageDirectory::allocateAnd
 
     for (size_t p = 0; p < pages; ++p) {
         vaddr_t curAddress = address + (p << seL4_PageBits);
-        result.push_back(map(FrameTable::allocate(), curAddress, attributes));
+        result.push_back(map(FrameTable::alloc(), curAddress, attributes));
     }
 
     return result;
