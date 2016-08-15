@@ -401,13 +401,13 @@ static void timer_recurring_test(uint32_t id, void *data) {
 
 int manual_ints_count = 0;
 static void timer_manual_recurring_test(uint32_t id, void *data) {
-    unsigned long long average = (time_stamp() - start_time) / ++manual_ints_count;
-    kprintf(0, "%s (id #%d) averages delay of %llu\n", __func__, id, average);
     if (manual_ints_count == 600) {
         assert(remove_timer(id) == CLOCK_R_OK);
     } else {
         register_timer(100000, timer_manual_recurring_test, (void*)0x0f0f0f0f);
     }
+    unsigned long long average = (time_stamp() - start_time) / ++manual_ints_count;
+    kprintf(0, "%s (id #%d) averages delay of %llu\n", __func__, id, average);
 }
 
 /*
