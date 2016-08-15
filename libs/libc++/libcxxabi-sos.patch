@@ -1,13 +1,22 @@
 diff --git a/src/cxa_personality.cpp b/src/cxa_personality.cpp
-index 63adf31..da2d9cf 100644
+index 63adf31..527d3b1 100644
 --- a/src/cxa_personality.cpp
 +++ b/src/cxa_personality.cpp
-@@ -336,6 +336,8 @@ static const void* read_target2_value(const void* ptr)
- #endif
- }
+@@ -347,7 +347,7 @@ get_shim_type_info(uint64_t ttypeIndex, const uint8_t* classInfo,
+         call_terminate(native_exception, unwind_exception);
+     }
  
-+#endif
-+#if 0
- static const __shim_type_info*
- get_shim_type_info(uint64_t ttypeIndex, const uint8_t* classInfo,
-                    uint8_t ttypeEncoding, bool native_exception,
+-    assert(ttypeEncoding == DW_EH_PE_absptr && "Unexpected TTypeEncoding");
++    assert((ttypeEncoding & 0x0f) == DW_EH_PE_absptr && "Unexpected TTypeEncoding");
+     (void)ttypeEncoding;
+ 
+     const uint8_t* ttypePtr = classInfo - ttypeIndex * sizeof(uintptr_t);
+@@ -414,7 +414,7 @@ exception_spec_can_catch(int64_t specIndex, const uint8_t* classInfo,
+         call_terminate(false, unwind_exception);
+     }
+ 
+-    assert(ttypeEncoding == DW_EH_PE_absptr && "Unexpected TTypeEncoding");
++    assert((ttypeEncoding & 0x0f) == DW_EH_PE_absptr && "Unexpected TTypeEncoding");
+     (void)ttypeEncoding;
+ 
+     // specIndex is negative of 1-based byte offset into classInfo;
