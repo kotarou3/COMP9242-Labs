@@ -79,7 +79,21 @@ Hardware::~Hardware() {
 }
 
 Timestamp Hardware::getTimestamp() const noexcept {
-    return _counterZeroTimestamp + microseconds(_registers->counter);
+    bool isAlreadyOverflowed = _registers->status & GPT1_SR_ROV;
+    Timestamp timestamp = _counterZeroTimestamp + microseconds(_registers->counter);
+
+    if (isAlreadyOverflowed) {
+        // Counter has overflowed, but it hasn't been handled yet
+        return timestamp + microseconds(0x100000000);
+    } else if (_registers->status & GPT1_SR_ROV) {
+        // Counter wasn't overflown initially, but did during this function body,
+        // so now our timestamp is potentially off by 0x100000000, but we can't
+        // be sure about that, so we re-run the function
+        return getTimestamp();
+    } else {
+        // Counter not overflowed
+        return timestamp;
+    }
 }
 
 void Hardware::requestNextIrqTime(Timestamp timestamp) noexcept {
