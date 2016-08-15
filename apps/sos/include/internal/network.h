@@ -24,14 +24,6 @@ extern fhandle_t mnt_point;
 extern void network_init(seL4_CPtr interrupt_ep);
 
 /**
- * Initialises DMA memory for the network driver
- * @param[in] paddr    The base physical address of the memory to use for DMA
- * @param[in] sizebits The size (1 << sizebits bytes) of the memory provided.
- * @return             0 on success
- */
-extern int dma_init(seL4_Word paddr, int sizebits);
-
-/**
  * Allows the network driver to handle any pending events
  */
 extern void network_irq(void);

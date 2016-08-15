@@ -164,7 +164,7 @@ typedef enum ftype {
  * since midnight January 1, 1970, Greenwich Mean Time.  It is used
  * to pass time and date information.
  */
-typedef struct timeval {
+typedef struct {
 /// The seconds portion of the time value.
     uint32_t seconds; 
 /// The micro seconds portion of the time value.

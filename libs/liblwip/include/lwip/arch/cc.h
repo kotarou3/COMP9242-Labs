@@ -22,14 +22,16 @@ typedef uintptr_t mem_ptr_t;
 #define SZT_F "uz"
 
 
-#if defined(__BYTE_ORDER__)
-#  define BYTE_ORDER __BYTE_ORDER__
-#elif defined(__BIG_ENDIAN)
-#  define BYTE_ORDER BIG_ENDIAN
-#elif defined(__LITTLE_ENDIAN)
-#  define BYTE_ORDER LITTLE_ENDIAN
-#else
-#  error Unable to detemine system endianess
+#if !defined(BYTE_ORDER)
+#  if defined(__BYTE_ORDER__)
+#    define BYTE_ORDER __BYTE_ORDER__
+#  elif defined(__BIG_ENDIAN)
+#    define BYTE_ORDER BIG_ENDIAN
+#  elif defined(__LITTLE_ENDIAN)
+#    define BYTE_ORDER LITTLE_ENDIAN
+#  else
+#    error Unable to detemine system endianess
+#  endif
 #endif
 
 

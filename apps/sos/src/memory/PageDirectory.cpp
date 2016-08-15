@@ -14,8 +14,6 @@ extern "C" {
 
 namespace memory {
 
-PageDirectory sosPageDirectory(seL4_CapInitThreadPD);
-
 ///////////////////
 // PageDirectory //
 ///////////////////
@@ -34,19 +32,8 @@ PageDirectory::~PageDirectory() {
         _cap.release();
 }
 
-std::vector<std::reference_wrapper<const MappedPage>> PageDirectory::allocateAndMap(size_t pages, vaddr_t address, Attributes attributes) {
-    if (pages == 0)
-        throw std::invalid_argument("Must specify at least one page");
-
-    std::vector<std::reference_wrapper<const MappedPage>> result;
-    result.reserve(pages);
-
-    for (size_t p = 0; p < pages; ++p) {
-        vaddr_t curAddress = address + p * PAGE_SIZE;
-        result.push_back(map(FrameTable::alloc(), curAddress, attributes));
-    }
-
-    return result;
+const MappedPage& PageDirectory::allocateAndMap(vaddr_t address, Attributes attributes) {
+    return map(FrameTable::alloc(), address, attributes);
 }
 
 const MappedPage& PageDirectory::map(Page page, vaddr_t address, Attributes attributes) {
@@ -114,9 +101,7 @@ const MappedPage& PageTable::map(Page page, vaddr_t address, Attributes attribut
 
 void PageTable::unmap(vaddr_t address) {
     _checkAddress(address);
-
-    if (_pages.erase(_toIndex(address)) == 0)
-        throw std::out_of_range("Address is not mapped");
+    _pages.erase(_toIndex(address));
 }
 
 const MappedPage& PageTable::lookup(vaddr_t address) const {

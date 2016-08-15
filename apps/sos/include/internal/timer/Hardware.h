@@ -1,11 +1,10 @@
 #pragma once
 
-#include <memory>
-
 extern "C" {
     #include <sel4/types.h>
 }
 
+#include "internal/memory/DeviceMemory.h"
 #include "internal/timer/timer.h"
 
 namespace timer {
@@ -34,7 +33,7 @@ class Hardware {
 
     private:
         struct Registers;
-        std::unique_ptr<volatile Registers, void (&)(volatile Registers*)> _registers;
+        memory::DeviceMemory<Registers> _registers;
 
         seL4_IRQHandler _irqCap;
         Timestamp _counterZeroTimestamp;

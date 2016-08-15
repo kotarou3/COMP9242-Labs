@@ -30,7 +30,14 @@ class PageDirectory {
         explicit PageDirectory(seL4_ARM_PageDirectory cap);
         ~PageDirectory();
 
-        std::vector<std::reference_wrapper<const MappedPage>> allocateAndMap(size_t pages, vaddr_t address, Attributes attributes);
+        PageDirectory(const PageDirectory&) = delete;
+        PageDirectory& operator=(const PageDirectory&) = delete;
+
+        PageDirectory(PageDirectory&&) = delete;
+        PageDirectory& operator=(PageDirectory&&) = delete;
+
+        // Warning: Returned reference is invalidated after another mapping
+        const MappedPage& allocateAndMap(vaddr_t address, Attributes attributes);
         const MappedPage& map(Page page, vaddr_t address, Attributes attributes);
         void unmap(vaddr_t address);
         const MappedPage& lookup(vaddr_t address) const;
@@ -87,7 +94,7 @@ class MappedPage {
         MappedPage(MappedPage&& other) = default;
         MappedPage& operator=(MappedPage&& other) = default;
 
-        //Page getPage() const noexcept {return _page;}
+        const Page& getPage() const noexcept {return _page;}
         vaddr_t getAddress() const noexcept {return _address;}
         Attributes getAttributes() const noexcept {return _attributes;}
 
@@ -98,7 +105,5 @@ class MappedPage {
 
         friend void FrameTable::init(paddr_t start, paddr_t end);
 };
-
-extern PageDirectory sosPageDirectory;
 
 }

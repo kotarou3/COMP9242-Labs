@@ -9,6 +9,17 @@
  */
 
 #include <platsupport/io.h>
+#include <sel4/types.h>
+
+#define DMA_SIZE_BITS 22
+
+/**
+ * Initialises DMA memory
+ * @param[in] paddr    The base physical address of the memory to use for DMA
+ * @param[in] sizebits The size (1 << sizebits bytes) of the memory provided.
+ * @return             0 on success
+ */
+int dma_init(seL4_Word paddr, int sizebits);
 
 void *sos_dma_malloc(void* cookie, size_t size, int align, int cached, ps_mem_flags_t flags);
 void sos_dma_free(void *cookie, void *addr, size_t size);

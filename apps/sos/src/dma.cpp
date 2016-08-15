@@ -19,60 +19,51 @@
 #include <assert.h>
 #include <string.h>
 
-#include <sel4/types.h>
-#include <cspace/cspace.h>
-#include "internal/dma.h"
-#include "internal/mapping.h"
-#include "internal/ut_manager/ut.h"
-#include "internal/vmem_layout.h"
+#include "internal/memory/FrameTable.h"
+#include "internal/memory/Mappings.h"
+#include "internal/process/Thread.h"
 
-#define verbose 5
-#include "internal/sys/debug.h"
-#include "internal/sys/panic.h"
+extern "C" {
+    #include "internal/dma.h"
+    #include <sel4/sel4.h>
+
+    #define verbose 5
+    #include "internal/sys/debug.h"
+    #include "internal/sys/panic.h"
+}
 
 #define DMA_SIZE     (_dma_pend - _dma_pstart)
-#define DMA_PAGES    (DMA_SIZE >> seL4_PageBits)
+#define DMA_PAGES    (memory::numPages(DMA_SIZE))
 
-#define PHYS(vaddr)  ((vaddr) - DMA_VSTART + _dma_pstart)
-#define VIRT(paddr)  ((paddr) + DMA_VSTART - _dma_pstart)
+#define PHYS(vaddr)  ((vaddr) - _dma_vstart + _dma_pstart)
+#define VIRT(paddr)  ((paddr) + _dma_vstart - _dma_pstart)
 
-#define PAGE_OFFSET(a) ((a) & ((1 << seL4_PageBits) - 1))
+#define PAGE_OFFSET(a) (memory::pageOffset(a))
 
 #define DMA_ALIGN_BITS  7 /* 128 */
 #define DMA_ALIGN(a)    ROUND_UP(a,DMA_ALIGN_BITS)
-
-static seL4_CPtr* _dma_caps;
+#define typeof(a)       decltype(a)
 
 static seL4_Word _dma_pstart = 0;
 static seL4_Word _dma_pend = 0;
 static seL4_Word _dma_pnext = 0;
 
+static memory::vaddr_t _dma_vstart;
+static memory::vaddr_t _dma_vend;
+
 static inline void
 _dma_fill(seL4_Word pstart, seL4_Word pend, int cached){
-    seL4_CPtr* caps = &_dma_caps[(pstart - _dma_pstart) >> seL4_PageBits];
-    seL4_ARM_VMAttributes vm_attr = 0;
-    int err;
-
-    if(cached){
-        vm_attr = seL4_ARM_Default_VMAttributes;
-        vm_attr = 0 /* TODO L2CC currently not controlled by kernel */;
-    }
-
     pstart -= PAGE_OFFSET(pstart);
-    while(pstart < pend){
-        if(*caps == seL4_CapNull){
-            /* Create the frame cap */
-            err = cspace_ut_retype_addr(pstart, seL4_ARM_SmallPageObject,
-                                        seL4_PageBits, cur_cspace, caps);
-            assert(!err);
-            /* Map in the frame */
-            err = map_page(*caps, seL4_CapInitThreadPD, VIRT(pstart),
-                           seL4_AllRights, vm_attr);
-            assert(!err);
+
+    for (; pstart < pend; pstart += PAGE_SIZE) {
+        try {
+            process::getSosProcess().pageDirectory.lookup(VIRT(pstart));
+        } catch (...) {
+            process::getSosProcess().pageDirectory.map(
+                memory::FrameTable::alloc(pstart), VIRT(pstart),
+                memory::Attributes{.read = true, .write = true, .execute = false, .notCacheable = !cached}
+            );
         }
-        /* Next */
-        pstart += (1 << seL4_PageBits);
-        caps++;
     }
 }
 
@@ -80,13 +71,19 @@ _dma_fill(seL4_Word pstart, seL4_Word pend, int cached){
 int
 dma_init(seL4_Word dma_paddr_start, int sizebits){
     assert(_dma_pstart == 0);
+    assert(sizebits >= seL4_PageBits);
 
     _dma_pstart = _dma_pnext = dma_paddr_start;
     _dma_pend = dma_paddr_start + (1 << sizebits);
-    _dma_caps = (seL4_CPtr*)malloc(sizeof(seL4_CPtr) * DMA_PAGES);
-    conditional_panic(!_dma_caps, "Not enough heap space for dma frame caps");
 
-    memset(_dma_caps, 0, sizeof(seL4_CPtr) * DMA_PAGES);
+    auto map = process::getSosProcess().maps.insert(
+        0, 1 << (sizebits - seL4_PageBits),
+        memory::Attributes{.read = true, .write = true, .execute = false, .notCacheable = true},
+        memory::Mapping::Flags{.shared = false}
+    );
+    _dma_vstart = map.start;
+    _dma_vend = map.end;
+
     return 0;
 }
 
@@ -126,7 +123,7 @@ void sos_dma_free(void *cookie, void *addr, size_t size) {
 }
 
 uintptr_t sos_dma_pin(void *cookie, void *addr, size_t size) {
-    if ((uintptr_t)addr < DMA_VSTART || (uintptr_t)addr >= DMA_VEND) {
+    if ((uintptr_t)addr < _dma_vstart || (uintptr_t)addr >= _dma_vend) {
         return 0;
     } else {
         return PHYS((uintptr_t)addr);

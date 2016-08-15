@@ -18,29 +18,32 @@
  *
  ****************************************************************************/
 
-#include "internal/network.h"
-
-#include <autoconf.h>
-
 #include <assert.h>
-#include <string.h>
 #include <stdio.h>
+#include <string.h>
 
-#include <nfs/nfs.h>
-#include <lwip/init.h>
-#include <netif/etharp.h>
-#include <ethdrivers/lwip.h>
-#include <ethdrivers/imx6.h>
-#include <cspace/cspace.h>
+#include "internal/memory/FrameTable.h"
+#include "internal/memory/Mappings.h"
+#include "internal/process/Thread.h"
 
-#include "internal/dma.h"
-#include "internal/mapping.h"
-#include "internal/ut_manager/ut.h"
+extern "C" {
+    #include <autoconf.h>
 
-#define verbose 0
-#include "internal/sys/debug.h"
-#include "internal/sys/panic.h"
+    #include <nfs/nfs.h>
+    #include <lwip/init.h>
+    #include <netif/etharp.h>
+    #include <ethdrivers/lwip.h>
+    #include <ethdrivers/imx6.h>
+    #include <cspace/cspace.h>
+    #include <sel4/sel4.h>
 
+    #include "internal/dma.h"
+    #include "internal/network.h"
+
+    #define verbose 0
+    #include "internal/sys/debug.h"
+    #include "internal/sys/panic.h"
+}
 
 #ifndef SOS_NFS_DIR
 #  ifdef CONFIG_SOS_NFS_DIR
@@ -72,14 +75,34 @@ lwip_iface_t *lwip_iface;
 
 static void *
 sos_map_device(void* cookie, uintptr_t addr, size_t size, int cached, ps_mem_flags_t flags){
-    (void)cookie;
-    return map_device((void*)addr, size);
+    try {
+        auto map = process::getSosProcess().maps.insertScoped(
+            0, memory::numPages(size),
+            memory::Attributes{.read = true, .write = true, .execute = false, .notCacheable = !cached},
+            memory::Mapping::Flags{.shared = false}
+        );
+
+        for (size_t offset = 0; offset < size; offset += PAGE_SIZE) {
+            process::getSosProcess().pageDirectory.map(
+                memory::FrameTable::alloc(addr + offset), map.getAddress() + offset,
+                memory::Attributes{.read = true, .write = true, .execute = false, .notCacheable = !cached}
+            );
+        }
+
+        void* result = reinterpret_cast<void*>(map.getAddress());
+        map.release();
+        return result;
+    } catch (...) {
+        return nullptr;
+    }
 }
 
 static void
 sos_unmap_device(void *cookie, void *addr, size_t size) {
+    process::getSosProcess().maps.erase(reinterpret_cast<memory::vaddr_t>(addr), memory::numPages(size));
 }
 
+extern "C"
 void
 sos_usleep(int usecs) {
     /* We need to spin because we do not as yet have a timer interrupt */
@@ -170,6 +193,7 @@ network_init(seL4_CPtr interrupt_ep) {
 
     ps_io_ops_t io_ops = {
         .io_mapper = io_mapper,
+        .io_port_ops = {0},
         .dma_manager = dma_man
     };
 
@@ -197,7 +221,7 @@ network_init(seL4_CPtr interrupt_ep) {
 
     /* Setup the network interface */
     lwip_init();
-    struct netif *netif = malloc(sizeof(*netif));
+    struct netif *netif = new struct netif;
     assert(netif);
     lwip_iface->netif = netif_add(netif, &ipaddr, &netmask, &gw,
                          lwip_iface, ethif_get_ethif_init(lwip_iface), ethernet_input);

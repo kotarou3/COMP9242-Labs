@@ -8,35 +8,38 @@
  * @TAG(NICTA_BSD)
  */
 
+#include <exception>
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <assert.h>
 #include <string.h>
 
-#include <cspace/cspace.h>
+extern "C" {
+    #include <cspace/cspace.h>
 
-#include <cpio/cpio.h>
-#include <nfs/nfs.h>
-#include <elf/elf.h>
-#include <serial/serial.h>
-#include <sos.h>
+    #include <cpio/cpio.h>
+    #include <elf/elf.h>
+    #include <sos.h>
+    #include <sel4/sel4.h>
 
-#include "internal/network.h"
+    #include "internal/dma.h"
+    #include "internal/network.h"
+
+    #include "internal/ut_manager/ut.h"
+
+    #include <autoconf.h>
+
+    #define verbose 5
+    #include "internal/sys/debug.h"
+    #include "internal/sys/panic.h"
+}
+
 #include "internal/elf.h"
+#include "internal/memory/FrameTable.h"
+#include "internal/memory/PageDirectory.h"
+#include "internal/process/Thread.h"
 
-#include "internal/ut_manager/ut.h"
-#include "internal/vmem_layout.h"
-#include "internal/mapping.h"
-
-#include <autoconf.h>
-
-#define verbose 5
-#include "internal/sys/debug.h"
-#include "internal/sys/panic.h"
-
-/* This is the index where a clients syscall enpoint will
- * be stored in the clients cspace. */
-#define USER_EP_CAP          (1)
 /* To differencient between async and and sync IPC, we assign a
  * badge to the async endpoint. The badge that we receive will
  * be the bitwise 'OR' of the async endpoint badge and the badges
@@ -47,96 +50,16 @@
 #define IRQ_BADGE_NETWORK (1 << 0)
 
 #define TTY_NAME             CONFIG_SOS_STARTUP_APP
-#define TTY_PRIORITY         (0)
 #define TTY_EP_BADGE         (101)
 
 /* The linker will link this symbol to the start address  *
  * of an archive of attached applications.                */
 extern char _cpio_archive[];
 
-const seL4_BootInfo* _boot_info;
-
-
-struct {
-
-    seL4_Word tcb_addr;
-    seL4_TCB tcb_cap;
-
-    seL4_Word vroot_addr;
-    seL4_ARM_PageDirectory vroot;
-
-    seL4_Word ipc_buffer_addr;
-    seL4_CPtr ipc_buffer_cap;
-
-    cspace_t *croot;
-
-} tty_test_process;
-
+std::unique_ptr<process::Thread> _tty_start_thread;
 
 seL4_CPtr _sos_ipc_ep_cap;
 seL4_CPtr _sos_interrupt_ep_cap;
-
-/**
- * NFS mount point
- */
-extern fhandle_t mnt_point;
-
-
-void handle_syscall(seL4_Word badge, uint32_t argc) {
-    /* Process system call */
-    seL4_Word syscall_number = seL4_GetMR(0);
-    switch (syscall_number) {
-    case SOS_SYS_SERIAL_WRITE: {
-        static struct serial *serial;
-        if (!serial)
-            serial = serial_init();
-
-        int sent = serial_send(serial, (char *)&seL4_GetIPCBuffer()->msg[1], argc);
-
-        seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
-        seL4_SetMR(0, sent);
-        seL4_Reply(reply);
-        break;
-    }
-
-    default:
-        printf("Unknown syscall %d\n", syscall_number);
-        /* we don't want to reply to an unknown syscall */
-    }
-}
-
-void syscall_loop(seL4_CPtr ep) {
-
-    while (1) {
-        seL4_Word badge;
-        seL4_Word label;
-        seL4_MessageInfo_t message;
-
-        message = seL4_Wait(ep, &badge);
-        label = seL4_MessageInfo_get_label(message);
-        if(badge & IRQ_EP_BADGE){
-            /* Interrupt */
-            if (badge & IRQ_BADGE_NETWORK) {
-                network_irq();
-            }
-
-        }else if(label == seL4_VMFault){
-            /* Page fault */
-            kprintf(0, "vm fault at 0x%08x, pc = 0x%08x, %s\n", seL4_GetMR(1),
-                    seL4_GetMR(0),
-                    seL4_GetMR(2) ? "Instruction Fault" : "Data fault");
-
-            assert(!"Unable to handle vm faults");
-        }else if(label == seL4_NoFault) {
-            /* System call */
-            handle_syscall(badge, seL4_MessageInfo_get_length(message) - 1);
-
-        }else{
-            printf("Rootserver got an unknown message\n");
-        }
-    }
-}
-
 
 static void print_bootinfo(const seL4_BootInfo* info) {
     int i;
@@ -200,110 +123,23 @@ static void print_bootinfo(const seL4_BootInfo* info) {
     kprintf(1,"--------------------------------------------------------\n");
 }
 
-void start_first_process(char* app_name, seL4_CPtr fault_ep) {
-    int err;
-
-    seL4_Word stack_addr;
-    seL4_CPtr stack_cap;
-    seL4_CPtr user_ep_cap;
-
-    /* These required for setting up the TCB */
-    seL4_UserContext context;
-
-    /* These required for loading program sections */
-    char* elf_base;
-    unsigned long elf_size;
-
-    /* Create a VSpace */
-    tty_test_process.vroot_addr = ut_alloc(seL4_PageDirBits);
-    conditional_panic(!tty_test_process.vroot_addr,
-                      "No memory for new Page Directory");
-    err = cspace_ut_retype_addr(tty_test_process.vroot_addr,
-                                seL4_ARM_PageDirectoryObject,
-                                seL4_PageDirBits,
-                                cur_cspace,
-                                &tty_test_process.vroot);
-    conditional_panic(err, "Failed to allocate page directory cap for client");
-
-    /* Create a simple 1 level CSpace */
-    tty_test_process.croot = cspace_create(1);
-    assert(tty_test_process.croot != NULL);
-
-    /* Create an IPC buffer */
-    tty_test_process.ipc_buffer_addr = ut_alloc(seL4_PageBits);
-    conditional_panic(!tty_test_process.ipc_buffer_addr, "No memory for ipc buffer");
-    err =  cspace_ut_retype_addr(tty_test_process.ipc_buffer_addr,
-                                 seL4_ARM_SmallPageObject,
-                                 seL4_PageBits,
-                                 cur_cspace,
-                                 &tty_test_process.ipc_buffer_cap);
-    conditional_panic(err, "Unable to allocate page for IPC buffer");
-
-    /* Copy the fault endpoint to the user app to enable IPC */
-    user_ep_cap = cspace_mint_cap(tty_test_process.croot,
-                                  cur_cspace,
-                                  fault_ep,
-                                  seL4_AllRights,
-                                  seL4_CapData_Badge_new(TTY_EP_BADGE));
-    /* should be the first slot in the space, hack I know */
-    assert(user_ep_cap == 1);
-    assert(user_ep_cap == USER_EP_CAP);
-
-    /* Create a new TCB object */
-    tty_test_process.tcb_addr = ut_alloc(seL4_TCBBits);
-    conditional_panic(!tty_test_process.tcb_addr, "No memory for new TCB");
-    err =  cspace_ut_retype_addr(tty_test_process.tcb_addr,
-                                 seL4_TCBObject,
-                                 seL4_TCBBits,
-                                 cur_cspace,
-                                 &tty_test_process.tcb_cap);
-    conditional_panic(err, "Failed to create TCB");
-
-    /* Configure the TCB */
-    err = seL4_TCB_Configure(tty_test_process.tcb_cap, user_ep_cap, TTY_PRIORITY,
-                             tty_test_process.croot->root_cnode, seL4_NilData,
-                             tty_test_process.vroot, seL4_NilData, PROCESS_IPC_BUFFER,
-                             tty_test_process.ipc_buffer_cap);
-    conditional_panic(err, "Unable to configure new TCB");
-
+void start_first_process(char* app_name, seL4_CPtr fault_ep) try {
+    auto process = std::make_shared<process::Process>();
 
     /* parse the cpio image */
     kprintf(1, "\nStarting \"%s\"...\n", app_name);
-    elf_base = cpio_get_file(_cpio_archive, app_name, &elf_size);
+    unsigned long elf_size;
+    uint8_t* elf_base = (uint8_t*)cpio_get_file(_cpio_archive, app_name, &elf_size);
     conditional_panic(!elf_base, "Unable to locate cpio header");
 
-    /* load the elf image */
-    err = elf_load(tty_test_process.vroot, elf_base);
-    conditional_panic(err, "Failed to load elf image");
+    elf::load(*process, elf_base);
 
-
-    /* Create a stack frame */
-    stack_addr = ut_alloc(seL4_PageBits);
-    conditional_panic(!stack_addr, "No memory for stack");
-    err =  cspace_ut_retype_addr(stack_addr,
-                                 seL4_ARM_SmallPageObject,
-                                 seL4_PageBits,
-                                 cur_cspace,
-                                 &stack_cap);
-    conditional_panic(err, "Unable to allocate page for stack");
-
-    /* Map in the stack frame for the user app */
-    err = map_page(stack_cap, tty_test_process.vroot,
-                   PROCESS_STACK_TOP - (1 << seL4_PageBits),
-                   seL4_AllRights, seL4_ARM_Default_VMAttributes);
-    conditional_panic(err, "Unable to map stack IPC buffer for user app");
-
-    /* Map in the IPC buffer for the thread */
-    err = map_page(tty_test_process.ipc_buffer_cap, tty_test_process.vroot,
-                   PROCESS_IPC_BUFFER,
-                   seL4_AllRights, seL4_ARM_Default_VMAttributes);
-    conditional_panic(err, "Unable to map IPC buffer for user app");
-
-    /* Start the new process */
-    memset(&context, 0, sizeof(context));
-    context.pc = elf_getEntryPoint(elf_base);
-    context.sp = PROCESS_STACK_TOP;
-    seL4_TCB_WriteRegisters(tty_test_process.tcb_cap, 1, 0, 2, &context);
+    _tty_start_thread = std::make_unique<process::Thread>(
+        process, fault_ep, TTY_EP_BADGE, elf_getEntryPoint(elf_base)
+    );
+} catch (const std::exception& e) {
+    kprintf(0, "Caught: %s\n", e.what());
+    panic("Caught exception while starting first process\n");
 }
 
 static void _sos_ipc_init(seL4_CPtr* ipc_ep, seL4_CPtr* async_ep){
@@ -337,13 +173,13 @@ static void _sos_ipc_init(seL4_CPtr* ipc_ep, seL4_CPtr* async_ep){
 }
 
 
-static void _sos_init(seL4_CPtr* ipc_ep, seL4_CPtr* async_ep){
+static void _sos_init(seL4_CPtr* ipc_ep, seL4_CPtr* async_ep) try {
     seL4_Word dma_addr;
     seL4_Word low, high;
     int err;
 
     /* Retrieve boot info from seL4 */
-    _boot_info = seL4_GetBootInfo();
+    const seL4_BootInfo* _boot_info = seL4_GetBootInfo();
     conditional_panic(!_boot_info, "Failed to retrieve boot info\n");
     if(verbose > 0){
         print_bootinfo(_boot_info);
@@ -367,6 +203,9 @@ static void _sos_init(seL4_CPtr* ipc_ep, seL4_CPtr* async_ep){
                                      malloc, free);
     conditional_panic(err, "Failed to initialise the c space\n");
 
+    /* Initialise the frame table. Requires cspace to be initialised first */
+    memory::FrameTable::init(low, high);
+
     /* Initialise DMA memory */
     err = dma_init(dma_addr, DMA_SIZE_BITS);
     conditional_panic(err, "Failed to intiialise DMA memory\n");
@@ -374,6 +213,9 @@ static void _sos_init(seL4_CPtr* ipc_ep, seL4_CPtr* async_ep){
     /* Initialiase other system compenents here */
 
     _sos_ipc_init(ipc_ep, async_ep);
+} catch (const std::exception& e) {
+    kprintf(0, "Caught: %s\n", e.what());
+    panic("Caught exception during initialisation\n");
 }
 
 static inline seL4_CPtr badge_irq_ep(seL4_CPtr ep, seL4_Word badge) {
@@ -399,8 +241,19 @@ int main(void) {
 
     /* Wait on synchronous endpoint for IPC */
     kprintf(0, "\nSOS entering syscall loop\n");
-    syscall_loop(_sos_ipc_ep_cap);
 
-    /* Not reached */
-    return 0;
+    while (true) {
+        seL4_Word badge;
+        seL4_MessageInfo_t message = seL4_Wait(_sos_ipc_ep_cap, &badge);
+
+        if (badge & IRQ_EP_BADGE) {
+            // Interrupt
+            if (badge & IRQ_BADGE_NETWORK)
+                network_irq();
+        } else if (badge == TTY_EP_BADGE) {
+            _tty_start_thread->handleFault(message);
+        } else {
+            kprintf(0, "Rootserver got an unknown message\n");
+        }
+    }
 }

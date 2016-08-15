@@ -32,6 +32,8 @@
 #ifndef __LWIP_ARCH_H__
 #define __LWIP_ARCH_H__
 
+#include <endian.h>
+
 #ifndef LITTLE_ENDIAN
 #define LITTLE_ENDIAN 1234
 #endif

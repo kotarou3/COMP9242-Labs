@@ -7,8 +7,6 @@ extern "C" {
     #include <cspace/cspace.h>
     #include <platsupport/clock.h>
     #include <platsupport/plat/gpt_constants.h>
-
-    #include "internal/mapping.h"
 }
 
 #include "internal/timer/Hardware.h"
@@ -29,10 +27,7 @@ struct Hardware::Registers {
 };
 
 Hardware::Hardware(seL4_CPtr irqEndpoint):
-    _registers(
-        static_cast<volatile Registers*>(map_device(reinterpret_cast<void*>(GPT1_DEVICE_PADDR), sizeof(Registers))),
-        reinterpret_cast<void (&)(volatile Registers*)>(unmap_device)
-    )
+    _registers(GPT1_DEVICE_PADDR)
 {
     // Set the timer to use the peripheral clock
     _registers->control = 0;

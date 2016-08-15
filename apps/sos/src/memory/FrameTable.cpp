@@ -4,6 +4,7 @@
 
 #include "internal/memory/FrameTable.h"
 #include "internal/memory/PageDirectory.h"
+#include "internal/process/Thread.h"
 
 extern "C" {
     #include <cspace/cspace.h>
@@ -41,9 +42,14 @@ void init(paddr_t start, paddr_t end) {
     size_t frameTableSize = frameCount * sizeof(Frame);
     size_t frameTablePages = numPages(frameTableSize);
 
-    // Pick some place in virtual memory to place the frame table
-    // TODO: Automatically choose a location in m3
-    _table = reinterpret_cast<Frame*>(0xc0000000);
+    // Allocate a place in virtual memory to place the frame table
+    _table = reinterpret_cast<Frame*>(
+        process::getSosProcess().maps.insert(
+            0, frameTablePages,
+            Attributes{.read = true, .write = true},
+            Mapping::Flags{.shared = false}
+        ).start
+    );
 
     // Allocate the frame table
     std::vector<std::pair<paddr_t, vaddr_t>> frameTableAddresses;
@@ -52,7 +58,7 @@ void init(paddr_t start, paddr_t end) {
         paddr_t phys = ut_alloc(seL4_PageBits);
         vaddr_t virt = reinterpret_cast<vaddr_t>(_table) + (p * PAGE_SIZE);
 
-        sosPageDirectory.map(
+        process::getSosProcess().pageDirectory.map(
             Page(phys), virt,
             Attributes{.read = true, .write = true}
         );
@@ -67,7 +73,7 @@ void init(paddr_t start, paddr_t end) {
     // Connect the frame table frames to the pages
     for (const auto& pair : frameTableAddresses) {
         Frame& frame = _getFrame(pair.first);
-        frame.pages = const_cast<Page*>(&sosPageDirectory.lookup(pair.second)._page);
+        frame.pages = const_cast<Page*>(&process::getSosProcess().pageDirectory.lookup(pair.second)._page);
         frame.pages->_frame = &frame;
     }
 
