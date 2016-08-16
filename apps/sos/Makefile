@@ -30,7 +30,6 @@ LIBS := sel4 elf c c++ c++abi cpio lwip ethdrivers \
 include $(SEL4_COMMON)/common.mk
 
 CRTOBJFILES :=
-LDFLAGS := $(subst gcc_eh,unwind,$(LDFLAGS))
 
 ${COMPONENTS}:
 	false

@@ -1,8 +1,9 @@
 # Targets
-TARGETS := libc++ libc++abi libunwind
+TARGETS := libc++ libc++abi
 
 include $(SEL4_COMMON)/common.mk
 
+CPPFLAGS := $(CPPFLAGS) -I$(SOURCE_DIR)/libunwind/include
 CFLAGS := $(CFLAGS) $(CPPFLAGS)
 CXXFLAGS := $(filter-out -I$(STAGE_DIR)/include/c++/v1,$(CXXFLAGS) $(CPPFLAGS))
 
@@ -11,7 +12,7 @@ CXXFLAGS := $(filter-out -I$(STAGE_DIR)/include/c++/v1,$(CXXFLAGS) $(CPPFLAGS))
 # unresolved symbols
 LDFLAGS := -Wl,--unresolved-symbols=ignore-all
 
-.PHONY: libc++ libc++abi libunwind
+.PHONY: libc++ libc++abi
 
 $(SOURCE_DIR)/llvm/CMakeLists.txt:
 	mkdir -p "$(SOURCE_DIR)/llvm"
@@ -46,7 +47,7 @@ libc++: $(SOURCE_DIR)/llvm/CMakeLists.txt $(SOURCE_DIR)/libcxx/CMakeLists.txt $(
 			-DLIBCXX_CXX_ABI=libcxxabi \
 			-DLIBCXX_CXX_ABI_INCLUDE_PATHS="$(SOURCE_DIR)/libcxxabi/include" \
 			-DLIBCXX_ENABLE_STATIC_ABI_LIBRARY=on \
-			-DLIBCXXABI_USE_LLVM_UNWINDER=on \
+			-DLIBCXXABI_USE_LLVM_UNWINDER=off \
 			-DLIBCXX_ENABLE_SHARED=off \
 			-DCMAKE_INSTALL_PREFIX="$(STAGE_DIR)" \
 			-DUNIX=1 \
@@ -64,26 +65,10 @@ libc++abi: libc++ $(SOURCE_DIR)/llvm/CMakeLists.txt $(SOURCE_DIR)/libcxx/CMakeLi
 			-DLLVM_PATH="$(SOURCE_DIR)/llvm" \
 			-DLIBCXXABI_LIBCXX_PATH="$(SOURCE_DIR)/libcxx" \
 			-DLIBCXXABI_LIBUNWIND_PATH="$(SOURCE_DIR)/libunwind" \
-			-DLIBCXXABI_USE_LLVM_UNWINDER=on \
+			-DLIBCXXABI_USE_LLVM_UNWINDER=off \
 			-DLIBCXXABI_ENABLE_SHARED=off \
 			-DCMAKE_INSTALL_PREFIX="$(STAGE_DIR)" \
 			-DUNIX=1 \
 			-DLLVM_FORCE_USE_OLD_TOOLCHAIN=1 \
 			"$(SOURCE_DIR)/libcxxabi" && \
-		$(MAKE) -j && $(MAKE) install
-
-libunwind: libc++ $(SOURCE_DIR)/llvm/CMakeLists.txt
-	mkdir -p "$(BUILD_DIR)/libunwind"
-	cd "$(BUILD_DIR)/libunwind" && \
-		CXXFLAGS="-I$(STAGE_DIR)/include/c++/v1 $(CXXFLAGS)" cmake \
-			-DCMAKE_SYSTEM_NAME=Generic \
-			-DCMAKE_SYSTEM_PROCESSOR=arm-eabi \
-			-DCMAKE_C_COMPILER="$(strip $(CC))" \
-			-DCMAKE_CXX_COMPILER="$(strip $(CXX))" \
-			-DLLVM_PATH="$(SOURCE_DIR)/llvm" \
-			-DLIBUNWIND_ENABLE_SHARED=off \
-			-DCMAKE_INSTALL_PREFIX="$(STAGE_DIR)" \
-			-DUNIX=1 \
-			-DLLVM_FORCE_USE_OLD_TOOLCHAIN=1 \
-			"$(SOURCE_DIR)/libunwind" && \
 		$(MAKE) -j && $(MAKE) install
