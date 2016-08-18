@@ -4,6 +4,7 @@
 #include <vector>
 
 #include "internal/memory/FrameTable.h"
+#include "internal/Capability.h"
 
 extern "C" {
     #include <sel4/types.h>
@@ -25,21 +26,23 @@ class MappedPage;
 
 class PageDirectory {
     public:
+        PageDirectory() = default;
         explicit PageDirectory(seL4_ARM_PageDirectory cap);
+        ~PageDirectory();
 
         std::vector<std::reference_wrapper<const MappedPage>> allocateAndMap(size_t pages, vaddr_t address, Attributes attributes);
         const MappedPage& map(Page page, vaddr_t address, Attributes attributes);
         void unmap(vaddr_t address);
         const MappedPage& lookup(vaddr_t address) const;
 
-        seL4_ARM_PageDirectory getCap() const noexcept {return _cap;}
+        seL4_ARM_PageDirectory getCap() const noexcept {return _cap.get();}
 
     private:
         constexpr static vaddr_t _toIndex(vaddr_t address) noexcept {
             return address & -((1 << (seL4_PageTableBits + seL4_PageBits)) / sizeof(seL4_Word));
         }
 
-        seL4_ARM_PageDirectory _cap;
+        Capability<seL4_ARM_PageDirectoryObject, seL4_PageDirBits> _cap;
         std::unordered_map<vaddr_t, PageTable> _tables;
 };
 
@@ -48,11 +51,17 @@ class PageTable {
         PageTable(PageDirectory& parent, vaddr_t baseAddress);
         ~PageTable();
 
+        PageTable(const PageTable&) = delete;
+        PageTable& operator=(const PageTable&) = delete;
+
+        PageTable(PageTable&& other) = default;
+        PageTable& operator=(PageTable&& other) = default;
+
         const MappedPage& map(Page page, vaddr_t address, Attributes attributes);
         void unmap(vaddr_t address);
         const MappedPage& lookup(vaddr_t address) const;
 
-        seL4_ARM_PageTable getCap() const noexcept {return _cap;};
+        seL4_ARM_PageTable getCap() const noexcept {return _cap.get();};
 
     private:
         void _checkAddress(vaddr_t address) const;
@@ -63,9 +72,7 @@ class PageTable {
         PageDirectory& _parent;
         vaddr_t _baseAddress;
 
-        seL4_Word _memory;
-        seL4_ARM_PageTable _cap;
-
+        Capability<seL4_ARM_PageTableObject, seL4_PageTableBits> _cap;
         std::unordered_map<vaddr_t, MappedPage> _pages;
 };
 
@@ -77,16 +84,14 @@ class MappedPage {
         MappedPage(const MappedPage&) = delete;
         MappedPage& operator=(const MappedPage&) = delete;
 
-        MappedPage(MappedPage&& other) noexcept;
-        MappedPage& operator=(MappedPage&& other) noexcept;
+        MappedPage(MappedPage&& other) = default;
+        MappedPage& operator=(MappedPage&& other) = default;
 
         //Page getPage() const noexcept {return _page;}
         vaddr_t getAddress() const noexcept {return _address;}
         Attributes getAttributes() const noexcept {return _attributes;}
 
     private:
-        bool _isValid; // To allow move semantics
-
         Page _page;
         vaddr_t _address;
         Attributes _attributes;

@@ -21,8 +21,18 @@ PageDirectory sosPageDirectory(seL4_CapInitThreadPD);
 ///////////////////
 
 PageDirectory::PageDirectory(seL4_ARM_PageDirectory cap):
-    _cap(cap)
+    // Externally managed cap, so set it's memory to 0
+    _cap(0, cap)
 {}
+
+PageDirectory::~PageDirectory() {
+    // Clear the page tables first, since they are using the page directory
+    _tables.clear();
+
+    // Leak the cap if it's externally managed
+    if (_cap.getMemory() == 0)
+        _cap.release();
+}
 
 std::vector<std::reference_wrapper<const MappedPage>> PageDirectory::allocateAndMap(size_t pages, vaddr_t address, Attributes attributes) {
     if (pages == 0)
@@ -67,32 +77,18 @@ PageTable::PageTable(PageDirectory& parent, vaddr_t baseAddress):
     _parent(parent),
     _baseAddress(baseAddress)
 {
-    _memory = ut_alloc(seL4_PageTableBits);
-    if (_memory == 0)
-        throw std::runtime_error("Failed to allocate seL4 memory");
-
-    int err = cspace_ut_retype_addr(
-        _memory, seL4_ARM_PageTableObject, seL4_PageTableBits, cur_cspace, &_cap
-    );
-    if (err != seL4_NoError) {
-        ut_free(_memory, seL4_PageTableBits);
-        throw std::runtime_error("Failed to retype seL4 memory to page table: " + std::to_string(err));
-    }
-
-    err = seL4_ARM_PageTable_Map(_cap, parent.getCap(), baseAddress, seL4_ARM_Default_VMAttributes);
-    if (err != seL4_NoError) {
-        cspace_delete_cap(cur_cspace, _cap);
-        ut_free(_memory, seL4_PageTableBits);
+    int err = seL4_ARM_PageTable_Map(_cap.get(), _parent.getCap(), baseAddress, seL4_ARM_Default_VMAttributes);
+    if (err != seL4_NoError)
         throw std::runtime_error("Failed to map in seL4 page table: " + std::to_string(err));
-    }
 }
 
 PageTable::~PageTable() {
+    // Clear the pages first, since they're using the page table
     _pages.clear();
 
-    assert(seL4_ARM_PageTable_Unmap(_cap) == seL4_NoError);
-    assert(cspace_delete_cap(cur_cspace, _cap) == CSPACE_NOERROR);
-    ut_free(_memory, seL4_PageTableBits);
+    // If we haven't been moved away, unmap the page table
+    if (_cap)
+        assert(seL4_ARM_PageTable_Unmap(_cap.get()) == seL4_NoError);
 }
 
 const MappedPage& PageTable::map(Page page, vaddr_t address, Attributes attributes) {
@@ -141,7 +137,6 @@ void PageTable::_checkAddress(vaddr_t address) const {
 ////////////////
 
 MappedPage::MappedPage(Page page, PageDirectory& directory, vaddr_t address, Attributes attributes):
-    _isValid(true),
     _page(std::move(page)),
     _address(address),
     _attributes(attributes)
@@ -170,28 +165,9 @@ MappedPage::MappedPage(Page page, PageDirectory& directory, vaddr_t address, Att
 }
 
 MappedPage::~MappedPage() {
-    if (_isValid)
+    // If we haven't been moved away, unmap the page
+    if (_page)
         assert(seL4_ARM_Page_Unmap(_page.getCap()) == seL4_NoError);
-}
-
-MappedPage::MappedPage(MappedPage&& other) noexcept:
-    _isValid(std::move(other._isValid)),
-    _page(std::move(other._page)),
-    _address(std::move(other._address)),
-    _attributes(std::move(other._attributes))
-{
-    other._isValid = false;
-}
-
-MappedPage& MappedPage::operator=(MappedPage&& other) noexcept {
-    _isValid = std::move(other._isValid);
-    other._isValid = false;
-
-    _page = std::move(other._page);
-    _address = std::move(other._address);
-    _attributes = std::move(other._attributes);
-
-    return *this;
 }
 
 }

@@ -42,7 +42,9 @@ class Page {
 
         Page copy() const {return *this;};
 
-        seL4_ARM_Page getCap() const noexcept {return _cap;};
+        seL4_ARM_Page getCap() const noexcept {return _cap;}
+
+        explicit operator bool() const noexcept {return _cap;}
 
     private:
         Page(FrameTable::Frame& frame);
