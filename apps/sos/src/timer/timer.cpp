@@ -70,12 +70,15 @@ TimerId setTimer(Duration delay, const std::function<void (TimerId)>& callback, 
         .recurring = recurring
     };
 
-    auto interruptTime = getTimestamp() + delay;
-    interrupts.push(Interrupt{.time = interruptTime, .id = nextFree});
+    auto now = getTimestamp();
+    auto interruptTime = now + delay;
+    if (interruptTime >= now) {
+        interrupts.push(Interrupt{.time = interruptTime, .id = nextFree});
 
-    // this may be earlier than the next interrupt
-    if (hardware->getNextIrqTime() > interruptTime)
-        hardware->requestNextIrqTime(interruptTime);
+        // this may be earlier than the next interrupt
+        if (hardware->getNextIrqTime() > interruptTime)
+            hardware->requestNextIrqTime(interruptTime);
+    }
 
     return nextFree++;
 }
