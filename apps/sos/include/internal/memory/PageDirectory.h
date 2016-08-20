@@ -90,6 +90,8 @@ class MappedPage {
         Page _page;
         vaddr_t _address;
         Attributes _attributes;
+
+        friend void FrameTable::init(paddr_t start, paddr_t end);
 };
 
 extern PageDirectory sosPageDirectory;

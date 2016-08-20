@@ -28,6 +28,7 @@ namespace FrameTable {
     void init(paddr_t start, paddr_t end);
 
     Page alloc();
+    Page alloc(paddr_t address);
 
     class Frame;
 }
@@ -46,12 +47,14 @@ class Page {
 
     private:
         Page(FrameTable::Frame& frame);
-        Page(FrameTable::Frame& frame, paddr_t address);
-        friend void FrameTable::init(paddr_t start, paddr_t end);
-        friend Page FrameTable::alloc();
+        Page(paddr_t address);
 
         seL4_ARM_Page _cap;
         FrameTable::Frame* _frame;
+
+        friend void FrameTable::init(paddr_t start, paddr_t end);
+        friend Page FrameTable::alloc();
+        friend Page FrameTable::alloc(paddr_t address);
 };
 
 }
