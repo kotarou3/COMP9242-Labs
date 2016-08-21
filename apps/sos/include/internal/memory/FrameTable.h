@@ -37,11 +37,10 @@ class Page {
     public:
         ~Page();
 
-        Page(const Page&) = delete;
-        Page& operator=(const Page&) = delete;
-
         Page(Page&& other) noexcept;
         Page& operator=(Page&& other) noexcept;
+
+        Page copy() const {return *this;};
 
         seL4_ARM_Page getCap() const noexcept {return _cap;};
 
@@ -49,8 +48,14 @@ class Page {
         Page(FrameTable::Frame& frame);
         Page(paddr_t address);
 
+        Page(const Page& other);
+        Page& operator=(const Page&) = delete;
+
         seL4_ARM_Page _cap;
         FrameTable::Frame* _frame;
+
+        Page* _prev;
+        mutable Page* _next;
 
         friend void FrameTable::init(paddr_t start, paddr_t end);
         friend Page FrameTable::alloc();

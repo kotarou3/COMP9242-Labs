@@ -100,7 +100,9 @@ Page::Page(FrameTable::Frame& frame):
 }
 
 Page::Page(paddr_t address):
-    _frame(nullptr)
+    _frame(nullptr),
+    _prev(nullptr),
+    _next(nullptr)
 {
     int err = cspace_ut_retype_addr(
         address,
@@ -119,12 +121,38 @@ Page::~Page() {
         assert(cspace_delete_cap(cur_cspace, _cap) == CSPACE_NOERROR);
 
         if (_frame) {
-            assert(_frame->pages == this);
-            _frame->pages = nullptr;
+            if (_frame->pages == this) {
+                assert(!_prev);
+                _frame->pages = _next;
+            } else {
+                assert(_prev);
+            }
 
-            ut_free(_frame->getAddress(), seL4_PageBits);
+            if (!_frame->pages)
+                // We were the last copy, so free the frame
+                ut_free(_frame->getAddress(), seL4_PageBits);
         }
+
+        if (_prev)
+            _prev->_next = _next;
+        if (_next)
+            _next->_prev = _prev;
     }
+}
+
+Page::Page(const Page& other):
+    _frame(other._frame),
+    _prev(const_cast<Page*>(&other)),
+    _next(other._next)
+{
+    _cap = cspace_copy_cap(cur_cspace, cur_cspace, other._cap, seL4_AllRights);
+    if (_cap == CSPACE_NULL)
+        throw std::runtime_error("Failed to copy page cap");
+    assert(_cap != 0);
+
+    _prev->_next = this;
+    if (_next)
+        _next->_prev = this;
 }
 
 Page::Page(Page&& other) noexcept {
@@ -134,12 +162,30 @@ Page::Page(Page&& other) noexcept {
 Page& Page::operator=(Page&& other) noexcept {
     _cap = std::move(other._cap);
     _frame = std::move(other._frame);
+    _prev = std::move(other._prev);
+    _next = std::move(other._next);
+
     other._cap = 0;
     other._frame = nullptr;
+    other._prev = nullptr;
+    other._next = nullptr;
 
     if (_frame) {
-        assert(_frame->pages == &other);
-        _frame->pages = this;
+        if (_frame->pages == &other) {
+            assert(!_prev);
+            _frame->pages = this;
+        } else {
+            assert(_prev);
+        }
+    }
+
+    if (_prev) {
+        assert(_prev->_next == &other);
+        _prev->_next = this;
+    }
+    if (_next) {
+        assert(_next->_prev == &other);
+        _next->_prev = this;
     }
 
     return *this;
