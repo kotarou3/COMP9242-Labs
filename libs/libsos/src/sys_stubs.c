@@ -453,11 +453,11 @@ long sys_mmap(va_list ap)
     assert(!"sys_mmap not implemented");
     return 0;
 }
-long sys_munmap(va_list ap)
+/*long sys_munmap(va_list ap)
 {
     assert(!"sys_munmap not implemented");
     return 0;
-}
+}*/
 long sys_truncate(va_list ap)
 {
     assert(!"sys_truncate not implemented");
@@ -1080,11 +1080,11 @@ long sys_mincore(va_list ap)
     assert(!"sys_mincore not implemented");
     return 0;
 }
-long sys_madvise(va_list ap)
+/*long sys_madvise(va_list ap)
 {
     assert(!"sys_madvise not implemented");
     return 0;
-}
+}*/
 long sys_madvise1(va_list ap)
 {
     assert(!"sys_madvise1 not implemented");
@@ -2022,11 +2022,11 @@ long sys_reboot(va_list ap)
     assert(!"sys_reboot not implemented");
     return 0;
 }
-long sys_munmap(va_list ap)
+/*long sys_munmap(va_list ap)
 {
     assert(!"sys_munmap not implemented");
     return 0;
-}
+}*/
 long sys_truncate(va_list ap)
 {
     assert(!"sys_truncate not implemented");
@@ -2570,11 +2570,11 @@ long sys_mincore(va_list ap)
     assert(!"sys_mincore not implemented");
     return 0;
 }
-long sys_madvise(va_list ap)
+/*long sys_madvise(va_list ap)
 {
     assert(!"sys_madvise not implemented");
     return 0;
-}
+}*/
 long sys_fcntl64(va_list ap)
 {
     assert(!"sys_fcntl64 not implemented");
