@@ -149,7 +149,7 @@ MappedPage::MappedPage(Page page, PageDirectory& directory, vaddr_t address, Att
     if (attributes.read)
         rights |= seL4_CanRead;
     if (attributes.write)
-        rights |= seL4_CanWrite;
+        rights |= seL4_CanRead | seL4_CanWrite; // ARM requires read permissions to write
     if (attributes.execute)
         rights |= seL4_CanRead; // XXX: No execute right on our version of seL4
 
