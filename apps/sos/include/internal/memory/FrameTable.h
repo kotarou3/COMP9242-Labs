@@ -1,7 +1,7 @@
 #pragma once
 
 extern "C" {
-    #include <sel4/sel4.h>
+    #include <sel4/types.h>
 }
 
 namespace memory {

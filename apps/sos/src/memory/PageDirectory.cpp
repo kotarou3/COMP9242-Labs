@@ -7,6 +7,7 @@
 
 extern "C" {
     #include <cspace/cspace.h>
+    #include <sel4/sel4.h>
 
     #include "internal/ut_manager/ut.h"
 }
