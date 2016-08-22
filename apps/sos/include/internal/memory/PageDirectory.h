@@ -57,7 +57,7 @@ class PageTable {
     private:
         void _checkAddress(vaddr_t address) const;
         constexpr static vaddr_t _toIndex(vaddr_t address) noexcept {
-            return address & ~-((1 << (seL4_PageTableBits + seL4_PageBits)) / sizeof(seL4_Word)) & -(1 << seL4_PageBits);
+            return pageAlign(address) & ~-((1 << (seL4_PageTableBits + seL4_PageBits)) / sizeof(seL4_Word));
         }
 
         PageDirectory& _parent;

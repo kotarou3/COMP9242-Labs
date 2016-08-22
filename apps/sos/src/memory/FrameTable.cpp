@@ -26,21 +26,21 @@ namespace {
 
     inline Frame& _getFrame(paddr_t address) {
         assert(_start <= address && address < _end);
-        return _table[(address - _start) >> seL4_PageBits];
+        return _table[(address - _start) / PAGE_SIZE];
     }
 }
 
 inline paddr_t Frame::getAddress() const {
-    return _start + ((this - _table) << seL4_PageBits);
+    return _start + ((this - _table) * PAGE_SIZE);
 }
 
 void init(paddr_t start, paddr_t end) {
     _start = start;
     _end = end;
 
-    size_t frameCount = (end - start) >> seL4_PageBits;
+    size_t frameCount = numPages(end - start);
     size_t frameTableSize = frameCount * sizeof(Frame);
-    size_t frameTablePages = (frameTableSize + (1 << seL4_PageBits) - 1) >> seL4_PageBits;
+    size_t frameTablePages = numPages(frameTableSize);
 
     // Pick some place in virtual memory to place the frame table
     // TODO: Automatically choose a location in m3
@@ -56,7 +56,7 @@ void init(paddr_t start, paddr_t end) {
         paddr_t address = ut_alloc(seL4_PageBits);
 
         sosPageDirectory.map(
-            Page(frame, address), reinterpret_cast<vaddr_t>(_table) + (p << seL4_PageBits),
+            Page(frame, address), reinterpret_cast<vaddr_t>(_table) + p * PAGE_SIZE,
             Attributes{.read = true, .write = true}
         );
 
@@ -75,7 +75,7 @@ void init(paddr_t start, paddr_t end) {
 
     // Check the allocations were correct
     assert(_table[0].getAddress() == start);
-    assert(_table[frameCount - 1].getAddress() == end - (1 << seL4_PageBits));
+    assert(_table[frameCount - 1].getAddress() == end - PAGE_SIZE);
 }
 
 Page alloc() {

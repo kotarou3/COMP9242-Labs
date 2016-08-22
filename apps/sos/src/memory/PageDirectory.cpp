@@ -32,7 +32,7 @@ std::vector<std::reference_wrapper<const MappedPage>> PageDirectory::allocateAnd
     result.reserve(pages);
 
     for (size_t p = 0; p < pages; ++p) {
-        vaddr_t curAddress = address + (p << seL4_PageBits);
+        vaddr_t curAddress = address + p * PAGE_SIZE;
         result.push_back(map(FrameTable::alloc(), curAddress, attributes));
     }
 
@@ -130,7 +130,7 @@ const MappedPage& PageTable::lookup(vaddr_t address) const {
 }
 
 void PageTable::_checkAddress(vaddr_t address) const {
-    if ((address & ~-(1 << seL4_PageBits)) != 0)
+    if (memory::pageAlign(address) != address)
         throw std::invalid_argument("Address is not aligned");
     if ((address & _baseAddress) != _baseAddress)
         throw std::invalid_argument("Address does not belong to this page table");

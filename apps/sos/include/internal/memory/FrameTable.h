@@ -1,5 +1,7 @@
 #pragma once
 
+#include <limits.h>
+
 extern "C" {
     #include <sel4/types.h>
 }
@@ -7,6 +9,18 @@ extern "C" {
 namespace memory {
 
 using paddr_t = size_t;
+
+static_assert(PAGE_SIZE == (1 << seL4_PageBits), "Incorrect value of PAGE_SIZE");
+
+constexpr size_t pageAlign(size_t value) {
+    return value & -PAGE_SIZE;
+}
+constexpr size_t pageOffset(size_t value) {
+    return value & ~-PAGE_SIZE;
+}
+constexpr size_t numPages(size_t bytes) {
+    return (bytes + PAGE_SIZE - 1) / PAGE_SIZE;
+}
 
 class Page;
 
