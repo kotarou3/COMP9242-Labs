@@ -7,6 +7,7 @@
 #include "internal/memory/layout.h"
 #include "internal/process/Thread.h"
 #include "internal/syscall/syscall.h"
+#include "internal/fs/FileDescriptor.h"
 
 extern "C" {
     #include <sos.h>
@@ -179,6 +180,7 @@ Process::Process():
 {
     if (!_cspace)
         throw std::runtime_error("Failed to create CSpace");
+    fdTable = fs::FDTable{};
 }
 
 Process::Process(bool isSosProcess):
@@ -195,6 +197,7 @@ Process::Process(bool isSosProcess):
     flags.fixed = true;
     flags.reserved = true;
     maps.insert(0, memory::MMAP_START / PAGE_SIZE, memory::Attributes{}, flags);
+    fdTable = fs::FDTable{};
 }
 
 void Process::handlePageFault(memory::vaddr_t address, memory::Attributes cause) {
