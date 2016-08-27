@@ -37,23 +37,31 @@ const MappedPage& PageDirectory::allocateAndMap(vaddr_t address, Attributes attr
 }
 
 const MappedPage& PageDirectory::map(Page page, vaddr_t address, Attributes attributes) {
-    if (_tables.count(_toIndex(address)) == 0) {
-        _tables.emplace(
+    auto table = _tables.find(_toIndex(address));
+    if (table == _tables.end()) {
+        table = _tables.emplace(
             std::piecewise_construct,
             std::forward_as_tuple(_toIndex(address)),
             std::forward_as_tuple(*this, _toIndex(address))
-        );
+        ).first;
     }
 
-    return _tables.at(_toIndex(address)).map(std::move(page), address, attributes);
+    return table->second.map(std::move(page), address, attributes);
 }
 
 void PageDirectory::unmap(vaddr_t address) {
     _tables.at(_toIndex(address)).unmap(address);
 }
 
-const MappedPage& PageDirectory::lookup(vaddr_t address) const {
-    return _tables.at(_toIndex(address)).lookup(address);
+const MappedPage* PageDirectory::lookup(vaddr_t address, bool noThrow) const {
+    auto table = _tables.find(_toIndex(address));
+    if (table == _tables.end()) {
+        if (noThrow)
+            return nullptr;
+        throw std::out_of_range("Address is not mapped");
+    }
+
+    return table->second.lookup(address, noThrow);
 }
 
 ///////////////
@@ -104,10 +112,17 @@ void PageTable::unmap(vaddr_t address) {
     _pages.erase(_toIndex(address));
 }
 
-const MappedPage& PageTable::lookup(vaddr_t address) const {
+const MappedPage* PageTable::lookup(vaddr_t address, bool noThrow) const {
     _checkAddress(address);
 
-    return _pages.at(_toIndex(address));
+    auto page = _pages.find(_toIndex(address));
+    if (page == _pages.end()) {
+        if (noThrow)
+            return nullptr;
+        throw std::out_of_range("Address is not mapped");
+    } else {
+        return &page->second;
+    }
 }
 
 void PageTable::_checkAddress(vaddr_t address) const {

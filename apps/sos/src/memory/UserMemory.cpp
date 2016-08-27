@@ -52,7 +52,7 @@ ScopedMapping UserMemory::_mapIn(size_t bytes, Attributes attributes, bool bypas
 
     // Map in a copy of the process' pages into the SOS process
     for (size_t p = 0; p < pages; ++p) {
-        auto page = _process.pageDirectory.lookup(alignedAddress + p * PAGE_SIZE).getPage().copy();
+        auto page = _process.pageDirectory.lookup(alignedAddress + p * PAGE_SIZE)->getPage().copy();
         process::getSosProcess().pageDirectory.map(
             std::move(page), map.getAddress() + p * PAGE_SIZE,
             attributes

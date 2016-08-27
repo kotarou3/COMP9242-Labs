@@ -73,7 +73,7 @@ void init(paddr_t start, paddr_t end) {
     // Connect the frame table frames to the pages
     for (const auto& pair : frameTableAddresses) {
         Frame& frame = _getFrame(pair.first);
-        frame.pages = const_cast<Page*>(&process::getSosProcess().pageDirectory.lookup(pair.second)._page);
+        frame.pages = const_cast<Page*>(&process::getSosProcess().pageDirectory.lookup(pair.second)->_page);
         frame.pages->_frame = &frame;
     }
 

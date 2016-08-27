@@ -213,12 +213,9 @@ void Process::handlePageFault(memory::vaddr_t address, memory::Attributes cause)
     if (cause.write && !map.attributes.write)
         throw std::runtime_error("Attempted to write to a non-writeable region");
 
-    try {
-        pageDirectory.lookup(address);
-    } catch (const std::out_of_range&) {
-        // page isn't mapped
+    auto page = pageDirectory.lookup(address, true);
+    if (!page)
         pageDirectory.allocateAndMap(address, map.attributes);
-    }
 }
 
 Process& getSosProcess() noexcept {

@@ -56,9 +56,8 @@ _dma_fill(seL4_Word pstart, seL4_Word pend, int cached){
     pstart -= PAGE_OFFSET(pstart);
 
     for (; pstart < pend; pstart += PAGE_SIZE) {
-        try {
-            process::getSosProcess().pageDirectory.lookup(VIRT(pstart));
-        } catch (...) {
+        auto page = process::getSosProcess().pageDirectory.lookup(VIRT(pstart), true);
+        if (!page) {
             process::getSosProcess().pageDirectory.map(
                 memory::FrameTable::alloc(pstart), VIRT(pstart),
                 memory::Attributes{.read = true, .write = true, .execute = false, .notCacheable = !cached}
