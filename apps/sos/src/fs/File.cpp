@@ -12,8 +12,11 @@ boost::future<ssize_t> File::write(const std::vector<IoVector>& /*iov*/, off64_t
     throw std::invalid_argument("File not writeable");
 }
 
-boost::future<int> File::ioctl(size_t /*request*/, size_t /*arg*/) {
+boost::future<int> File::ioctl(size_t /*request*/, memory::UserMemory /*argp*/) {
     throw std::invalid_argument("File not ioctl'able");
 }
+
+std::unique_ptr<FileSystem> rootFileSystem;
+boost::inline_executor asyncExecutor;
 
 }

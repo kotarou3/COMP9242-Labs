@@ -2,6 +2,7 @@
 
 #include <utility>
 #include <vector>
+#include <string>
 
 #include "internal/memory/PageDirectory.h"
 #include "internal/process/Thread.h"
@@ -13,6 +14,8 @@ class UserMemory {
         UserMemory(process::Process& process, vaddr_t address);
 
         void read(uint8_t* to, size_t bytes, bool bypassAttributes = false);
+        std::string readString(bool bypassAttributes = false);
+
         void write(const uint8_t* from, size_t bytes, bool bypassAttributes = false);
 
         template <typename T>

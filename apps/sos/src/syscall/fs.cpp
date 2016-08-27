@@ -1,40 +1,31 @@
 #include <sys/uio.h>
 
 #include "internal/fs/File.h"
+#include "internal/fs/FileDescriptor.h"
 #include "internal/memory/UserMemory.h"
 #include "internal/syscall/fs.h"
-
-#include "internal/fs/ConsoleDevice.h"
-#include "internal/fs/DebugDevice.h"
-#include "internal/fs/DeviceFileSystem.h"
 
 namespace syscall {
 
 namespace {
-    boost::future<ssize_t> _preadwritev2(bool isWrite, int fd, const std::vector<fs::IoVector>& iov, off64_t offset) noexcept {
-        (void)fd;
-
+    boost::future<ssize_t> _preadwritev2(bool isWrite, process::Process& process, int fd, const std::vector<fs::IoVector>& iov, off64_t offset) noexcept {
         if (iov.size() == 0)
             return _returnNow(0);
 
-        // TODO: Do this properly
-        /*static fs::DeviceFileSystem deviceFileSystem;
-        static bool isInited = false;
-        if (!isInited) {
-            fs::ConsoleDevice::init(deviceFileSystem);
-            isInited = true;
-        }
-        return deviceFileSystem.open("console").then([=](auto device) {
+        fs::OpenFile::Flags flags = {
+            .read = !isWrite,
+            .write = isWrite
+        };
+
+        try {
+            auto file = process.fdTable.get(fd, flags);
             if (isWrite)
-                return device.get()->write(iov, offset);
+                return file->write(iov, offset);
             else
-                return device.get()->read(iov, offset);
-        });*/
-        auto device = fs::DebugDevice();
-        if (isWrite)
-            return device.write(iov, offset);
-        else
-            return device.read(iov, offset);
+                return file->read(iov, offset);
+        } catch (...) {
+            return _returnNow(-EBADF);
+        }
     }
 
     std::vector<fs::IoVector> _getIovs(process::Process& process, memory::vaddr_t iov, size_t iovcnt) {
@@ -66,7 +57,7 @@ namespace {
 
     boost::future<ssize_t> _preadwritev(bool isWrite, process::Process& process, int fd, memory::vaddr_t iov, size_t iovcnt, off64_t offset) noexcept {
         try {
-            return _preadwritev2(isWrite, fd, _getIovs(process, iov, iovcnt), offset);
+            return _preadwritev2(isWrite, process, fd, _getIovs(process, iov, iovcnt), offset);
         } catch (const std::invalid_argument&) {
             return _returnNow(-EINVAL);
         } catch (...) {
@@ -76,7 +67,7 @@ namespace {
 
     boost::future<ssize_t> _preadwrite(bool isWrite, process::Process& process, int fd, memory::vaddr_t buf, size_t count, off64_t offset) noexcept {
         return _preadwritev2(
-            isWrite, fd,
+            isWrite, process, fd,
             std::vector<fs::IoVector>{fs::IoVector{
                 .buffer = memory::UserMemory(process, buf),
                 .length = count
@@ -86,18 +77,39 @@ namespace {
     }
 }
 
-boost::future<int> open(process::Process& process, const char* pathname, int flags, mode_t mode) noexcept {
-    (void)process;
-    (void)pathname;
-    (void)flags;
+boost::future<int> open(process::Process& process, memory::vaddr_t pathname, int flags, mode_t mode) noexcept {
+    fs::OpenFile::Flags openFileFlags = {0};
+    int access = flags & O_ACCMODE;
+    if (access == O_RDONLY) {
+        openFileFlags.read = true;
+    } else if (access == O_WRONLY) {
+        openFileFlags.write = true;
+    } else if (access == O_RDWR) {
+        openFileFlags.read = true;
+        openFileFlags.write = true;
+    } else {
+        return _returnNow(-EINVAL);
+    }
+
+    if (flags & ~O_ACCMODE)
+        return _returnNow(-EINVAL);
     (void)mode;
-    return _returnNow(-ENOSYS);
+
+    try {
+        return fs::rootFileSystem->open(memory::UserMemory(process, pathname).readString())
+            .then(fs::asyncExecutor, [openFileFlags, &process](auto file) {
+                return process.fdTable.insert(std::make_shared<fs::OpenFile>(file.get(), openFileFlags));
+            });
+    } catch (...) {
+        return _returnNow(-EINVAL);
+    }
 }
 
 boost::future<int> close(process::Process& process, int fd) noexcept {
-    (void)process;
-    (void)fd;
-    return _returnNow(-ENOSYS);
+    if (process.fdTable.erase(fd))
+        return _returnNow(0);
+    else
+        return _returnNow(-EBADF);
 }
 
 boost::future<int> read(process::Process& process, int fd, memory::vaddr_t buf, size_t count) noexcept {
@@ -134,13 +146,12 @@ boost::future<int> pwritev(process::Process& process, int fd, memory::vaddr_t io
     return _preadwritev(true, process, fd, iov, iovcnt, offset);
 }
 
-boost::future<int> ioctl(process::Process& process, int fd, size_t request, size_t arg) noexcept {
-    (void)process;
-    (void)fd;
-    (void)request;
-    (void)arg;
-    //return _returnNow(-ENOSYS);
-    return _returnNow(0);
+boost::future<int> ioctl(process::Process& process, int fd, size_t request, memory::vaddr_t argp) noexcept {
+    try {
+        return process.fdTable.get(fd, fs::OpenFile::Flags{})->ioctl(request, memory::UserMemory(process, argp));
+    } catch (...) {
+        return _returnNow(-EBADF);
+    }
 }
 
 }

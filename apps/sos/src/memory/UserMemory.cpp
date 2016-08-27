@@ -15,6 +15,28 @@ void UserMemory::read(uint8_t* to, size_t bytes, bool bypassAttributes) {
     std::copy(map.first, map.first + bytes, to);
 }
 
+std::string UserMemory::readString(bool bypassAttributes) {
+    std::string result;
+
+    vaddr_t pageEnd;
+    {
+        // Start reading the string from the first page
+        auto map = mapIn<char>(1, Attributes{.read = true}, bypassAttributes);
+        pageEnd = map.second.getEnd();
+        for (char* c = map.first; c < reinterpret_cast<char*>(pageEnd); ++c)
+            if (*c)
+                result.push_back(*c);
+            else
+                goto finished;
+    }
+
+    // XXX: Continue reading the next page recursively
+    result += UserMemory(_process, pageEnd).readString(bypassAttributes);
+
+finished:
+    return result;
+}
+
 void UserMemory::write(const uint8_t* from, size_t bytes, bool bypassAttributes) {
     auto map = _mapIn(bytes, Attributes{.read = false, .write = true}, bypassAttributes);
     std::copy(from, from + bytes, map.first);

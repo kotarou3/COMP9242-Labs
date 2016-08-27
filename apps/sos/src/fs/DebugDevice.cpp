@@ -1,4 +1,5 @@
 #include <stdexcept>
+#include <sys/ioctl.h>
 
 #include "internal/fs/DebugDevice.h"
 
@@ -27,6 +28,23 @@ boost::future<ssize_t> DebugDevice::write(const std::vector<IoVector>& iov, off6
 
     boost::promise<ssize_t> promise;
     promise.set_value(totalBytesWritten);
+    return promise.get_future();
+}
+
+boost::future<int> DebugDevice::ioctl(size_t request, memory::UserMemory argp) {
+    if (request != TIOCGWINSZ)
+        throw std::invalid_argument("Unknown ioctl on debug device");
+
+    // Can't query debug device for window size, so return a placeholder
+    argp.set(winsize{
+        .ws_row = 24,
+        .ws_col = 80,
+        .ws_xpixel = 640,
+        .ws_ypixel = 480
+    });
+
+    boost::promise<ssize_t> promise;
+    promise.set_value(0);
     return promise.get_future();
 }
 
