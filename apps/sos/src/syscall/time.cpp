@@ -4,7 +4,6 @@
 
 #include <assert.h>
 #include <errno.h>
-#include <stdarg.h>
 #include <time.h>
 
 #include "internal/memory/UserMemory.h"
@@ -56,17 +55,9 @@ boost::future<int> nanosleep(process::Process& process, memory::vaddr_t req, mem
 
 }
 
-extern "C" {
-
-int sys_clock_gettime(clockid_t clk_id, memory::vaddr_t tp) {
-    auto result = syscall::clock_gettime(process::getSosProcess(), clk_id, tp);
-    assert(result.is_ready());
-    return result.get();
-}
-
-int sys_nanosleep() {
+extern "C" int sys_nanosleep() {
     assert(!"SOS cannot sleep");
     __builtin_unreachable();
 }
 
-}
+FORWARD_SYSCALL(clock_gettime, 2);

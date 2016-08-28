@@ -1,6 +1,5 @@
 #include <assert.h>
 #include <errno.h>
-#include <stdarg.h>
 #include <stdint.h>
 #include <sys/mman.h>
 
@@ -76,9 +75,7 @@ boost::future<int> munmap(process::Process& process, memory::vaddr_t addr, size_
 
 }
 
-extern "C" {
-
-int sys_brk(va_list ap) {
+extern "C" int sys_brk(va_list ap) {
     // Use an static allocation to allow malloc() before the memory subsystem
     // is ready for mmap()s
     constexpr const size_t SOS_PROCESS_INIT_SIZE = 0x100000;
@@ -92,31 +89,10 @@ int sys_brk(va_list ap) {
         return reinterpret_cast<int>(brk);
 }
 
-int sys_mmap2(va_list ap) {
-    memory::vaddr_t addr = va_arg(ap, memory::vaddr_t);
-    size_t length = va_arg(ap, size_t);
-    int prot = va_arg(ap, int);
-    int flags = va_arg(ap, int);
-    int fd = va_arg(ap, int);
-    off_t offset = va_arg(ap, off_t);
-
-    auto result = syscall::mmap2(process::getSosProcess(), addr, length, prot, flags, fd, offset);
-    assert(result.is_ready());
-    return result.get();
-}
-
-int sys_munmap(va_list ap) {
-    memory::vaddr_t addr = va_arg(ap, memory::vaddr_t);
-    size_t length = va_arg(ap, size_t);
-
-    auto result = syscall::munmap(process::getSosProcess(), addr, length);
-    assert(result.is_ready());
-    return result.get();
-}
-
-int sys_mremap() {
+extern "C" int sys_mremap() {
     assert(!"Not implemented");
     __builtin_unreachable();
 }
 
-}
+FORWARD_SYSCALL(mmap2, 6);
+FORWARD_SYSCALL(munmap, 2);
