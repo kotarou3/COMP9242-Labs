@@ -1,4 +1,5 @@
 /libs/libc++/*
+/libs/libboost/boost
 /libs/libmuslc-updated/*
 
 /.config
