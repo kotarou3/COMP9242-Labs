@@ -231,11 +231,14 @@ static int second_time(int argc, char *argv[]) {
     return 0;
 }
 
-static int micro_time(int argc, char *argv[]) {
+uint64_t get_timestamp() {
     struct timeval time;
     gettimeofday(&time, NULL);
-    uint64_t micros = (uint64_t)time.tv_sec * US_IN_S + (uint64_t)time.tv_usec;
-    printf("%llu microseconds since boot\n", micros);
+    return (uint64_t)time.tv_sec * US_IN_S + (uint64_t)time.tv_usec;
+}
+
+static int micro_time(int argc, char *argv[]) {
+    printf("%llu microseconds since boot\n", get_timestamp());
     return 0;
 }
 
@@ -248,6 +251,18 @@ static int kill(int argc, char *argv[]) {
 
     pid = atoi(argv[1]);
 //    return sos_process_delete(pid);
+}
+
+static int test_command(int fp(int, char**), char* testname, int ntests, int nreps, int argc, char **argv) {
+    printf("TEST START: %s\n", testname);
+    for (int i = 0; i < ntests; i++) {
+        uint64_t start = get_timestamp();
+        for (int j = 0; j < nreps; j++) {
+            fp(argc, argv);
+        }
+        printf("TEST RESULTS: test #%d, %d reps,%llu microseconds\n", get_timestamp() - start);
+    }
+    printf("TEST COMPLETE\n");
 }
 
 struct command {
