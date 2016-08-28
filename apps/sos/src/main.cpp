@@ -210,7 +210,7 @@ static void _sos_init(seL4_CPtr* ipc_ep, seL4_CPtr* async_ep) try {
     err = dma_init(dma_addr, DMA_SIZE_BITS);
     conditional_panic(err, "Failed to intiialise DMA memory\n");
 
-    /* Initialiase other system compenents here */
+    /* TODO: Set stdout to the debug device */
 
     _sos_ipc_init(ipc_ep, async_ep);
 } catch (const std::exception& e) {

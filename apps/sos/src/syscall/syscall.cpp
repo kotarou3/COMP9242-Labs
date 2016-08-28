@@ -2,14 +2,12 @@
 #include <sys/syscall.h>
 #include <errno.h>
 
+#include "internal/syscall/fs.h"
 #include "internal/syscall/mmap.h"
 #include "internal/syscall/syscall.h"
 #include "internal/syscall/time.h"
 
 extern "C" {
-    #include <serial/serial.h>
-    #include <sos.h>
-
     #define verbose 5
     #include "internal/sys/debug.h"
     #include "internal/sys/panic.h"
@@ -37,6 +35,22 @@ namespace {
 
     constexpr ProcessSyscall _getProcessSyscall(long number) {
         #define ADD_SYSCALL(name) if (number == SYS_##name) return reinterpret_cast<ProcessSyscall>(syscall::name)
+
+	    // fs
+        ADD_SYSCALL(open);
+        ADD_SYSCALL(close);
+
+        ADD_SYSCALL(read);
+        ADD_SYSCALL(readv);
+        ADD_SYSCALL(pread64);
+        ADD_SYSCALL(preadv);
+
+        ADD_SYSCALL(write);
+        ADD_SYSCALL(writev);
+        ADD_SYSCALL(pwrite64);
+        ADD_SYSCALL(pwritev);
+
+        ADD_SYSCALL(ioctl);
 
 	    // mmap
 	    ADD_SYSCALL(brk);
@@ -68,13 +82,7 @@ boost::future<int> handle(process::Thread& thread, long number, size_t argc, seL
 }
 
 boost::future<int> handle(process::Process& process, long number, size_t argc, seL4_Word* argv) noexcept {
-    if (number == SOS_SYS_SERIAL_WRITE) {
-        static struct serial *serial;
-        if (!serial)
-            serial = serial_init();
-
-        return _returnNow(serial_send(serial, reinterpret_cast<char*>(argv), argc));
-    } else if (_getProcessSyscall(number)) {
+    if (_getProcessSyscall(number)) {
         seL4_Word args[8] = {0};
         std::copy(argv, argv + std::min(argc, 8U), args);
 
