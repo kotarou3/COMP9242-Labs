@@ -40,52 +40,52 @@ static void sel4_abort(void) {
 }
 
 long
-sys_exit(va_list ap)
+sys_exit()
 {
     abort();
-    return 0;
+    __builtin_unreachable();
 }
 
 long
-sys_rt_sigprocmask(va_list ap)
+sys_rt_sigprocmask()
 {
     printf("Ignoring call to %s\n", __FUNCTION__);
     return 0;
 }
 
 long
-sys_gettid(va_list ap)
+sys_gettid()
 {
     printf("Ignoring call to %s\n", __FUNCTION__);
     return 0;
 }
 
 long
-sys_getpid(va_list ap)
+sys_getpid()
 {
     printf("Ignoring call to %s\n", __FUNCTION__);
     return 0;
 }
 
 long
-sys_set_tid_address(va_list ap)
+sys_set_tid_address()
 {
     printf("Ignoring call to %s\n", __FUNCTION__);
-    return sys_gettid(ap);
+    return sys_gettid();
 }
 
 long
-sys_tkill(va_list ap)
+sys_tkill()
 {
     printf("%s assuming self kill\n", __FUNCTION__);
     sel4_abort();
-    return 0;
+    __builtin_unreachable();
 }
 
 long
-sys_tgkill(va_list ap)
+sys_tgkill()
 {
     printf("%s assuming self kill\n", __FUNCTION__);
     sel4_abort();
-    return 0;
+    __builtin_unreachable();
 }

@@ -9,10 +9,8 @@
 
 int sys_brk(va_list ap)
 {
-    void *addr = va_arg(ap, void*);
-
     seL4_SetMR(0, SYS_brk);
-    seL4_SetMR(1, addr);
+    seL4_SetMR(1, va_arg(ap, seL4_Word));
 
     seL4_MessageInfo_t req = seL4_MessageInfo_new(seL4_NoFault, 0, 0, 2);
     seL4_Call(SOS_IPC_EP_CAP, req);
@@ -21,20 +19,13 @@ int sys_brk(va_list ap)
 
 int sys_mmap2(va_list ap)
 {
-    void *addr = va_arg(ap, void*);
-    size_t length = va_arg(ap, size_t);
-    int prot = va_arg(ap, int);
-    int flags = va_arg(ap, int);
-    int fd = va_arg(ap, int);
-    off_t offset = va_arg(ap, off_t);
-
     seL4_SetMR(0, SYS_mmap2);
-    seL4_SetMR(1, addr);
-    seL4_SetMR(2, length);
-    seL4_SetMR(3, prot);
-    seL4_SetMR(4, flags);
-    seL4_SetMR(5, fd);
-    seL4_SetMR(6, offset);
+    seL4_SetMR(1, va_arg(ap, seL4_Word));
+    seL4_SetMR(2, va_arg(ap, seL4_Word));
+    seL4_SetMR(3, va_arg(ap, seL4_Word));
+    seL4_SetMR(4, va_arg(ap, seL4_Word));
+    seL4_SetMR(5, va_arg(ap, seL4_Word));
+    seL4_SetMR(6, va_arg(ap, seL4_Word));
 
     seL4_MessageInfo_t req = seL4_MessageInfo_new(seL4_NoFault, 0, 0, 7);
     seL4_Call(SOS_IPC_EP_CAP, req);
@@ -43,25 +34,22 @@ int sys_mmap2(va_list ap)
 
 int sys_munmap(va_list ap)
 {
-    void *addr = va_arg(ap, void*);
-    size_t length = va_arg(ap, size_t);
-
     seL4_SetMR(0, SYS_munmap);
-    seL4_SetMR(1, addr);
-    seL4_SetMR(2, length);
+    seL4_SetMR(1, va_arg(ap, seL4_Word));
+    seL4_SetMR(2, va_arg(ap, seL4_Word));
 
-    seL4_MessageInfo_t req = seL4_MessageInfo_new(seL4_NoFault, 0, 0, 7);
+    seL4_MessageInfo_t req = seL4_MessageInfo_new(seL4_NoFault, 0, 0, 3);
     seL4_Call(SOS_IPC_EP_CAP, req);
     return seL4_GetMR(0);
 }
 
-int sys_mremap(va_list ap)
+int sys_mremap()
 {
     assert(!"not implemented");
-    return -ENOMEM;
+    __builtin_unreachable();
 }
 
-int sys_madvise(va_list ap)
+int sys_madvise()
 {
     // free() needs this
     return -ENOSYS;

@@ -9,12 +9,12 @@
 
 namespace syscall {
 
-int brk(process::Process& process, memory::vaddr_t addr) noexcept {
+int brk(process::Process& /*process*/, memory::vaddr_t /*addr*/) noexcept {
     // We don't actually implement this - we let malloc() use mmap2() instead
     return -ENOSYS;
 }
 
-int mmap2(process::Process& process, memory::vaddr_t addr, size_t length, int prot, int flags, int fd, off_t offset) noexcept {
+int mmap2(process::Process& process, memory::vaddr_t addr, size_t length, int prot, int flags, int /*fd*/, off_t /*offset*/) noexcept {
     if (memory::pageAlign(addr) != addr || memory::pageAlign(length) != length)
         return -EINVAL;
 
@@ -109,9 +109,9 @@ int sys_munmap(va_list ap) {
     return syscall::munmap(process::getSosProcess(), addr, length);
 }
 
-int sys_mremap(va_list ap) {
+int sys_mremap() {
     assert(!"Not implemented");
-    return -ENOSYS;
+    __builtin_unreachable();
 }
 
 }

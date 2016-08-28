@@ -32,6 +32,7 @@ LIBS := sel4 elf c c++ c++abi cpio lwip ethdrivers \
 
 include $(SEL4_COMMON)/common.mk
 
+CPPFLAGS += -Werror -Wno-missing-field-initializers
 CRTOBJFILES :=
 
 ${COMPONENTS}:

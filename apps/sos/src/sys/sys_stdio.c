@@ -82,11 +82,11 @@ sys_writev(va_list ap)
     return ret;
 }
 
-long sys_readv(va_list ap)
+long sys_readv()
 {
     /* rootserver cannot read input */
     assert(!"not implemented");
-    return 0;
+    __builtin_unreachable();
 }
 
 long sys_read(va_list ap)
@@ -111,19 +111,19 @@ sys_ioctl(va_list ap)
         return 0;
     }
     assert(!"not implemented");
-    return 0;
+    __builtin_unreachable();
 }
 
 long
-sys_open(va_list ap)
+sys_open()
 {
     assert(!"not implemented");
-    return 0;
+    __builtin_unreachable();
 }
 
 long
-sys_close(va_list ap)
+sys_close()
 {
     assert(!"not implemented");
-    return 0;
+    __builtin_unreachable();
 }

@@ -131,6 +131,7 @@ void Mappings::erase(vaddr_t address, size_t pages) {
             case OverlapType::None:
             default:
                 assert(false);
+                __builtin_unreachable();
         }
 
         for (size_t p = 0; p < unmapPages; ++p) {

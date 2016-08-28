@@ -62,8 +62,6 @@ seL4_CPtr _sos_ipc_ep_cap;
 seL4_CPtr _sos_interrupt_ep_cap;
 
 static void print_bootinfo(const seL4_BootInfo* info) {
-    int i;
-
     /* General info */
     kprintf(1, "Info Page:  %p\n", info);
     kprintf(1,"IPC Buffer: %p\n", info->ipcBuffer);
@@ -86,7 +84,7 @@ static void print_bootinfo(const seL4_BootInfo* info) {
     /* Untyped details */
     kprintf(1,"\nUntyped details:\n");
     kprintf(1,"Untyped Slot       Paddr      Bits\n");
-    for (i = 0; i < info->untyped.end-info->untyped.start; i++) {
+    for (size_t i = 0; i < info->untyped.end-info->untyped.start; i++) {
         kprintf(1,"%3d     0x%08x 0x%08x %d\n", i, info->untyped.start + i,
                                                    info->untypedPaddrList[i],
                                                    info->untypedSizeBitsList[i]);
@@ -95,7 +93,7 @@ static void print_bootinfo(const seL4_BootInfo* info) {
     /* Device untyped details */
     kprintf(1,"\nDevice untyped details:\n");
     kprintf(1,"Untyped Slot       Paddr      Bits\n");
-    for (i = 0; i < info->deviceUntyped.end-info->deviceUntyped.start; i++) {
+    for (size_t i = 0; i < info->deviceUntyped.end-info->deviceUntyped.start; i++) {
         kprintf(1,"%3d     0x%08x 0x%08x %d\n", i, info->deviceUntyped.start + i,
                                                    info->untypedPaddrList[i + (info->untyped.end - info->untyped.start)],
                                                    info->untypedSizeBitsList[i + (info->untyped.end-info->untyped.start)]);
@@ -108,7 +106,7 @@ static void print_bootinfo(const seL4_BootInfo* info) {
     kprintf(1,"--------------------------------------------------------\n");
     kprintf(1,"| index |        name      |  address   | size (bytes) |\n");
     kprintf(1,"|------------------------------------------------------|\n");
-    for(i = 0;; i++) {
+    for(int i = 0;; i++) {
         unsigned long size;
         const char *name;
         void *data;
@@ -123,7 +121,7 @@ static void print_bootinfo(const seL4_BootInfo* info) {
     kprintf(1,"--------------------------------------------------------\n");
 }
 
-void start_first_process(char* app_name, seL4_CPtr fault_ep) try {
+void start_first_process(const char* app_name, seL4_CPtr fault_ep) try {
     auto process = std::make_shared<process::Process>();
 
     /* parse the cpio image */

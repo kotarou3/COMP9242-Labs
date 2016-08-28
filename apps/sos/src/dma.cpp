@@ -88,10 +88,9 @@ dma_init(seL4_Word dma_paddr_start, int sizebits){
 
 
 void *
-sos_dma_malloc(void* cookie, size_t size, int align, int cached, ps_mem_flags_t flags) {
+sos_dma_malloc(void* /*cookie*/, size_t size, int align, int cached, ps_mem_flags_t /*flags*/) {
     static int alloc_cached = 0;
     void *dma_addr;
-    (void)cookie;
 
     assert(_dma_pstart);
     _dma_pnext = DMA_ALIGN(_dma_pnext);
@@ -117,11 +116,11 @@ sos_dma_malloc(void* cookie, size_t size, int align, int cached, ps_mem_flags_t 
     return dma_addr;
 }
 
-void sos_dma_free(void *cookie, void *addr, size_t size) {
+void sos_dma_free(void* /*cookie*/, void* /*addr*/, size_t /*size*/) {
     /* do not support free */
 }
 
-uintptr_t sos_dma_pin(void *cookie, void *addr, size_t size) {
+uintptr_t sos_dma_pin(void* /*cookie*/, void* addr, size_t /*size*/) {
     if ((uintptr_t)addr < _dma_vstart || (uintptr_t)addr >= _dma_vend) {
         return 0;
     } else {
@@ -129,18 +128,18 @@ uintptr_t sos_dma_pin(void *cookie, void *addr, size_t size) {
     }
 }
 
-void sos_dma_unpin(void *cookie, void *addr, size_t size) {
+void sos_dma_unpin(void* /*cookie*/, void* /*addr*/, size_t /*size*/) {
     /* no op */
 }
 
 typedef int (*sel4_cache_op_fn_t)(seL4_ARM_PageDirectory, seL4_Word, seL4_Word);
 
 static void
-cache_foreach(void *vaddr, int range, sel4_cache_op_fn_t proc)
+cache_foreach(void* vaddr, int range, sel4_cache_op_fn_t proc)
 {
     int error;
     uintptr_t next;
-    uintptr_t end = (uintptr_t)(vaddr + range);
+    uintptr_t end = (uintptr_t)vaddr + range;
     for (uintptr_t addr = (uintptr_t)vaddr; addr < end; addr = next) {
         next = MIN(PAGE_ALIGN_4K(addr + PAGE_SIZE_4K), end);
         error = proc(seL4_CapInitThreadPD, addr, next);
@@ -148,7 +147,7 @@ cache_foreach(void *vaddr, int range, sel4_cache_op_fn_t proc)
     }
 }
 
-void sos_dma_cache_op(void *cookie, void *addr, size_t size, dma_cache_op_t op) {
+void sos_dma_cache_op(void* /*cookie*/, void* addr, size_t size, dma_cache_op_t op) {
     /* everything is mapped uncached at the moment */
     switch(op) {
     case DMA_CACHE_OP_CLEAN:

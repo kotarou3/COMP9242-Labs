@@ -22,52 +22,52 @@ sel4_abort()
 }
 
 long
-sys_rt_sigprocmask(va_list ap) {
+sys_rt_sigprocmask() {
     /* abort messages with signals in order to kill itself */
-    return 0;
+    __builtin_unreachable();
 }
 
 long
-sys_gettid(va_list ap) {
+sys_gettid() {
     /* return dummy for now */
     return 0;
 }
 
 long
-sys_getpid(va_list ap) {
+sys_getpid() {
     /* assuming process IDs are the same as thread IDs*/
-    return 0;
+    return sys_gettid();
 }
 
 long
-sys_set_tid_address(va_list ap) {
-    return sys_gettid(ap);
+sys_set_tid_address() {
+    return sys_gettid();
 }
 
 long
-sys_exit(va_list ap)
+sys_exit()
 {
     abort();
-    return 0;
+    __builtin_unreachable();
 }
 
 long
-sys_exit_group(va_list ap)
+sys_exit_group()
 {
     abort();
-    return 0;
+    __builtin_unreachable();
 }
 
 long
-sys_tkill(va_list ap)
+sys_tkill()
 {
     sel4_abort();
-    return 0;
+    __builtin_unreachable();
 }
 
 long
-sys_tgkill(va_list ap)
+sys_tgkill()
 {
     sel4_abort();
-    return 0;
+    __builtin_unreachable();
 }
