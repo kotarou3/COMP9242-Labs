@@ -17,7 +17,7 @@ extern "C" {
 namespace syscall {
 
 namespace {
-    using Syscall = int (*)(
+    using Syscall = boost::future<int> (*)(
         process::Process& process, // Thread-specific syscalls not supported yet
 	    seL4_Word, seL4_Word, seL4_Word, seL4_Word,
 	    seL4_Word, seL4_Word, seL4_Word, seL4_Word
@@ -34,13 +34,13 @@ namespace {
     }
 }
 
-int handle(process::Thread& thread, long number, size_t argc, seL4_Word* argv) noexcept {
+boost::future<int> handle(process::Thread& thread, long number, size_t argc, seL4_Word* argv) noexcept {
     if (number == SOS_SYS_SERIAL_WRITE) {
         static struct serial *serial;
         if (!serial)
             serial = serial_init();
 
-        return serial_send(serial, reinterpret_cast<char*>(argv), argc);
+        return _returnNow(serial_send(serial, reinterpret_cast<char*>(argv), argc));
     } else if (getSyscall(number)) {
         seL4_Word args[8] = {0};
         std::copy(argv, argv + std::min(argc, 8U), args);
@@ -52,7 +52,7 @@ int handle(process::Thread& thread, long number, size_t argc, seL4_Word* argv) n
         );
     } else {
         kprintf(0, "Unknown syscall %d\n", number);
-        return -ENOSYS;
+        return _returnNow(-ENOSYS);
     }
 }
 

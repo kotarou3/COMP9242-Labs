@@ -28,11 +28,14 @@ INCLUDE_DIRS  += $(SOURCE_DIR)/include
 
 # Libraries required to build the target
 LIBS := sel4 elf c c++ c++abi cpio lwip ethdrivers \
-	 serial nfs clock sel4cspace platsupport
+	 serial nfs clock sel4cspace platsupport \
+	 boost_system boost_thread
 
 include $(SEL4_COMMON)/common.mk
 
 CPPFLAGS += -Werror -Wno-missing-field-initializers
+CXXFLAGS += -DBOOST_THREAD_VERSION=4 -DBOOST_SYSTEM_NO_DEPRECATED -DBOOST_THREAD_PROVIDES_EXECUTORS
+
 CRTOBJFILES :=
 
 ${COMPONENTS}:
