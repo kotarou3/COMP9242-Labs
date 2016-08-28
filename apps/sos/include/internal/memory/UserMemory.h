@@ -1,3 +1,5 @@
+#pragma once
+
 #include <vector>
 
 #include "internal/memory/PageDirectory.h"
