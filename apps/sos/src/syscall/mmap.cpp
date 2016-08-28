@@ -4,7 +4,6 @@
 #include <sys/mman.h>
 
 #include "internal/memory/Mappings.h"
-#include "internal/process/Thread.h"
 #include "internal/syscall/mmap.h"
 
 namespace syscall {

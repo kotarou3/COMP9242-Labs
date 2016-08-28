@@ -1,6 +1,5 @@
 #pragma once
 
-#include "internal/process/Thread.h"
 #include "internal/syscall/syscall.h"
 
 namespace syscall {

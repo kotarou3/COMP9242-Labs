@@ -7,7 +7,6 @@
 #include <time.h>
 
 #include "internal/memory/UserMemory.h"
-#include "internal/process/Thread.h"
 #include "internal/syscall/time.h"
 #include "internal/timer/timer.h"
 
