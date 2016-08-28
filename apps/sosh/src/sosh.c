@@ -114,7 +114,7 @@ static int ps(int argc, char **argv) {
         return 1;
     }
 
-    processes = sos_process_status(process, MAX_PROCESSES);
+//    processes = sos_process_status(process, MAX_PROCESSES);
 
     printf("TID SIZE   STIME   CTIME COMMAND\n");
 
@@ -147,11 +147,11 @@ static int exec(int argc, char **argv) {
         assert(r == 0);
     }
 
-    pid = sos_process_create(argv[1]);
+//    pid = sos_process_create(argv[1]);
     if (pid >= 0) {
         printf("Child pid=%d\n", pid);
         if (bg == 0) {
-            sos_process_wait(pid);
+//            sos_process_wait(pid);
         }
     } else {
         printf("Failed!\n");
@@ -173,7 +173,7 @@ static int dir(int argc, char **argv) {
     }
 
     if (argc == 2) {
-        r = sos_stat(argv[1], &sbuf);
+//        r = sos_stat(argv[1], &sbuf);
         if (r < 0) {
             printf("stat(%s) failed: %d\n", argv[1], r);
             return 0;
@@ -183,14 +183,14 @@ static int dir(int argc, char **argv) {
     }
 
     while (1) {
-        r = sos_getdirent(i, buf, BUF_SIZ);
+//        r = sos_getdirent(i, buf, BUF_SIZ);
         if (r < 0) {
             printf("dirent(%d) failed: %d\n", i, r);
             break;
         } else if (!r) {
             break;
         }
-        r = sos_stat(buf, &sbuf);
+//        r = sos_stat(buf, &sbuf);
         if (r < 0) {
             printf("stat(%s) failed: %d\n", buf, r);
             break;
@@ -247,7 +247,7 @@ static int kill(int argc, char *argv[]) {
     }
 
     pid = atoi(argv[1]);
-    return sos_process_delete(pid);
+//    return sos_process_delete(pid);
 }
 
 struct command {
@@ -265,15 +265,18 @@ int main(void) {
     int i, r, done, found, new, argc;
     char *bp, *p;
 
-    in = open("console", O_RDONLY);
-    assert(in >= 0);
+//    in = open("console", O_RDONLY);
+//    assert(in >= 0);
 
     bp = buf;
     done = 0;
     new = 1;
 
-    printf("\n[SOS Starting]\n");
-
+    printf("\n[SOSH Starting]\n");
+    micro_time(0, (char**)NULL);
+    printf("Micro time done\n");
+    second_time(0, (char**)NULL);
+    printf("Time done\n");
     while (!done) {
         if (new) {
             printf("$ ");
@@ -369,17 +372,17 @@ int main(void) {
         /* Didn't find a command */
         if (found == 0) {
             /* They might try to exec a program */
-            if (sos_stat(argv[0], &sbuf) != 0) {
-                printf("Command \"%s\" not found\n", argv[0]);
-            } else if (!(sbuf.st_fmode & FM_EXEC)) {
-                printf("File \"%s\" not executable\n", argv[0]);
-            } else {
-                /* Execute the program */
-                argc = 2;
-                argv[1] = argv[0];
-                argv[0] = "exec";
-                exec(argc, argv);
-            }
+//            if (sos_stat(argv[0], &sbuf) != 0) {
+//                printf("Command \"%s\" not found\n", argv[0]);
+//            } else if (!(sbuf.st_fmode & FM_EXEC)) {
+//                printf("File \"%s\" not executable\n", argv[0]);
+//            } else {
+//                /* Execute the program */
+//                argc = 2;
+//                argv[1] = argv[0];
+//                argv[0] = "exec";
+//                exec(argc, argv);
+//            }
         }
     }
     printf("[SOS Exiting]\n");

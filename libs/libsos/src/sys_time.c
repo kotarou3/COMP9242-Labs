@@ -23,6 +23,9 @@
 #include <utils/time.h>
 
 #include <sel4/sel4.h>
+#include <sys/syscall.h>
+
+
 
 long sys_nanosleep(va_list ap) {
     struct timespec *req = va_arg(ap, struct timespec*);
@@ -43,6 +46,7 @@ long sys_clock_gettime(va_list ap) {
         return -EINVAL;
     }
     uint64_t micros = sos_sys_time_stamp();
+    printf("Got %ull\n", micros);
     res->tv_sec = micros / US_IN_S;
     res->tv_nsec = (micros % US_IN_S) * NS_IN_US;
     return 0;

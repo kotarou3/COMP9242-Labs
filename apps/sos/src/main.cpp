@@ -18,6 +18,7 @@
 extern "C" {
     #include <cspace/cspace.h>
 
+    #include <clock/clock.h>
     #include <cpio/cpio.h>
     #include <elf/elf.h>
     #include <sos.h>
@@ -48,6 +49,7 @@ extern "C" {
 /* All badged IRQs set high bet, then we use uniq bits to
  * distinguish interrupt sources */
 #define IRQ_BADGE_NETWORK (1 << 0)
+#define IRQ_BADGE_TIMER (1 << 1)
 
 #define TTY_NAME             CONFIG_SOS_STARTUP_APP
 #define TTY_EP_BADGE         (101)
@@ -235,6 +237,8 @@ int main(void) {
 
     /* Initialise the network hardware */
     network_init(badge_irq_ep(_sos_interrupt_ep_cap, IRQ_BADGE_NETWORK));
+
+    assert(start_timer(badge_irq_ep(_sos_interrupt_ep_cap, IRQ_BADGE_TIMER)) == CLOCK_R_OK);
 
     /* Start the user application */
     start_first_process(TTY_NAME, _sos_ipc_ep_cap);

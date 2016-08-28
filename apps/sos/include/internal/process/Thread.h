@@ -53,6 +53,7 @@ class Process {
 
         memory::PageDirectory pageDirectory;
         memory::Mappings maps;
+        fs::FDTable fdTable;
 
         const bool isSosProcess;
 
@@ -62,7 +63,6 @@ class Process {
 
         std::unique_ptr<cspace_t, std::function<void (cspace_t*)>> _cspace;
 
-        fs::FDTable fdTable;
 
         friend class Thread;
 };

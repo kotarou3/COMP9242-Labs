@@ -23,6 +23,14 @@ std::vector<uint8_t> UserMemory::read(size_t bytes, bool bypassAttributes) {
     return result;
 }
 
+std::string UserMemory::readString(size_t max_size, bool bypassAttributes) {
+    auto result = read(max_size, bypassAttributes);
+    auto end = result.cfind('\0');
+    if (end == result.cend())
+        throw std::runtime_error("Attempted to map in a string that was either longer than allowed or was not null terminated");
+    return std::string(result.cbegin(), end);
+}
+
 void UserMemory::write(uint8_t* from, size_t bytes, bool bypassAttributes) {
     auto map = _mapIn(bytes, Attributes{.read = false, .write = true}, bypassAttributes);
     std::copy(

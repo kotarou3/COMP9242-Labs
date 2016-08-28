@@ -8,17 +8,27 @@
  * @TAG(NICTA_BSD)
  */
 
-#include <assert.h>
-#include <string.h>
+#include <cassert>
+#include <cstring>
+#include <algorithm>
 
-#include <sel4/sel4.h>
-#include <sos.h>
-#include <unistd.h>
-#include <utils/arith.h>
+
+extern "C" {
+    #include <unistd.h>
+    #include <sel4/sel4.h>
+    #include <sos.h>
+    #include <utils/arith.h>
+    #include <sys/syscall.h>
+    #include <clock/clock.h>
+}
 
 int sos_sys_open(const char *path, fmode_t mode) {
-    assert(!"You need to implement this");
-    return -1;
+    seL4_MessageInfo_t req = seL4_MessageInfo_new(seL4_NoFault, 0, 0, 3);
+    seL4_SetMR(0, SYS_open);
+    seL4_SetMR(1, (seL4_Word)path);
+    seL4_SetMR(2, mode);
+    seL4_Call(SOS_IPC_EP_CAP, req);
+    return seL4_GetMR(0);
 }
 
 int sos_sys_read(int file, char *buf, size_t nbyte) {
@@ -32,7 +42,7 @@ int sos_sys_write(int file, const char *buf, size_t nbyte) {
         assert(!"You need to implement this");
 
     // No shared memory yet, so we just use the IPC buffer
-    nbyte = MIN(nbyte, seL4_MsgMaxLength - 1);
+    nbyte = std::min(nbyte, (size_t)(seL4_MsgMaxLength - 1));
     memcpy(&seL4_GetIPCBuffer()->msg[1], buf, nbyte);
 
     seL4_MessageInfo_t req = seL4_MessageInfo_new(seL4_NoFault, 0, 0, nbyte + 1);
@@ -47,6 +57,5 @@ void sos_sys_usleep(int msec) {
 }
 
 int64_t sos_sys_time_stamp(void) {
-    assert(!"You need to implement this");
-    return -1;
+    return time_stamp();
 }

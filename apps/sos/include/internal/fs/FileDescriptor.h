@@ -5,7 +5,7 @@
 namespace fs {
 
 struct Mode {
-    bool read:1, write:1;
+    bool read:1, write:1, execute:1;
 };
 
 // when a process is forked, the file descriptor table is copied.

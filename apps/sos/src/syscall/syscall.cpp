@@ -29,6 +29,7 @@ namespace {
 	    ADD_SYSCALL(brk);
 	    ADD_SYSCALL(mmap2);
 	    ADD_SYSCALL(munmap);
+        ADD_SYSCALL(open);
 
 	    return nullptr;
     }
