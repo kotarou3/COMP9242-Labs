@@ -11,19 +11,22 @@ UserMemory::UserMemory(process::Process& process, vaddr_t address):
 {}
 
 std::vector<uint8_t> UserMemory::read(size_t bytes, bool bypassAttributes) {
-    auto map = _mapIn(bytes, Attributes{.read = true}, bypassAttributes);
-
     std::vector<uint8_t> result(bytes);
-    uint8_t* start = reinterpret_cast<uint8_t*>(map.getAddress() + pageOffset(_address));
-    std::copy(
-        start, start + bytes,
-        result.begin()
-    );
-
+    read(result.data(), bytes, bypassAttributes);
     return result;
 }
 
-void UserMemory::write(uint8_t* from, size_t bytes, bool bypassAttributes) {
+void UserMemory::read(uint8_t* to, size_t bytes, bool bypassAttributes) {
+    auto map = _mapIn(bytes, Attributes{.read = true}, bypassAttributes);
+
+    const uint8_t* start = reinterpret_cast<const uint8_t*>(map.getAddress() + pageOffset(_address));
+    std::copy(
+        start, start + bytes,
+        to
+    );
+}
+
+void UserMemory::write(const uint8_t* from, size_t bytes, bool bypassAttributes) {
     auto map = _mapIn(bytes, Attributes{.read = false, .write = true}, bypassAttributes);
     std::copy(
         from, from + bytes,
