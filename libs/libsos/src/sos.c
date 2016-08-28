@@ -46,13 +46,3 @@ int sos_sys_write(int file, const char *buf, size_t nbyte) {
 
     return seL4_GetMR(0);
 }
-
-void sos_sys_usleep(int msec) {
-    (void)msec;
-    assert(!"You need to implement this");
-}
-
-int64_t sos_sys_time_stamp(void) {
-    assert(!"You need to implement this");
-    __builtin_unreachable();
-}

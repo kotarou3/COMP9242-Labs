@@ -39,6 +39,7 @@ extern "C" {
 #include "internal/memory/FrameTable.h"
 #include "internal/memory/PageDirectory.h"
 #include "internal/process/Thread.h"
+#include "internal/timer/timer.h"
 
 /* To differencient between async and and sync IPC, we assign a
  * badge to the async endpoint. The badge that we receive will
@@ -48,6 +49,7 @@ extern "C" {
 /* All badged IRQs set high bet, then we use uniq bits to
  * distinguish interrupt sources */
 #define IRQ_BADGE_NETWORK (1 << 0)
+#define IRQ_BADGE_TIMER   (1 << 1)
 
 #define TTY_NAME             CONFIG_SOS_STARTUP_APP
 #define TTY_EP_BADGE         (101)
@@ -234,6 +236,9 @@ int main(void) {
     /* Initialise the network hardware */
     network_init(badge_irq_ep(_sos_interrupt_ep_cap, IRQ_BADGE_NETWORK));
 
+    /* Initialise the timer */
+    timer::init(badge_irq_ep(_sos_interrupt_ep_cap, IRQ_BADGE_TIMER));
+
     /* Start the user application */
     start_first_process(TTY_NAME, _sos_ipc_ep_cap);
 
@@ -248,6 +253,8 @@ int main(void) {
             // Interrupt
             if (badge & IRQ_BADGE_NETWORK)
                 network_irq();
+            if (badge & IRQ_BADGE_TIMER)
+                timer::handleIrq();
         } else if (badge == TTY_EP_BADGE) {
             _tty_start_thread->handleFault(message);
         } else {

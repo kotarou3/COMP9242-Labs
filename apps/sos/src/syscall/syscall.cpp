@@ -4,6 +4,7 @@
 
 #include "internal/syscall/mmap.h"
 #include "internal/syscall/syscall.h"
+#include "internal/syscall/time.h"
 
 extern "C" {
     #include <serial/serial.h>
@@ -26,9 +27,14 @@ namespace {
     constexpr Syscall getSyscall(long number) {
         #define ADD_SYSCALL(name) if (number == SYS_##name) return reinterpret_cast<Syscall>(syscall::name)
 
+	    // mmap
 	    ADD_SYSCALL(brk);
 	    ADD_SYSCALL(mmap2);
 	    ADD_SYSCALL(munmap);
+
+	    // time
+	    ADD_SYSCALL(clock_gettime);
+	    ADD_SYSCALL(nanosleep);
 
 	    return nullptr;
     }

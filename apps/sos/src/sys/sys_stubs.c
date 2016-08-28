@@ -801,11 +801,11 @@ long sys_sched_rr_get_interval()
     assert(!"sys_sched_rr_get_interval not implemented");
     __builtin_unreachable();
 }
-long sys_nanosleep()
+/*long sys_nanosleep()
 {
     assert(!"sys_nanosleep not implemented");
     __builtin_unreachable();
-}
+}*/
 long sys_setresuid()
 {
     assert(!"sys_setresuid not implemented");
@@ -1300,11 +1300,11 @@ long sys_clock_settime()
     assert(!"sys_clock_settime not implemented");
     __builtin_unreachable();
 }
-long sys_clock_gettime()
+/*long sys_clock_gettime()
 {
     assert(!"sys_clock_gettime not implemented");
     __builtin_unreachable();
-}
+}*/
 long sys_clock_getres()
 {
     assert(!"sys_clock_getres not implemented");
@@ -2305,11 +2305,11 @@ long sys_sched_rr_get_interval()
     assert(!"sys_sched_rr_get_interval not implemented");
     __builtin_unreachable();
 }
-long sys_nanosleep()
+/*long sys_nanosleep()
 {
     assert(!"sys_nanosleep not implemented");
     __builtin_unreachable();
-}
+}*/
 
 long sys_setresuid()
 {
@@ -2765,11 +2765,11 @@ long sys_clock_settime()
     assert(!"sys_clock_settime not implemented");
     __builtin_unreachable();
 }
-long sys_clock_gettime()
+/*long sys_clock_gettime()
 {
     assert(!"sys_clock_gettime not implemented");
     __builtin_unreachable();
-}
+}*/
 long sys_clock_getres()
 {
     assert(!"sys_clock_getres not implemented");

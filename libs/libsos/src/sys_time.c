@@ -1,49 +1,25 @@
-/*
- * Copyright 2014, NICTA
- *
- * This software may be distributed and modified according to the terms of
- * the BSD 2-Clause license. Note that NO WARRANTY is provided.
- * See "LICENSE_BSD2.txt" for details.
- *
- * @TAG(NICTA_BSD)
- */
-
-#include <autoconf.h>
-#include <assert.h>
-#include <errno.h>
-#include <fcntl.h>
-#include <limits.h>
 #include <stdarg.h>
-#include <string.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <unistd.h>
-#include <time.h>
-#include <sos.h>
-#include <utils/time.h>
+#include <sys/syscall.h>
 
 #include <sel4/sel4.h>
+#include <sos.h>
 
-long sys_nanosleep(va_list ap) {
-    struct timespec *req = va_arg(ap, struct timespec*);
-    struct timespec *rem = va_arg(ap, struct timespec*);
-    /* We ignore the remaining since we will always wait the full time */
-    (void)rem;
-    /* construct a sleep call */
-    int millis = req->tv_sec * MS_IN_S;
-    millis += req->tv_nsec / NS_IN_MS;
-    sos_sys_usleep(millis);
-    return 0;
+int sys_clock_gettime(va_list ap) {
+    seL4_SetMR(0, SYS_clock_gettime);
+    seL4_SetMR(1, va_arg(ap, seL4_Word));
+    seL4_SetMR(2, va_arg(ap, seL4_Word));
+
+    seL4_MessageInfo_t req = seL4_MessageInfo_new(seL4_NoFault, 0, 0, 3);
+    seL4_Call(SOS_IPC_EP_CAP, req);
+    return seL4_GetMR(0);
 }
 
-long sys_clock_gettime(va_list ap) {
-    clockid_t clk_id = va_arg(ap, clockid_t);
-    struct timespec *res = va_arg(ap, struct timespec*);
-    if (clk_id != CLOCK_REALTIME) {
-        return -EINVAL;
-    }
-    uint64_t micros = sos_sys_time_stamp();
-    res->tv_sec = micros / US_IN_S;
-    res->tv_nsec = (micros % US_IN_S) * NS_IN_US;
-    return 0;
+int sys_nanosleep(va_list ap) {
+    seL4_SetMR(0, SYS_nanosleep);
+    seL4_SetMR(1, va_arg(ap, seL4_Word));
+    seL4_SetMR(2, va_arg(ap, seL4_Word));
+
+    seL4_MessageInfo_t req = seL4_MessageInfo_new(seL4_NoFault, 0, 0, 3);
+    seL4_Call(SOS_IPC_EP_CAP, req);
+    return seL4_GetMR(0);
 }
