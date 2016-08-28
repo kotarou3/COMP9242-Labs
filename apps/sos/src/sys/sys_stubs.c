@@ -35,11 +35,11 @@ long sys_fork()
     assert(!"sys_read not implemented");
     __builtin_unreachable();
 }*/
-long sys_write()
+/*long sys_write()
 {
     assert(!"sys_write not implemented");
     __builtin_unreachable();
-}
+}*/
 long sys_waitpid()
 {
     assert(!"sys_waitpid not implemented");
@@ -886,16 +886,16 @@ long sys_rt_sigsuspend()
     assert(!"sys_rt_sigsuspend not implemented");
     __builtin_unreachable();
 }
-long sys_pread64()
+/*long sys_pread64()
 {
     assert(!"sys_pread64 not implemented");
     __builtin_unreachable();
-}
-long sys_pwrite64()
+}*/
+/*long sys_pwrite64()
 {
     assert(!"sys_pwrite64 not implemented");
     __builtin_unreachable();
-}
+}*/
 long sys_chown()
 {
     assert(!"sys_chown not implemented");
@@ -1635,16 +1635,16 @@ long sys_inotify_init1()
     assert(!"sys_inotify_init1 not implemented");
     __builtin_unreachable();
 }
-long sys_preadv()
+/*long sys_preadv()
 {
     assert(!"sys_preadv not implemented");
     __builtin_unreachable();
-}
-long sys_pwritev()
+}*/
+/*long sys_pwritev()
 {
     assert(!"sys_pwritev not implemented");
     __builtin_unreachable();
-}
+}*/
 long sys_name_to_handle_at()
 {
     assert(!"sys_name_to_handle_at not implemented");
@@ -1729,11 +1729,11 @@ long sys_fork()
     assert(!"sys_read not implemented");
     __builtin_unreachable();
 }*/
-long sys_write()
+/*long sys_write()
 {
     assert(!"sys_write not implemented");
     __builtin_unreachable();
-}
+}*/
 long sys_creat()
 {
     assert(!"sys_creat not implemented");
@@ -2381,16 +2381,16 @@ long sys_rt_sigsuspend()
     assert(!"sys_rt_sigsuspend not implemented");
     __builtin_unreachable();
 }
-long sys_pread64()
+/*long sys_pread64()
 {
     assert(!"sys_pread64 not implemented");
     __builtin_unreachable();
-}
-long sys_pwrite64()
+}*/
+/*long sys_pwrite64()
 {
     assert(!"sys_pwrite64 not implemented");
     __builtin_unreachable();
-}
+}*/
 long sys_chown()
 {
     assert(!"sys_chown not implemented");
@@ -3255,16 +3255,16 @@ long sys_inotify_init1()
     assert(!"sys_inotify_init1 not implemented");
     __builtin_unreachable();
 }
-long sys_preadv()
+/*long sys_preadv()
 {
     assert(!"sys_preadv not implemented");
     __builtin_unreachable();
-}
-long sys_pwritev()
+}*/
+/*long sys_pwritev()
 {
     assert(!"sys_pwritev not implemented");
     __builtin_unreachable();
-}
+}*/
 long sys_rt_tgsigqueueinfo()
 {
     assert(!"sys_rt_tgsigqueueinfo not implemented");

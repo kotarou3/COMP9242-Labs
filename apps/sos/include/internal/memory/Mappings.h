@@ -52,6 +52,7 @@ class Mappings {
 
 class ScopedMapping {
     public:
+        ScopedMapping() = default;
         ScopedMapping(Mappings& maps, vaddr_t address, size_t pages);
         ~ScopedMapping();
 

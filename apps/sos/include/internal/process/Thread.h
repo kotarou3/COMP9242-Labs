@@ -3,6 +3,7 @@
 #include <memory>
 #include <unordered_map>
 
+#include "internal/fs/FileDescriptor.h"
 #include "internal/memory/Mappings.h"
 #include "internal/memory/PageDirectory.h"
 #include "internal/Capability.h"
@@ -52,6 +53,7 @@ class Process {
 
         memory::PageDirectory pageDirectory;
         memory::Mappings maps;
+        fs::FDTable fdTable;
 
         const bool isSosProcess;
 
