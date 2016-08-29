@@ -31,9 +31,7 @@ namespace {
             int size = std::min(static_cast<unsigned int>(newline - buffer.cbegin()), iov.length);
             try {
                 iov.buffer.write(buffer.cbegin(), newline, false);
-                printf("Read partial of %d bytes, %d, %d, %d\n", size, buffer.size(), iov.length, newline - buffer.cbegin());
             } catch (std::runtime_error&) {
-                printf("Got invalid buffer\n");
                 requests.front().second.set_value(-EINVAL);
                 requests.pop();
                 total = 0;
@@ -43,7 +41,6 @@ namespace {
             }
             total += size;
             if (++index == requests.front().first.size()) {
-                printf("Read %d bytes\n", total);
                 requests.front().second.set_value(total);
                 total = 0;
                 index = 0U;

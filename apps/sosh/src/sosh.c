@@ -19,8 +19,6 @@
 #include <fcntl.h>
 #include <time.h>
 #include <sys/time.h>
-#include <sys/stat.h>
-#include <sys/procfs.h>
 #include <utils/time.h>
 
 /* Your OS header file */
@@ -30,16 +28,16 @@
 #define MAX_ARGS   32
 
 static int in;
-static struct stat sbuf;
+static sos_stat_t sbuf;
 
 static void prstat(const char *name) {
     /* print out stat buf */
     printf("%c%c%c%c 0x%06x 0x%lx 0x%06lx %s\n",
-            S_ISREG(sbuf.st_mode) ? '-' : 's', // special file
-            sbuf.st_mode & S_IRUSR ? 'r' : '-', // permissions for owner
-            sbuf.st_mode & S_IWUSR ? 'w' : '-',
-            sbuf.st_mode & S_IXUSR ? 'x' : '-', sbuf.st_size, sbuf.st_ctim,
-            sbuf.st_atim, name);
+            sbuf.st_type == ST_SPECIAL ? 's' : '-',
+            sbuf.st_fmode & FM_READ ? 'r' : '-',
+            sbuf.st_fmode & FM_WRITE ? 'w' : '-',
+            sbuf.st_fmode & FM_EXEC ? 'x' : '-', sbuf.st_size, sbuf.st_ctime,
+            sbuf.st_atime, name);
 }
 
 static int cat(int argc, char **argv) {
@@ -106,7 +104,7 @@ static int cp(int argc, char **argv) {
 #define MAX_PROCESSES 10
 
 static int ps(int argc, char **argv) {
-    prstatus_t *process; // this appears to be missing size and command
+    sos_process_t *process;
     int i, processes;
 
     process = malloc(MAX_PROCESSES * sizeof(*process));
@@ -116,13 +114,13 @@ static int ps(int argc, char **argv) {
         return 1;
     }
 
-    processes = sys_procstatus(process, MAX_PROCESSES);
+    processes = sos_process_status(process, MAX_PROCESSES);
 
     printf("TID SIZE   STIME   CTIME COMMAND\n");
 
     for (i = 0; i < processes; i++) {
-        printf("%3x %4x %7d %s\n", process[i].pr_pid, 0, // PROCESS SIZE HERE
-                process[i].pr_stime, "PROCESS COMMAND HERE");
+        printf("%3x %4x %7d %s\n", process[i].pid, process[i].size,
+                process[i].stime, process[i].command);
     }
 
     free(process);
@@ -149,11 +147,11 @@ static int exec(int argc, char **argv) {
         assert(r == 0);
     }
 
-    pid = sys_execve(argv[1]);
+    pid = sos_process_create(argv[1]);
     if (pid >= 0) {
         printf("Child pid=%d\n", pid);
         if (bg == 0) {
-            sys_waitid(pid);
+            sos_process_wait(pid);
         }
     } else {
         printf("Failed!\n");
@@ -175,7 +173,7 @@ static int dir(int argc, char **argv) {
     }
 
     if (argc == 2) {
-        r = sys_stat(argv[1], &sbuf);
+        r = sos_stat(argv[1], &sbuf);
         if (r < 0) {
             printf("stat(%s) failed: %d\n", argv[1], r);
             return 0;
@@ -185,14 +183,14 @@ static int dir(int argc, char **argv) {
     }
 
     while (1) {
-        r = sys_getdents(i, buf, BUF_SIZ);
+        r = sos_getdirent(i, buf, BUF_SIZ);
         if (r < 0) {
             printf("dirent(%d) failed: %d\n", i, r);
             break;
         } else if (!r) {
             break;
         }
-        r = sys_stat(buf, &sbuf);
+        r = sos_stat(buf, &sbuf);
         if (r < 0) {
             printf("stat(%s) failed: %d\n", buf, r);
             break;
@@ -249,19 +247,7 @@ static int kill(int argc, char *argv[]) {
     }
 
     pid = atoi(argv[1]);
-    return sys_kill(pid);
-}
-
-static int test_command(int fp(int, char**), char* testname, int ntests, int nreps, int argc, char **argv) {
-    printf("TEST START: %s\n", testname);
-    for (int i = 0; i < ntests; i++) {
-        uint64_t start = get_timestamp();
-        for (int j = 0; j < nreps; j++) {
-            fp(argc, argv);
-        }
-        printf("TEST RESULTS: test #%d, %d reps,%llu microseconds\n", get_timestamp() - start);
-    }
-    printf("TEST COMPLETE\n");
+    return sos_process_delete(pid);
 }
 
 struct command {
@@ -273,66 +259,14 @@ struct command commands[] = { { "dir", dir }, { "ls", dir }, { "cat", cat }, {
         "cp", cp }, { "ps", ps }, { "exec", exec }, {"sleep",second_sleep}, {"msleep",milli_sleep},
         {"time", second_time}, {"mtime", micro_time}, {"kill", kill} };
 
-#define SMALL_BUF_SZ 2
-
-char test_str[] = "Basic test string for read/write";
-char small_buf[SMALL_BUF_SZ];
-
-int test_buffers(int console_fd) {
-    int result;
-    printf("test a small string from the code segment\n");
-    result = sos_sys_write(console_fd, test_str, strlen(test_str));
-    assert(result == strlen(test_str));
-
-    printf("test reading to a small buffer\n");
-    result = sos_sys_read(console_fd, small_buf, SMALL_BUF_SZ);
-    /* make sure you type in at least SMALL_BUF_SZ */
-    assert(result == SMALL_BUF_SZ);
-
-    printf("test a reading into a large on-stack buffer\n");
-    char stack_buf[BUF_SIZ];
-    /* for this test you'll need to paste a lot of data into
-       the console, without newlines */
-    result = sos_sys_read(console_fd, &stack_buf, BUF_SIZ);
-    printf("%d == %d\n", result, BUF_SIZ);
-    assert(result == BUF_SIZ);
-
-    printf("Now attempt to write it\n");
-    result = sos_sys_write(console_fd, &stack_buf, BUF_SIZ);
-    assert(result == BUF_SIZ);
-
-    printf("this call to malloc should trigger an sbrk\n");
-    char *heap_buf = malloc(BUF_SIZ);
-    assert(heap_buf != NULL);
-
-    /* for this test you'll need to paste a lot of data into
-       the console, without newlines */
-    result = sos_sys_read(console_fd, &heap_buf, BUF_SIZ);
-    assert(result == BUF_SIZ);
-
-    result = sos_sys_write(console_fd, &heap_buf, BUF_SIZ);
-    assert(result == BUF_SIZ);
-
-    printf("try sleeping\n");
-    for (int i = 0; i < 5; i++) {
-        time_t prev_seconds = time(NULL);
-        char *x[2] = {"", "1"};
-        second_sleep(2, x);
-        time_t next_seconds = time(NULL);
-        assert(next_seconds > prev_seconds);
-        printf("Tick\n");
-    }
-}
-
 int main(void) {
     char buf[BUF_SIZ];
     char *argv[MAX_ARGS];
     int i, r, done, found, new, argc;
     char *bp, *p;
 
-    in = open("console", O_RDWR);
+    in = open("console", O_RDONLY);
     assert(in >= 0);
-    test_buffers(in);
 
     bp = buf;
     done = 0;
@@ -352,12 +286,10 @@ int main(void) {
             fflush(stdout);
             r = read(in, bp, BUF_SIZ - 1 + buf - bp);
             if (r < 0) {
-                printf("Console read failed (%d)!\n", r);
+                printf("Console read failed!\n");
                 done = 1;
                 break;
             }
-            printf("Got %s\n", buf);
-
             bp[r] = 0; /* terminate */
             for (p = bp; p < bp + r; p++) {
                 if (*p == '\03') { /* ^C */
@@ -437,9 +369,9 @@ int main(void) {
         /* Didn't find a command */
         if (found == 0) {
             /* They might try to exec a program */
-            if (sys_stat(argv[0], &sbuf) != 0) {
+            if (sos_stat(argv[0], &sbuf) != 0) {
                 printf("Command \"%s\" not found\n", argv[0]);
-            } else if (!(sbuf.st_mode & S_IXUSR)) {
+            } else if (!(sbuf.st_fmode & FM_EXEC)) {
                 printf("File \"%s\" not executable\n", argv[0]);
             } else {
                 /* Execute the program */
