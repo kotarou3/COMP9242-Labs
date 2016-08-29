@@ -279,9 +279,7 @@ int main(void) {
     int i, r, done, found, new, argc;
     char *bp, *p;
 
-    printf("\n[SOS pre-Starting]\n");
     in = open("console", O_RDONLY);
-    printf("Recieved file descriptor %d\n", in);
     assert(in >= 0);
 
     bp = buf;
@@ -302,7 +300,7 @@ int main(void) {
             fflush(stdout);
             r = read(in, bp, BUF_SIZ - 1 + buf - bp);
             if (r < 0) {
-                printf("Console read failed!\n");
+                printf("Console read failed (%d)!\n", r);
                 done = 1;
                 break;
             }

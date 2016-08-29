@@ -17,6 +17,11 @@ class UserMemory {
         std::string readString(bool bypassAttributes = false);
 
         void write(const uint8_t* from, size_t bytes, bool bypassAttributes = false);
+        template <typename T>
+        void write(const T from, const T to, bool bypassAttributes = false) {
+            auto map = _mapIn(to - from, Attributes{.read = false, .write = true}, bypassAttributes);
+            std::copy(from, to, map.first);
+        }
 
         template <typename T>
         T get(bool bypassAttributes = false) {

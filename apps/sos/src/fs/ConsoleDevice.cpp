@@ -1,3 +1,7 @@
+#include <deque>
+#include <utility>
+#include <queue>
+#include <vector>
 #include <stdexcept>
 #include <sys/ioctl.h>
 
@@ -13,12 +17,51 @@ namespace fs {
 
 namespace {
     serial* _serial;
+    auto buffer = std::deque<char>{};
+    auto requests = std::queue<std::pair<std::vector<IoVector>, boost::promise<ssize_t>>>{};
+    constexpr const unsigned int MAX_BUFFER_SIZE = 1<<18; // 1MB
+
+    inline void tryRead(bool forceFlush=false) {
+        static int total = 0;
+        static unsigned int index = 0U;
+        printf("Attempting to read\n");
+        auto& iov = requests.front().first[index];
+        if (forceFlush || buffer.size() >= iov.length - 1) {
+            printf("Good read\n");
+            buffer.push_back('\0');
+            int size = std::min(buffer.size(), iov.length);
+            iov.buffer.write(buffer.cbegin(), buffer.cbegin() + size, false);
+            total += size;
+            if (++index == requests.front().first.size()) {
+                requests.front().second.set_value(total);
+                total = 0;
+                index = 0U;
+                requests.pop();
+            }
+        }
+    }
+
+    void serialHandler(serial* serial, char c) {
+        printf("Recieved byte %c\n\n\n", c);
+        (void)serial;
+        if (c != '\n')
+            buffer.push_back(c);
+        if (buffer.size() > MAX_BUFFER_SIZE)
+            buffer.pop_front(); // just start dropping the stuff at the front
+        if (c == '\n' && requests.empty())
+            buffer.clear();
+        else if (requests.empty()) {
+            tryRead(c == '\n');
+        }
+    }
 }
 
 void ConsoleDevice::mountOn(DeviceFileSystem& fs, const std::string& name) {
     fs.create(name, [] {
-        if (!_serial)
+        if (!_serial) {
             _serial = serial_init();
+            serial_register_handler(_serial, serialHandler);
+        }
 
         boost::promise<std::shared_ptr<File>> promise;
         promise.set_value(std::shared_ptr<File>(new ConsoleDevice));
@@ -30,12 +73,11 @@ boost::future<ssize_t> ConsoleDevice::read(const std::vector<IoVector>& iov, off
     if (offset != CURRENT_OFFSET)
         throw std::invalid_argument("Cannot seek the console device");
 
-    // TODO
-    (void)iov;
-    (void)offset;
-
     boost::promise<ssize_t> promise;
-    promise.set_value(0);
+    boost::future<ssize_t> future = promise.get_future();
+    requests.push(std::make_pair(iov, std::move(promise)));
+    future.then(asyncExecutor, [](auto value) { return value.get(); });
+    tryRead();
     return promise.get_future();
 }
 
