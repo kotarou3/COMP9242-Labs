@@ -22,12 +22,20 @@ namespace {
     constexpr const unsigned int MAX_BUFFER_SIZE = 1<<18; // 1MB
 
     inline void tryRead(bool forceFlush=false) {
-        static int total = 0;
+        static ssize_t total = 0;
         static size_t index = 0U;
         auto& iov = requests.front().first[index];
         if (forceFlush || buffer.size() >= iov.length - 1) {
             int size = std::min(buffer.size(), iov.length);
-            iov.buffer.write(buffer.cbegin(), buffer.cbegin() + size, false);
+            try {
+                iov.buffer.write(buffer.cbegin(), buffer.cbegin() + size, false);
+            } catch (std::runtime_error&) {
+                requests.front().second.set_value(-EINVAL);
+                requests.pop();
+                total = 0;
+                index = 0;
+                return;
+            }
             total += size;
             if (++index == requests.front().first.size()) {
                 requests.front().second.set_value(total);
@@ -77,13 +85,15 @@ boost::future<ssize_t> ConsoleDevice::read(const std::vector<IoVector>& iov, off
 boost::future<ssize_t> ConsoleDevice::write(const std::vector<IoVector>& iov, off64_t offset) {
     if (offset != CURRENT_OFFSET)
         throw std::invalid_argument("Cannot seek the console device");
-
     ssize_t totalBytesWritten = 0;
     try {
         for (const auto& vector : iov) {
+            printf("Write called\n");
             auto map = memory::UserMemory(vector.buffer).mapIn<char>(vector.length, memory::Attributes{.read = true});
+            printf("Mapped in memory\n");
             ssize_t bytesWritten = serial_send(_serial, map.first, vector.length);
             totalBytesWritten += bytesWritten;
+            printf("Wrote %s", map.first);
 
             if (static_cast<size_t>(bytesWritten) != vector.length)
                 break;

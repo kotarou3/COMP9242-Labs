@@ -273,6 +273,55 @@ struct command commands[] = { { "dir", dir }, { "ls", dir }, { "cat", cat }, {
         "cp", cp }, { "ps", ps }, { "exec", exec }, {"sleep",second_sleep}, {"msleep",milli_sleep},
         {"time", second_time}, {"mtime", micro_time}, {"kill", kill} };
 
+#define SMALL_BUF_SZ 2
+
+char test_str[] = "Basic test string for read/write";
+char small_buf[SMALL_BUF_SZ];
+
+int test_buffers(int console_fd) {
+    printf("test a small string from the code segment\n");
+    int result = sos_sys_write(console_fd, test_str, strlen(test_str));
+    assert(result == strlen(test_str));
+
+    printf("test reading to a small buffer\n");
+    result = sos_sys_read(console_fd, small_buf, SMALL_BUF_SZ);
+    /* make sure you type in at least SMALL_BUF_SZ */
+    assert(result == SMALL_BUF_SZ);
+
+    printf("test a reading into a large on-stack buffer\n");
+    char stack_buf[BUF_SIZ];
+    /* for this test you'll need to paste a lot of data into
+       the console, without newlines */
+    result = sos_sys_read(console_fd, &stack_buf, BUF_SIZ);
+    assert(result == BUF_SIZ);
+
+    printf("Now attempt to write it\n");
+    result = sos_sys_write(console_fd, &stack_buf, BUF_SIZ);
+    assert(result == BUF_SIZ);
+
+    printf("this call to malloc should trigger an sbrk\n");
+    char *heap_buf = malloc(BUF_SIZ);
+    assert(heap_buf != NULL);
+
+    /* for this test you'll need to paste a lot of data into
+       the console, without newlines */
+    result = sos_sys_read(console_fd, &heap_buf, BUF_SIZ);
+    assert(result == BUF_SIZ);
+
+    result = sos_sys_write(console_fd, &heap_buf, BUF_SIZ);
+    assert(result == BUF_SIZ);
+
+    printf("try sleeping\n");
+    for (int i = 0; i < 5; i++) {
+        time_t prev_seconds = time(NULL);
+        char *x[2] = {"", "1"};
+        second_sleep(2, x);
+        time_t next_seconds = time(NULL);
+        assert(next_seconds > prev_seconds);
+        printf("Tick\n");
+    }
+}
+
 int main(void) {
     char buf[BUF_SIZ];
     char *argv[MAX_ARGS];
@@ -281,6 +330,7 @@ int main(void) {
 
     in = open("console", O_RDONLY);
     assert(in >= 0);
+    test_buffers(in);
 
     bp = buf;
     done = 0;
