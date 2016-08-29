@@ -304,6 +304,8 @@ int main(void) {
                 done = 1;
                 break;
             }
+            printf("Got %s\n", buf);
+
             bp[r] = 0; /* terminate */
             for (p = bp; p < bp + r; p++) {
                 if (*p == '\03') { /* ^C */

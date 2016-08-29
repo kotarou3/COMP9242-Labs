@@ -23,12 +23,9 @@ namespace {
 
     inline void tryRead(bool forceFlush=false) {
         static int total = 0;
-        static unsigned int index = 0U;
-        printf("Attempting to read\n");
+        static size_t index = 0U;
         auto& iov = requests.front().first[index];
         if (forceFlush || buffer.size() >= iov.length - 1) {
-            printf("Good read\n");
-            buffer.push_back('\0');
             int size = std::min(buffer.size(), iov.length);
             iov.buffer.write(buffer.cbegin(), buffer.cbegin() + size, false);
             total += size;
@@ -41,16 +38,13 @@ namespace {
         }
     }
 
-    void serialHandler(serial* serial, char c) {
-        printf("Recieved byte %c\n\n\n", c);
-        (void)serial;
-        if (c != '\n')
-            buffer.push_back(c);
+    void serialHandler(serial*, char c) {
+        buffer.push_back(c);
         if (buffer.size() > MAX_BUFFER_SIZE)
             buffer.pop_front(); // just start dropping the stuff at the front
         if (c == '\n' && requests.empty())
             buffer.clear();
-        else if (requests.empty()) {
+        else if (!requests.empty()) {
             tryRead(c == '\n');
         }
     }
@@ -76,9 +70,8 @@ boost::future<ssize_t> ConsoleDevice::read(const std::vector<IoVector>& iov, off
     boost::promise<ssize_t> promise;
     boost::future<ssize_t> future = promise.get_future();
     requests.push(std::make_pair(iov, std::move(promise)));
-    future.then(asyncExecutor, [](auto value) { return value.get(); });
     tryRead();
-    return promise.get_future();
+    return future;
 }
 
 boost::future<ssize_t> ConsoleDevice::write(const std::vector<IoVector>& iov, off64_t offset) {
