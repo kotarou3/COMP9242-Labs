@@ -279,8 +279,9 @@ char test_str[] = "Basic test string for read/write";
 char small_buf[SMALL_BUF_SZ];
 
 int test_buffers(int console_fd) {
+    int result;
     printf("test a small string from the code segment\n");
-    int result = sos_sys_write(console_fd, test_str, strlen(test_str));
+    result = sos_sys_write(console_fd, test_str, strlen(test_str));
     assert(result == strlen(test_str));
 
     printf("test reading to a small buffer\n");
@@ -293,6 +294,7 @@ int test_buffers(int console_fd) {
     /* for this test you'll need to paste a lot of data into
        the console, without newlines */
     result = sos_sys_read(console_fd, &stack_buf, BUF_SIZ);
+    printf("%d == %d\n", result, BUF_SIZ);
     assert(result == BUF_SIZ);
 
     printf("Now attempt to write it\n");
@@ -328,7 +330,7 @@ int main(void) {
     int i, r, done, found, new, argc;
     char *bp, *p;
 
-    in = open("console", O_RDONLY);
+    in = open("console", O_RDWR);
     assert(in >= 0);
     test_buffers(in);
 

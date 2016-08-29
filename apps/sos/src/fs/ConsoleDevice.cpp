@@ -21,26 +21,33 @@ namespace {
     auto requests = std::queue<std::pair<std::vector<IoVector>, boost::promise<ssize_t>>>{};
     constexpr const unsigned int MAX_BUFFER_SIZE = 1<<18; // 1MB
 
-    inline void tryRead(bool forceFlush=false) {
+    inline void tryRead(std::deque<char>::const_iterator newline) {
         static ssize_t total = 0;
         static size_t index = 0U;
         auto& iov = requests.front().first[index];
-        if (forceFlush || buffer.size() >= iov.length - 1) {
-            int size = std::min(buffer.size(), iov.length);
+        if (newline != buffer.cend() || buffer.size() >= iov.length) {
+            if (newline != buffer.cend())
+                newline++;
+            int size = std::min(static_cast<unsigned int>(newline - buffer.cbegin()), iov.length);
             try {
-                iov.buffer.write(buffer.cbegin(), buffer.cbegin() + size, false);
+                iov.buffer.write(buffer.cbegin(), newline, false);
+                printf("Read partial of %d bytes, %d, %d, %d\n", size, buffer.size(), iov.length, newline - buffer.cbegin());
             } catch (std::runtime_error&) {
+                printf("Got invalid buffer\n");
                 requests.front().second.set_value(-EINVAL);
                 requests.pop();
                 total = 0;
                 index = 0;
+                buffer.clear();
                 return;
             }
             total += size;
             if (++index == requests.front().first.size()) {
+                printf("Read %d bytes\n", total);
                 requests.front().second.set_value(total);
                 total = 0;
                 index = 0U;
+                buffer.clear();
                 requests.pop();
             }
         }
@@ -50,10 +57,8 @@ namespace {
         buffer.push_back(c);
         if (buffer.size() > MAX_BUFFER_SIZE)
             buffer.pop_front(); // just start dropping the stuff at the front
-        if (c == '\n' && requests.empty())
-            buffer.clear();
-        else if (!requests.empty()) {
-            tryRead(c == '\n');
+        if (!requests.empty()) {
+            tryRead(buffer.end() - (c == '\n' ? 1 : 0));
         }
     }
 }
@@ -78,7 +83,7 @@ boost::future<ssize_t> ConsoleDevice::read(const std::vector<IoVector>& iov, off
     boost::promise<ssize_t> promise;
     boost::future<ssize_t> future = promise.get_future();
     requests.push(std::make_pair(iov, std::move(promise)));
-    tryRead();
+    tryRead(std::find(buffer.cbegin(), buffer.cend(), '\n'));
     return future;
 }
 
@@ -88,12 +93,9 @@ boost::future<ssize_t> ConsoleDevice::write(const std::vector<IoVector>& iov, of
     ssize_t totalBytesWritten = 0;
     try {
         for (const auto& vector : iov) {
-            printf("Write called\n");
             auto map = memory::UserMemory(vector.buffer).mapIn<char>(vector.length, memory::Attributes{.read = true});
-            printf("Mapped in memory\n");
             ssize_t bytesWritten = serial_send(_serial, map.first, vector.length);
             totalBytesWritten += bytesWritten;
-            printf("Wrote %s", map.first);
 
             if (static_cast<size_t>(bytesWritten) != vector.length)
                 break;
