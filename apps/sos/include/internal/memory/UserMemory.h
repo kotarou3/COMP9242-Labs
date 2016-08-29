@@ -5,6 +5,7 @@
 #include <string>
 
 #include "internal/memory/PageDirectory.h"
+#include "internal/memory/Mappings.h"
 #include "internal/process/Thread.h"
 
 namespace memory {

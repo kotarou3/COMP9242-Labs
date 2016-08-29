@@ -4,6 +4,7 @@
 #include <unordered_map>
 
 #include "internal/memory/Mappings.h"
+#include "internal/memory/UserMemory.h"
 #include "internal/memory/PageDirectory.h"
 #include "internal/fs/FileDescriptor.h"
 #include "internal/Capability.h"

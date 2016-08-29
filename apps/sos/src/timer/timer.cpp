@@ -4,15 +4,15 @@
 #include <string>
 #include <unordered_map>
 
+#include "internal/timer/Hardware.h"
+#include "internal/timer/timer.h"
+
 extern "C" {
     #include <sel4/types.h>
 
     #define verbose 2
     #include "internal/sys/debug.h"
 }
-
-#include "internal/timer/Hardware.h"
-#include "internal/timer/timer.h"
 
 namespace timer {
 

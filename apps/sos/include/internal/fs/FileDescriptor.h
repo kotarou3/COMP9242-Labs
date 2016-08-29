@@ -1,8 +1,11 @@
 #pragma once
 
-#include "internal/fs/OpenFile.h"
+#include <unordered_map>
+#include <memory>
 
 namespace fs {
+
+using uid=unsigned int;
 
 struct Mode {
     bool read:1, write:1, execute:1;
@@ -11,17 +14,19 @@ struct Mode {
 // when a process is forked, the file descriptor table is copied.
 // This makes multiple references to the one open file, which is behaviour we want
 
+class File;
+
 class FileDescriptor {
 public:
-    FileDescriptor(std::string, Mode);
+    FileDescriptor(std::shared_ptr<File>, Mode);
 private:
-    std::shared_ptr<OpenFile> of;
+    std::shared_ptr<File> of;
     Mode mode;
 };
 
 class FDTable {
 public:
-    uid insert(FileDescriptor&);
+    uid insert(FileDescriptor);
 
     uid open(std::string, Mode);
     void close(uid);

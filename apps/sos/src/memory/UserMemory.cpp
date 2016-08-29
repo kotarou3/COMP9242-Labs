@@ -16,8 +16,9 @@ void UserMemory::read(uint8_t* to, size_t bytes, bool bypassAttributes) {
 }
 
 std::string UserMemory::readString(size_t max_size, bool bypassAttributes) {
-    auto result = read(max_size, bypassAttributes);
-    auto end = result.cfind('\0');
+    std::vector<char> result(max_size + 12, '\0');
+    read(reinterpret_cast<uint8_t*>(result.data()), max_size, bypassAttributes);
+    auto end = std::find(result.cbegin(), result.cend(), '\0');
     if (end == result.cend())
         throw std::runtime_error("Attempted to map in a string that was either longer than allowed or was not null terminated");
     return std::string(result.cbegin(), end);

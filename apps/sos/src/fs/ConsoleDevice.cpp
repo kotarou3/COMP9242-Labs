@@ -5,6 +5,7 @@ extern "C" {
 }
 
 #include "internal/fs/ConsoleDevice.h"
+#include "internal/fs/File.h"
 #include "internal/fs/DeviceFileSystem.h"
 
 namespace fs {

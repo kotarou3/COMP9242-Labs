@@ -15,6 +15,12 @@
 #include <assert.h>
 #include <string.h>
 
+#include "internal/elf.h"
+#include "internal/memory/FrameTable.h"
+#include "internal/memory/PageDirectory.h"
+#include "internal/process/Thread.h"
+#include "internal/timer/timer.h"
+
 extern "C" {
     #include <cspace/cspace.h>
 
@@ -35,12 +41,6 @@ extern "C" {
     #include "internal/sys/debug.h"
     #include "internal/sys/panic.h"
 }
-
-#include "internal/elf.h"
-#include "internal/memory/FrameTable.h"
-#include "internal/memory/PageDirectory.h"
-#include "internal/process/Thread.h"
-#include "internal/timer/timer.h"
 
 /* To differencient between async and and sync IPC, we assign a
  * badge to the async endpoint. The badge that we receive will
