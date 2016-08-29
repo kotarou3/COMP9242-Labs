@@ -17,6 +17,7 @@ CXXFILES := $(patsubst $(SOURCE_DIR)/%,%,$(wildcard $(SOURCE_DIR)/src/*.cpp))
 
 # Header files/directories this library provides
 HDRFILES := $(wildcard $(SOURCE_DIR)/include/*)
-CFLAGS := -g -Wall
 
 include $(SEL4_COMMON)/common.mk
+
+CPPFLAGS += -Werror

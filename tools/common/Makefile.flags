@@ -9,9 +9,14 @@
 #
 
 CFLAGS :=
-CPPFLAGS := -Wall -Wextra
+CPPFLAGS := -Wall
 ASFLAGS :=
 CXXFLAGS :=
+
+# Everything in -Wextra except -Wextra itself, since seL4 headers triggers a
+# -Wextra only warning each time it's included
+CPPFLAGS += -Wclobbered -Wempty-body -Wignored-qualifiers -Wmissing-field-initializers -Wsign-compare -Wtype-limits -Wuninitialized -Wunused-parameter -Wunused-but-set-parameter
+CFLAGS += -Wmissing-parameter-type -Wold-style-declaration -Woverride-init
 
 # CCFLAGS represent flags that will later get included into both CFLAGS and CXXFLAGS
 CCFLAGS :=

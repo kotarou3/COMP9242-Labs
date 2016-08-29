@@ -124,6 +124,9 @@ void Hardware::handleIrq() noexcept {
     if (_registers->status & GPT1_SR_ROV)
         _counterZeroTimestamp += microseconds(0x100000000);
 
+    // We don't want getNextIrqTime() returning a value in the past
+    _registers->interrupt &= ~GPT1_IR_OF1IE;
+
     // Clear status register
     _registers->status = 0xffffffff;
 

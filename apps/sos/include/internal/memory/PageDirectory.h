@@ -40,7 +40,7 @@ class PageDirectory {
         const MappedPage& allocateAndMap(vaddr_t address, Attributes attributes);
         const MappedPage& map(Page page, vaddr_t address, Attributes attributes);
         void unmap(vaddr_t address);
-        const MappedPage& lookup(vaddr_t address) const;
+        const MappedPage* lookup(vaddr_t address, bool noThrow = false) const;
 
         seL4_ARM_PageDirectory getCap() const noexcept {return _cap.get();}
 
@@ -66,7 +66,7 @@ class PageTable {
 
         const MappedPage& map(Page page, vaddr_t address, Attributes attributes);
         void unmap(vaddr_t address);
-        const MappedPage& lookup(vaddr_t address) const;
+        const MappedPage* lookup(vaddr_t address, bool noThrow = false) const;
 
         seL4_ARM_PageTable getCap() const noexcept {return _cap.get();};
 

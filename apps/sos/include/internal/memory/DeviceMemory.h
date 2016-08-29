@@ -13,7 +13,7 @@ template <typename T>
 class DeviceMemory {
     public:
         DeviceMemory(paddr_t address):
-            _map(process::getSosProcess().maps.insertScoped(
+            _map(process::getSosProcess().maps.insert(
                 0, numPages(sizeof(T)),
                 Attributes{.read = true, .write = true, .execute = false, .notCacheable = true},
                 Mapping::Flags{.shared = false}

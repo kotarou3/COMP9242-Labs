@@ -74,9 +74,9 @@ lwip_iface_t *lwip_iface;
  *******************/
 
 static void *
-sos_map_device(void* cookie, uintptr_t addr, size_t size, int cached, ps_mem_flags_t flags){
+sos_map_device(void* /*cookie*/, uintptr_t addr, size_t size, int cached, ps_mem_flags_t /*flags*/){
     try {
-        auto map = process::getSosProcess().maps.insertScoped(
+        auto map = process::getSosProcess().maps.insert(
             0, memory::numPages(size),
             memory::Attributes{.read = true, .write = true, .execute = false, .notCacheable = !cached},
             memory::Mapping::Flags{.shared = false}
@@ -98,7 +98,7 @@ sos_map_device(void* cookie, uintptr_t addr, size_t size, int cached, ps_mem_fla
 }
 
 static void
-sos_unmap_device(void *cookie, void *addr, size_t size) {
+sos_unmap_device(void* /*cookie*/, void* addr, size_t size) {
     process::getSosProcess().maps.erase(reinterpret_cast<memory::vaddr_t>(addr), memory::numPages(size));
 }
 
@@ -122,15 +122,12 @@ sos_usleep(int usecs) {
  *******************/
 void
 network_irq(void) {
-    int err;
-    int i;
     /* skip if the network was not initialised */
     if(_irq_ep == seL4_CapNull){
         return;
     }
     ethif_lwip_handle_irq(lwip_iface, 150);
-    err = seL4_IRQHandler_Ack(_net_irqs[0].cap);
-    assert(!err);
+    assert(!seL4_IRQHandler_Ack(_net_irqs[0].cap));
 }
 
 static seL4_CPtr
@@ -173,10 +170,6 @@ network_prime_arp(struct ip_addr *gw){
 
 void
 network_init(seL4_CPtr interrupt_ep) {
-    struct ip_addr netmask, ipaddr, gw;
-    int err;
-    int i;
-
     ps_io_mapper_t io_mapper = {
         .cookie = NULL,
         .io_map_fn = sos_map_device,
@@ -201,7 +194,8 @@ network_init(seL4_CPtr interrupt_ep) {
 
     /* Extract IP from .config */
     printf("\nInitialising network...\n\n");
-    err = 0;
+    struct ip_addr netmask, ipaddr, gw;
+    int err = 0;
     err |= !ipaddr_aton(CONFIG_SOS_GATEWAY,      &gw);
     err |= !ipaddr_aton(CONFIG_SOS_IP     ,  &ipaddr);
     err |= !ipaddr_aton(CONFIG_SOS_NETMASK, &netmask);

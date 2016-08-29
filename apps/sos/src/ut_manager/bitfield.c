@@ -37,6 +37,7 @@ void debug_print(bitfield_t* bf){
     }
     printf("\n\n");
 #else
+    (void)bf;
 #endif
 }
 

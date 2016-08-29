@@ -1,0 +1,4 @@
+config LIB_BOOST
+    bool "Build libboost"
+    depends on LIB_CXX
+    default y

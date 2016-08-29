@@ -345,16 +345,13 @@ static void do_ut_free_from_list(seL4_Word addr, int sizebits){
  *** Exported functions ***
  **************************/
 void ut_allocator_init(seL4_Word low, seL4_Word high){
-    seL4_Word mem_size;
-    int i;
-
     assert(!_initialised);
 
     /* Align memory bounds */
     low = FLOOR14(low);
     high = CEILING14(high);
 
-    mem_size = high - low;
+    seL4_Word mem_size = high - low;
 
     _pool_base = low;
     _pool14 = new_bitfield(mem_size >> 14, BITFIELD_INIT_FILLED);
@@ -362,7 +359,7 @@ void ut_allocator_init(seL4_Word low, seL4_Word high){
     _pool10 = new_bitfield(mem_size >> 10, BITFIELD_INIT_FILLED);
 
     /* Marked untyped as available */
-    for(i = 0; i < mem_size >> 14; i++){
+    for(seL4_Word i = 0; i < mem_size >> 14; i++){
         bf_clr(_pool14, i);
     }
 

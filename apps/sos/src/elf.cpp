@@ -37,7 +37,7 @@ void load(process::Process& process, uint8_t* file) {
         memory::vaddr_t start = to - startPadding;
         size_t pages = memory::numPages(memorySize + startPadding);
 
-        auto map = process.maps.insertScoped(
+        auto map = process.maps.insert(
             start, pages,
             memory::Attributes{
                 .read = flags & PF_R,
@@ -53,7 +53,7 @@ void load(process::Process& process, uint8_t* file) {
             // Unify the data and instruction cache's view of the pages
             for (size_t b = 0; b < fileSize + startPadding; b += (1 << seL4_PageBits)) {
                 seL4_ARM_Page_Unify_Instruction(
-                    process.pageDirectory.lookup(start + b).getPage().getCap(),
+                    process.pageDirectory.lookup(start + b)->getPage().getCap(),
                     0, PAGE_SIZE
                 );
             }

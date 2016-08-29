@@ -1,38 +1,37 @@
 #include <assert.h>
 #include <errno.h>
-#include <stdarg.h>
 #include <stdint.h>
 #include <sys/mman.h>
 
 #include "internal/memory/Mappings.h"
-#include "internal/process/Thread.h"
+#include "internal/syscall/mmap.h"
 
 namespace syscall {
 
-int brk(process::Process& process, memory::vaddr_t addr) noexcept {
+boost::future<int> brk(process::Process& /*process*/, memory::vaddr_t /*addr*/) noexcept {
     // We don't actually implement this - we let malloc() use mmap2() instead
-    return -ENOSYS;
+    return _returnNow(-ENOSYS);
 }
 
-int mmap2(process::Process& process, memory::vaddr_t addr, size_t length, int prot, int flags, int fd, off_t offset) noexcept {
+boost::future<int> mmap2(process::Process& process, memory::vaddr_t addr, size_t length, int prot, int flags, int /*fd*/, off_t /*offset*/) noexcept {
     if (memory::pageAlign(addr) != addr || memory::pageAlign(length) != length)
-        return -EINVAL;
+        return _returnNow(-EINVAL);
 
     if (prot & ~(PROT_READ | PROT_WRITE | PROT_EXEC))
-        return -EINVAL;
+        return _returnNow(-EINVAL);
 
     if (flags & ~(MAP_SHARED | MAP_PRIVATE | MAP_ANONYMOUS))
-        return -ENOSYS;
+        return _returnNow(-ENOSYS);
     if ((flags & MAP_SHARED) && (flags & MAP_PRIVATE))
-        return -EINVAL;
+        return _returnNow(-EINVAL);
     if (!(flags & (MAP_SHARED | MAP_PRIVATE)))
-        return -EINVAL;
+        return _returnNow(-EINVAL);
 
     if (!(flags & MAP_ANONYMOUS))
-        return -ENOSYS;
+        return _returnNow(-ENOSYS);
 
     try {
-        auto map = process.maps.insertScoped(
+        auto map = process.maps.insert(
             addr, length / PAGE_SIZE,
             memory::Attributes{
                 .read = prot & PROT_READ,
@@ -53,31 +52,29 @@ int mmap2(process::Process& process, memory::vaddr_t addr, size_t length, int pr
 
         int result = static_cast<int>(map.getStart());
         map.release();
-        return result;
+        return _returnNow(result);
     } catch (const std::bad_alloc&) {
-        return -ENOMEM;
+        return _returnNow(-ENOMEM);
     } catch (...) {
-        return -EINVAL;
+        return _returnNow(-EINVAL);
     }
 }
 
-int munmap(process::Process& process, memory::vaddr_t addr, size_t length) noexcept {
+boost::future<int> munmap(process::Process& process, memory::vaddr_t addr, size_t length) noexcept {
     if (memory::pageAlign(addr) != addr || memory::pageAlign(length) != length)
-        return -EINVAL;
+        return _returnNow(-EINVAL);
 
     try {
         process.maps.erase(addr, length / PAGE_SIZE);
-        return 0;
+        return _returnNow(0);
     } catch (...) {
-        return -EINVAL;
+        return _returnNow(-EINVAL);
     }
 }
 
 }
 
-extern "C" {
-
-int sys_brk(va_list ap) {
+extern "C" int sys_brk(va_list ap) {
     // Use an static allocation to allow malloc() before the memory subsystem
     // is ready for mmap()s
     constexpr const size_t SOS_PROCESS_INIT_SIZE = 0x100000;
@@ -91,27 +88,10 @@ int sys_brk(va_list ap) {
         return reinterpret_cast<int>(brk);
 }
 
-int sys_mmap2(va_list ap) {
-    memory::vaddr_t addr = va_arg(ap, memory::vaddr_t);
-    size_t length = va_arg(ap, size_t);
-    int prot = va_arg(ap, int);
-    int flags = va_arg(ap, int);
-    int fd = va_arg(ap, int);
-    off_t offset = va_arg(ap, off_t);
-
-    return syscall::mmap2(process::getSosProcess(), addr, length, prot, flags, fd, offset);
-}
-
-int sys_munmap(va_list ap) {
-    memory::vaddr_t addr = va_arg(ap, memory::vaddr_t);
-    size_t length = va_arg(ap, size_t);
-
-    return syscall::munmap(process::getSosProcess(), addr, length);
-}
-
-int sys_mremap(va_list ap) {
+extern "C" int sys_mremap() {
     assert(!"Not implemented");
-    return -ENOSYS;
+    __builtin_unreachable();
 }
 
-}
+FORWARD_SYSCALL(mmap2, 6);
+FORWARD_SYSCALL(munmap, 2);

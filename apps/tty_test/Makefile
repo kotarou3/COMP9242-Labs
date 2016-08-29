@@ -18,3 +18,5 @@ CFILES   := $(patsubst $(SOURCE_DIR)/%,%,$(wildcard $(SOURCE_DIR)/src/*.c))
 LIBS := c sel4 sos
 #export DEBUG=1
 include $(SEL4_COMMON)/common.mk
+
+CPPFLAGS += -Werror

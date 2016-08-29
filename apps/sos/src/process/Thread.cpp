@@ -4,6 +4,14 @@
 #include <assert.h>
 #include <errno.h>
 
+#define syscall(...) _syscall(__VA_ARGS__)
+// Includes missing from inline_executor.hpp
+#include <boost/thread/thread.hpp>
+#include <boost/thread/concurrent_queues/sync_queue.hpp>
+
+#include <boost/thread/executors/inline_executor.hpp>
+#undef syscall
+
 #include "internal/memory/layout.h"
 #include "internal/process/Thread.h"
 #include "internal/syscall/syscall.h"
@@ -20,18 +28,22 @@ extern "C" {
 
 namespace process {
 
+namespace {
+    boost::inline_executor _asyncSyscallExecutor;
+}
+
 ////////////
 // Thread //
 ////////////
 
 Thread::Thread(std::shared_ptr<Process> process, seL4_CPtr faultEndpoint, seL4_Word faultEndpointBadge, memory::vaddr_t entryPoint):
     _process(process),
-    _stack(_process->maps.insertScoped(
+    _stack(_process->maps.insert(
         0, memory::STACK_PAGES,
         memory::Attributes{.read = true, .write = true},
         memory::Mapping::Flags{.shared = false, .fixed = false, .stack = true}
     )),
-    _ipcBuffer(_process->maps.insertScoped(
+    _ipcBuffer(_process->maps.insert(
         0, 1,
         memory::Attributes{.read = true, .write = true},
         memory::Mapping::Flags{.shared = false}
@@ -83,15 +95,8 @@ Thread::~Thread() {
 }
 
 void Thread::handleFault(const seL4_MessageInfo_t& message) noexcept {
-    seL4_CPtr replyCap = cspace_save_reply_cap(cur_cspace);
-
     switch (seL4_MessageInfo_get_label(message)) {
         case seL4_VMFault: {
-            if (replyCap == CSPACE_NULL) {
-                kprintf(0, "Would raise SIGSEGV, but not implemented yet - halting thread\n");
-                break;
-            }
-
             memory::vaddr_t pc = seL4_GetMR(0);
             memory::vaddr_t address = seL4_GetMR(1);
 
@@ -119,7 +124,7 @@ void Thread::handleFault(const seL4_MessageInfo_t& message) noexcept {
             try {
                 _process->handlePageFault(address, faultType);
                 seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 0);
-                seL4_Send(replyCap, reply);
+                seL4_Reply(reply);
             } catch (const std::exception& e) {
                 kprintf(1, "Caught %s\n", e.what());
 
@@ -138,23 +143,33 @@ void Thread::handleFault(const seL4_MessageInfo_t& message) noexcept {
         }
 
         case seL4_NoFault: { // Syscall
-            if (replyCap == CSPACE_NULL) {
-                seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
-                seL4_SetMR(0, -ENOMEM);
-                seL4_Reply(reply);
-                return;
-            }
-
-            int result = syscall::handle(
+            auto result = syscall::handle(
                 *this,
                 seL4_GetMR(0),
                 seL4_MessageInfo_get_length(message) - 1,
                 &seL4_GetIPCBuffer()->msg[1]
             );
+            if (result.is_ready()) {
+                seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
+                seL4_SetMR(0, result.get());
+                seL4_Reply(reply);
+            } else {
+                seL4_CPtr replyCap = cspace_save_reply_cap(cur_cspace);
+                if (replyCap == CSPACE_NULL) {
+                    seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
+                    seL4_SetMR(0, -ENOMEM);
+                    seL4_Reply(reply);
+                    break;
+                }
 
-            seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
-            seL4_SetMR(0, result);
-            seL4_Send(replyCap, reply);
+                result.then(_asyncSyscallExecutor, [replyCap](boost::future<int> result) {
+                    seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
+                    seL4_SetMR(0, result.get());
+                    seL4_Send(replyCap, reply);
+
+                    assert(cspace_free_slot(cur_cspace, replyCap) == CSPACE_NOERROR);
+                });
+            }
             break;
         }
 
@@ -162,9 +177,6 @@ void Thread::handleFault(const seL4_MessageInfo_t& message) noexcept {
             kprintf(0, "Unknown fault type %u\n", seL4_MessageInfo_get_label(message));
             break;
     }
-
-    if (replyCap != CSPACE_NULL)
-        cspace_free_slot(cur_cspace, replyCap);
 }
 
 /////////////
@@ -196,7 +208,7 @@ Process::Process(bool isSosProcess):
     memory::Mapping::Flags flags = {0};
     flags.fixed = true;
     flags.reserved = true;
-    maps.insert(0, memory::MMAP_START / PAGE_SIZE, memory::Attributes{}, flags);
+    maps.insert(0, memory::MMAP_START / PAGE_SIZE, memory::Attributes{}, flags).release();
     fdTable = fs::FDTable{};
 }
 
@@ -216,12 +228,9 @@ void Process::handlePageFault(memory::vaddr_t address, memory::Attributes cause)
     if (cause.write && !map.attributes.write)
         throw std::runtime_error("Attempted to write to a non-writeable region");
 
-    try {
-        pageDirectory.lookup(address);
-    } catch (const std::out_of_range&) {
-        // page isn't mapped
+    auto page = pageDirectory.lookup(address, true);
+    if (!page)
         pageDirectory.allocateAndMap(address, map.attributes);
-    }
 }
 
 Process& getSosProcess() noexcept {

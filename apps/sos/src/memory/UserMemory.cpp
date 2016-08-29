@@ -11,16 +11,19 @@ UserMemory::UserMemory(process::Process& process, vaddr_t address):
 {}
 
 std::vector<uint8_t> UserMemory::read(size_t bytes, bool bypassAttributes) {
+    std::vector<uint8_t> result(bytes);
+    read(result.data(), bytes, bypassAttributes);
+    return result;
+}
+
+void UserMemory::read(uint8_t* to, size_t bytes, bool bypassAttributes) {
     auto map = _mapIn(bytes, Attributes{.read = true}, bypassAttributes);
 
-    std::vector<uint8_t> result(bytes);
-    uint8_t* start = reinterpret_cast<uint8_t*>(map.getAddress() + pageOffset(_address));
+    const uint8_t* start = reinterpret_cast<const uint8_t*>(map.getAddress() + pageOffset(_address));
     std::copy(
         start, start + bytes,
-        result.begin()
+        to
     );
-
-    return result;
 }
 
 std::string UserMemory::readString(size_t max_size, bool bypassAttributes) {
@@ -31,7 +34,7 @@ std::string UserMemory::readString(size_t max_size, bool bypassAttributes) {
     return std::string(result.cbegin(), end);
 }
 
-void UserMemory::write(uint8_t* from, size_t bytes, bool bypassAttributes) {
+void UserMemory::write(const uint8_t* from, size_t bytes, bool bypassAttributes) {
     auto map = _mapIn(bytes, Attributes{.read = false, .write = true}, bypassAttributes);
     std::copy(
         from, from + bytes,
@@ -53,14 +56,14 @@ ScopedMapping UserMemory::_mapIn(size_t bytes, Attributes attributes, bool bypas
     }
 
     // Allocate some space in SOS' virtual memory for the target pages
-    auto map = process::getSosProcess().maps.insertScoped(
+    auto map = process::getSosProcess().maps.insert(
         0, pages,
         attributes, Mapping::Flags{.shared = false}
     );
 
     // Map in a copy of the process' pages into the SOS process
     for (size_t p = 0; p < pages; ++p) {
-        auto page = _process.pageDirectory.lookup(alignedAddress + p * PAGE_SIZE).getPage().copy();
+        auto page = _process.pageDirectory.lookup(alignedAddress + p * PAGE_SIZE)->getPage().copy();
         process::getSosProcess().pageDirectory.map(
             std::move(page), map.getAddress() + p * PAGE_SIZE,
             attributes

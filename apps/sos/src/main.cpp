@@ -40,6 +40,7 @@ extern "C" {
 #include "internal/memory/FrameTable.h"
 #include "internal/memory/PageDirectory.h"
 #include "internal/process/Thread.h"
+#include "internal/timer/timer.h"
 
 /* To differencient between async and and sync IPC, we assign a
  * badge to the async endpoint. The badge that we receive will
@@ -49,7 +50,7 @@ extern "C" {
 /* All badged IRQs set high bet, then we use uniq bits to
  * distinguish interrupt sources */
 #define IRQ_BADGE_NETWORK (1 << 0)
-#define IRQ_BADGE_TIMER (1 << 1)
+#define IRQ_BADGE_TIMER   (1 << 1)
 
 #define TTY_NAME             CONFIG_SOS_STARTUP_APP
 #define TTY_EP_BADGE         (101)
@@ -64,8 +65,6 @@ seL4_CPtr _sos_ipc_ep_cap;
 seL4_CPtr _sos_interrupt_ep_cap;
 
 static void print_bootinfo(const seL4_BootInfo* info) {
-    int i;
-
     /* General info */
     kprintf(1, "Info Page:  %p\n", info);
     kprintf(1,"IPC Buffer: %p\n", info->ipcBuffer);
@@ -88,7 +87,7 @@ static void print_bootinfo(const seL4_BootInfo* info) {
     /* Untyped details */
     kprintf(1,"\nUntyped details:\n");
     kprintf(1,"Untyped Slot       Paddr      Bits\n");
-    for (i = 0; i < info->untyped.end-info->untyped.start; i++) {
+    for (size_t i = 0; i < info->untyped.end-info->untyped.start; i++) {
         kprintf(1,"%3d     0x%08x 0x%08x %d\n", i, info->untyped.start + i,
                                                    info->untypedPaddrList[i],
                                                    info->untypedSizeBitsList[i]);
@@ -97,7 +96,7 @@ static void print_bootinfo(const seL4_BootInfo* info) {
     /* Device untyped details */
     kprintf(1,"\nDevice untyped details:\n");
     kprintf(1,"Untyped Slot       Paddr      Bits\n");
-    for (i = 0; i < info->deviceUntyped.end-info->deviceUntyped.start; i++) {
+    for (size_t i = 0; i < info->deviceUntyped.end-info->deviceUntyped.start; i++) {
         kprintf(1,"%3d     0x%08x 0x%08x %d\n", i, info->deviceUntyped.start + i,
                                                    info->untypedPaddrList[i + (info->untyped.end - info->untyped.start)],
                                                    info->untypedSizeBitsList[i + (info->untyped.end-info->untyped.start)]);
@@ -110,7 +109,7 @@ static void print_bootinfo(const seL4_BootInfo* info) {
     kprintf(1,"--------------------------------------------------------\n");
     kprintf(1,"| index |        name      |  address   | size (bytes) |\n");
     kprintf(1,"|------------------------------------------------------|\n");
-    for(i = 0;; i++) {
+    for(int i = 0;; i++) {
         unsigned long size;
         const char *name;
         void *data;
@@ -125,7 +124,7 @@ static void print_bootinfo(const seL4_BootInfo* info) {
     kprintf(1,"--------------------------------------------------------\n");
 }
 
-void start_first_process(char* app_name, seL4_CPtr fault_ep) try {
+void start_first_process(const char* app_name, seL4_CPtr fault_ep) try {
     auto process = std::make_shared<process::Process>();
 
     /* parse the cpio image */
@@ -212,7 +211,7 @@ static void _sos_init(seL4_CPtr* ipc_ep, seL4_CPtr* async_ep) try {
     err = dma_init(dma_addr, DMA_SIZE_BITS);
     conditional_panic(err, "Failed to intiialise DMA memory\n");
 
-    /* Initialiase other system compenents here */
+    /* TODO: Set stdout to the debug device */
 
     _sos_ipc_init(ipc_ep, async_ep);
 } catch (const std::exception& e) {
@@ -238,7 +237,8 @@ int main(void) {
     /* Initialise the network hardware */
     network_init(badge_irq_ep(_sos_interrupt_ep_cap, IRQ_BADGE_NETWORK));
 
-    assert(start_timer(badge_irq_ep(_sos_interrupt_ep_cap, IRQ_BADGE_TIMER)) == CLOCK_R_OK);
+    /* Initialise the timer */
+    timer::init(badge_irq_ep(_sos_interrupt_ep_cap, IRQ_BADGE_TIMER));
 
     /* Start the user application */
     start_first_process(TTY_NAME, _sos_ipc_ep_cap);
@@ -254,6 +254,8 @@ int main(void) {
             // Interrupt
             if (badge & IRQ_BADGE_NETWORK)
                 network_irq();
+            if (badge & IRQ_BADGE_TIMER)
+                timer::handleIrq();
         } else if (badge == TTY_EP_BADGE) {
             _tty_start_thread->handleFault(message);
         } else {

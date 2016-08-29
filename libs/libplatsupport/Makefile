@@ -8,6 +8,9 @@
 # @TAG(NICTA_BSD)
 #
 
+# For some reason, libplatsupport can't be built with make -j
+.NOTPARALLEL:
+
 # Targets
 TARGETS := libplatsupport.a
 
