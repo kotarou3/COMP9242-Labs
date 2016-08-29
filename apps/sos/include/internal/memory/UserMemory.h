@@ -5,7 +5,6 @@
 #include <string>
 
 #include "internal/memory/PageDirectory.h"
-#include "internal/memory/Mappings.h"
 #include "internal/process/Thread.h"
 
 namespace memory {
@@ -15,7 +14,8 @@ class UserMemory {
         UserMemory(process::Process& process, vaddr_t address);
 
         void read(uint8_t* to, size_t bytes, bool bypassAttributes = false);
-        std::string readString(size_t max_size, bool bypassAttributes = false);
+        std::string readString(bool bypassAttributes = false);
+
         void write(const uint8_t* from, size_t bytes, bool bypassAttributes = false);
 
         template <typename T>

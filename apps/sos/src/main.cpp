@@ -15,18 +15,9 @@
 #include <assert.h>
 #include <string.h>
 
-#include "internal/elf.h"
-#include "internal/memory/FrameTable.h"
-#include "internal/memory/PageDirectory.h"
-#include "internal/process/Thread.h"
-#include "internal/timer/timer.h"
-#include "internal/fs/DeviceFileSystem.h"
-#include "internal/fs/ConsoleDevice.h"
-
 extern "C" {
     #include <cspace/cspace.h>
 
-    #include <clock/clock.h>
     #include <cpio/cpio.h>
     #include <elf/elf.h>
     #include <sos.h>
@@ -39,10 +30,22 @@ extern "C" {
 
     #include <autoconf.h>
 
-    #define verbose 5
     #include "internal/sys/debug.h"
     #include "internal/sys/panic.h"
 }
+
+#include "internal/elf.h"
+#include "internal/fs/ConsoleDevice.h"
+#include "internal/fs/DebugDevice.h"
+#include "internal/fs/DeviceFileSystem.h"
+#include "internal/fs/FlatFileSystem.h"
+#include "internal/memory/FrameTable.h"
+#include "internal/memory/PageDirectory.h"
+#include "internal/process/Thread.h"
+#include "internal/syscall/fs.h"
+#include "internal/timer/timer.h"
+
+#define verbose 5
 
 /* To differencient between async and and sync IPC, we assign a
  * badge to the async endpoint. The badge that we receive will
@@ -127,19 +130,34 @@ static void print_bootinfo(const seL4_BootInfo* info) {
 }
 
 void start_first_process(const char* app_name, seL4_CPtr fault_ep) try {
-    auto process = std::make_shared<process::Process>();
+    /* open the console device */
+    fs::rootFileSystem->open("console").then(fs::asyncExecutor, [=](auto file) {
+        auto process = std::make_shared<process::Process>();
+        auto openFile = std::make_shared<fs::OpenFile>(
+            file.get(),
+            fs::OpenFile::Flags{
+                .read = true,
+                .write = true
+            }
+        );
 
-    /* parse the cpio image */
-    kprintf(1, "\nStarting \"%s\"...\n", app_name);
-    unsigned long elf_size;
-    uint8_t* elf_base = (uint8_t*)cpio_get_file(_cpio_archive, app_name, &elf_size);
-    conditional_panic(!elf_base, "Unable to locate cpio header");
+        /* attach the console device to stdin/out/err */
+        assert(process->fdTable.insert(openFile) == STDIN_FILENO);
+        assert(process->fdTable.insert(openFile) == STDOUT_FILENO);
+        assert(process->fdTable.insert(openFile) == STDERR_FILENO);
 
-    elf::load(*process, elf_base);
+        /* parse the cpio image */
+        kprintf(1, "\nStarting \"%s\"...\n", app_name);
+        unsigned long elf_size;
+        uint8_t* elf_base = (uint8_t*)cpio_get_file(_cpio_archive, app_name, &elf_size);
+        conditional_panic(!elf_base, "Unable to locate cpio header");
 
-    _tty_start_thread = std::make_unique<process::Thread>(
-        process, fault_ep, TTY_EP_BADGE, elf_getEntryPoint(elf_base)
-    );
+        elf::load(*process, elf_base);
+
+        _tty_start_thread = std::make_unique<process::Thread>(
+            process, fault_ep, TTY_EP_BADGE, elf_getEntryPoint(elf_base)
+        );
+    });
 } catch (const std::exception& e) {
     kprintf(0, "Caught: %s\n", e.what());
     panic("Caught exception while starting first process\n");
@@ -213,7 +231,17 @@ static void _sos_init(seL4_CPtr* ipc_ep, seL4_CPtr* async_ep) try {
     err = dma_init(dma_addr, DMA_SIZE_BITS);
     conditional_panic(err, "Failed to intiialise DMA memory\n");
 
-    /* TODO: Set stdout to the debug device */
+    /* Set stdin/out/err to the debug device */
+    auto debugDevice = std::make_shared<fs::OpenFile>(
+        std::make_shared<fs::DebugDevice>(),
+        fs::OpenFile::Flags{
+            .read = true,
+            .write = true
+        }
+    );
+    assert(process::getSosProcess().fdTable.insert(debugDevice) == STDIN_FILENO);
+    assert(process::getSosProcess().fdTable.insert(debugDevice) == STDOUT_FILENO);
+    assert(process::getSosProcess().fdTable.insert(debugDevice) == STDERR_FILENO);
 
     _sos_ipc_init(ipc_ep, async_ep);
 } catch (const std::exception& e) {
@@ -241,6 +269,15 @@ int main(void) {
 
     /* Initialise the timer */
     timer::init(badge_irq_ep(_sos_interrupt_ep_cap, IRQ_BADGE_TIMER));
+
+    /* Initialise the device filesystem */
+    auto deviceFileSystem = std::make_unique<fs::DeviceFileSystem>();
+    fs::ConsoleDevice::mountOn(*deviceFileSystem, "console");
+
+    /* Initialise the root filesystem */
+    auto rootFileSystem = std::make_unique<fs::FlatFileSystem>();
+    rootFileSystem->mount(std::move(deviceFileSystem));
+    fs::rootFileSystem = std::move(rootFileSystem);
 
     /* Start the user application */
     start_first_process(TTY_NAME, _sos_ipc_ep_cap);

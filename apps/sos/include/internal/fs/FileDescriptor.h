@@ -1,37 +1,40 @@
 #pragma once
 
-#include <unordered_map>
+#include <map>
 #include <memory>
 
 namespace fs {
 
-using uid=unsigned int;
-
-struct Mode {
-    bool read:1, write:1, execute:1;
-};
-
-// when a process is forked, the file descriptor table is copied.
-// This makes multiple references to the one open file, which is behaviour we want
+using FileDescriptor = int;
+constexpr const size_t MAX_FILE_DESCRIPTORS = 1000;
 
 class File;
 
-class FileDescriptor {
-public:
-    FileDescriptor(std::shared_ptr<File>, Mode);
-private:
-    std::shared_ptr<File> of;
-    Mode mode;
+class OpenFile {
+    public:
+        struct Flags {
+            bool read:1, write:1;
+        };
+
+        OpenFile(std::shared_ptr<File> file, Flags flags);
+
+        std::shared_ptr<File> get(Flags flags) const;
+
+    private:
+        std::shared_ptr<File> _file;
+        Flags _flags;
 };
 
 class FDTable {
-public:
-    uid insert(FileDescriptor);
+    public:
+        FileDescriptor insert(std::shared_ptr<OpenFile> file);
+        bool erase(FileDescriptor fd) noexcept;
 
-    void close(uid);
-private:
-    std::unordered_map <uid, FileDescriptor> fds;
-    uid upto;
+        std::shared_ptr<OpenFile> get(FileDescriptor fd) const;
+        std::shared_ptr<File> get(FileDescriptor fd, OpenFile::Flags flags) const;
+
+    private:
+        std::map<FileDescriptor, std::shared_ptr<OpenFile>> _table;
 };
 
 }

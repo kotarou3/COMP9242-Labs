@@ -6,6 +6,11 @@
 #include <fcntl.h>
 
 #define syscall(...) _syscall(__VA_ARGS__)
+// Includes missing from inline_executor.hpp
+#include <boost/thread/thread.hpp>
+#include <boost/thread/concurrent_queues/sync_queue.hpp>
+
+#include <boost/thread/executors/inline_executor.hpp>
 #include <boost/thread/future.hpp>
 #undef syscall
 
@@ -27,7 +32,7 @@ class File {
         virtual boost::future<ssize_t> read(const std::vector<IoVector>& iov, off64_t offset);
         virtual boost::future<ssize_t> write(const std::vector<IoVector>& iov, off64_t offset);
 
-        virtual boost::future<int> ioctl(size_t request, size_t arg);
+        virtual boost::future<int> ioctl(size_t request, memory::UserMemory argp);
 };
 
 class FileSystem {
@@ -36,5 +41,8 @@ class FileSystem {
 
         virtual boost::future<std::shared_ptr<File>> open(const std::string& pathname) = 0;
 };
+
+extern std::unique_ptr<FileSystem> rootFileSystem;
+extern boost::inline_executor asyncExecutor;
 
 }
