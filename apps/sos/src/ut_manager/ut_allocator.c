@@ -15,7 +15,6 @@
 #include "internal/ut_manager/bitfield.h"
 
 #include "internal/sys/debug.h"
-#include "internal/sys/panic.h"
 
 #define FLOOR14(x) ((x) & ~((1 << 14) - 1))
 #define CEILING14(x) FLOOR14((x) + (1 << 14) - 1)

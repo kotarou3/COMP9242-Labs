@@ -28,7 +28,6 @@ extern "C" {
     #include <sel4/sel4.h>
 
     #include "internal/sys/debug.h"
-    #include "internal/sys/panic.h"
 }
 
 #define DMA_SIZE     (_dma_pend - _dma_pstart)

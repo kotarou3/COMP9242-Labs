@@ -9,7 +9,6 @@
 
 extern "C" {
     #include "internal/sys/debug.h"
-    #include "internal/sys/panic.h"
 }
 
 namespace syscall {
