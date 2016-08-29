@@ -91,9 +91,12 @@ boost::future<int> open(process::Process& process, memory::vaddr_t pathname, int
         return _returnNow(-EINVAL);
     }
 
+    // XXX: Ignore these flags for now
+    flags &= ~(O_CREAT | O_TRUNC | O_LARGEFILE);
+    (void)mode;
+
     if (flags & ~O_ACCMODE)
         return _returnNow(-EINVAL);
-    (void)mode;
 
     try {
         return fs::rootFileSystem->open(memory::UserMemory(process, pathname).readString())
