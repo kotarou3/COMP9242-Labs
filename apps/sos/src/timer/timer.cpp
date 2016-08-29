@@ -7,7 +7,6 @@
 extern "C" {
     #include <sel4/types.h>
 
-    #define verbose 2
     #include "internal/sys/debug.h"
 }
 

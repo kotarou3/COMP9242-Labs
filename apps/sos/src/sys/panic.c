@@ -15,8 +15,6 @@
 #include <stdlib.h>
 #include <sel4/sel4.h>
 
-#define verbose 1
-
 inline void __conditional_panic(int condition, const char *message,
         const char *file, const char *func, int line) {
     if (condition) {

@@ -15,7 +15,6 @@
 
 #include <autoconf.h>
 
-#define verbose 0
 #include "internal/sys/debug.h"
 
 #define ALIGN(x, base)     ((x) & ~((base) - 1))

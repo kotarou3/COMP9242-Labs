@@ -27,7 +27,6 @@ extern "C" {
     #include "internal/dma.h"
     #include <sel4/sel4.h>
 
-    #define verbose 5
     #include "internal/sys/debug.h"
     #include "internal/sys/panic.h"
 }

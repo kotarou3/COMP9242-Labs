@@ -40,7 +40,6 @@ extern "C" {
     #include "internal/dma.h"
     #include "internal/network.h"
 
-    #define verbose 0
     #include "internal/sys/debug.h"
     #include "internal/sys/panic.h"
 }

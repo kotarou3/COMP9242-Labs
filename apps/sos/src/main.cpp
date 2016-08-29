@@ -45,8 +45,6 @@ extern "C" {
 #include "internal/syscall/fs.h"
 #include "internal/timer/timer.h"
 
-#define verbose 5
-
 /* To differencient between async and and sync IPC, we assign a
  * badge to the async endpoint. The badge that we receive will
  * be the bitwise 'OR' of the async endpoint badge and the badges

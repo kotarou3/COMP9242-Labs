@@ -8,7 +8,6 @@
 #include "internal/syscall/time.h"
 
 extern "C" {
-    #define verbose 5
     #include "internal/sys/debug.h"
     #include "internal/sys/panic.h"
 }

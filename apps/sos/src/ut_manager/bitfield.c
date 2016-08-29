@@ -14,7 +14,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define verbose 0
 #include "internal/sys/debug.h"
 #include "internal/sys/panic.h"
 
