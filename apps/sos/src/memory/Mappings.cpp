@@ -19,7 +19,7 @@ Mappings::Mappings(const std::function<void (vaddr_t)>& unmapPageCallback):
     _unmapPageCallback(unmapPageCallback)
 {}
 
-const Mapping& Mappings::insert(vaddr_t address, size_t pages, Attributes attributes, Mapping::Flags flags) {
+ScopedMapping Mappings::insert(vaddr_t address, size_t pages, Attributes attributes, Mapping::Flags flags) {
     _checkAddress(address, pages);
 
     if (flags.shared)
@@ -65,16 +65,12 @@ const Mapping& Mappings::insert(vaddr_t address, size_t pages, Attributes attrib
 
 haveValidAddress:
 
-    return _maps[address] = Mapping{
+    auto map = _maps[address] = Mapping{
         .start = address,
         .end = address + pages * PAGE_SIZE,
         .attributes = attributes,
         .flags = flags
     };
-}
-
-ScopedMapping Mappings::insertScoped(vaddr_t address, size_t pages, Attributes attributes, Mapping::Flags flags) {
-    auto map = insert(address, pages, attributes, flags);
     return ScopedMapping(*this, map.start, pages);
 }
 

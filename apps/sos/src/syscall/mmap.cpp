@@ -32,7 +32,7 @@ int mmap2(process::Process& process, memory::vaddr_t addr, size_t length, int pr
         return -ENOSYS;
 
     try {
-        auto map = process.maps.insertScoped(
+        auto map = process.maps.insert(
             addr, length / PAGE_SIZE,
             memory::Attributes{
                 .read = prot & PROT_READ,

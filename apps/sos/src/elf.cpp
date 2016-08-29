@@ -37,7 +37,7 @@ void load(process::Process& process, uint8_t* file) {
         memory::vaddr_t start = to - startPadding;
         size_t pages = memory::numPages(memorySize + startPadding);
 
-        auto map = process.maps.insertScoped(
+        auto map = process.maps.insert(
             start, pages,
             memory::Attributes{
                 .read = flags & PF_R,

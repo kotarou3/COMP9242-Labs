@@ -25,12 +25,12 @@ namespace process {
 
 Thread::Thread(std::shared_ptr<Process> process, seL4_CPtr faultEndpoint, seL4_Word faultEndpointBadge, memory::vaddr_t entryPoint):
     _process(process),
-    _stack(_process->maps.insertScoped(
+    _stack(_process->maps.insert(
         0, memory::STACK_PAGES,
         memory::Attributes{.read = true, .write = true},
         memory::Mapping::Flags{.shared = false, .fixed = false, .stack = true}
     )),
-    _ipcBuffer(_process->maps.insertScoped(
+    _ipcBuffer(_process->maps.insert(
         0, 1,
         memory::Attributes{.read = true, .write = true},
         memory::Mapping::Flags{.shared = false}
@@ -194,7 +194,7 @@ Process::Process(bool isSosProcess):
     memory::Mapping::Flags flags = {0};
     flags.fixed = true;
     flags.reserved = true;
-    maps.insert(0, memory::MMAP_START / PAGE_SIZE, memory::Attributes{}, flags);
+    maps.insert(0, memory::MMAP_START / PAGE_SIZE, memory::Attributes{}, flags).release();
 }
 
 void Process::handlePageFault(memory::vaddr_t address, memory::Attributes cause) {

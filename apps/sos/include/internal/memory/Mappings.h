@@ -29,9 +29,7 @@ class Mappings {
         Mappings(const Mappings&) = delete;
         Mappings& operator=(const Mappings&) = delete;
 
-        // Warning: Returned reference is invalidated after another insertion
-        const Mapping& insert(vaddr_t address, size_t pages, Attributes attributes, Mapping::Flags flags);
-        ScopedMapping insertScoped(vaddr_t address, size_t pages, Attributes attributes, Mapping::Flags flags);
+        ScopedMapping insert(vaddr_t address, size_t pages, Attributes attributes, Mapping::Flags flags);
         void erase(vaddr_t address, size_t pages);
 
         const Mapping& lookup(vaddr_t address) const;

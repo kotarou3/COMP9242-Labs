@@ -76,7 +76,7 @@ lwip_iface_t *lwip_iface;
 static void *
 sos_map_device(void* /*cookie*/, uintptr_t addr, size_t size, int cached, ps_mem_flags_t /*flags*/){
     try {
-        auto map = process::getSosProcess().maps.insertScoped(
+        auto map = process::getSosProcess().maps.insert(
             0, memory::numPages(size),
             memory::Attributes{.read = true, .write = true, .execute = false, .notCacheable = !cached},
             memory::Mapping::Flags{.shared = false}

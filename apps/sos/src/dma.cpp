@@ -80,8 +80,9 @@ dma_init(seL4_Word dma_paddr_start, int sizebits){
         memory::Attributes{.read = true, .write = true, .execute = false, .notCacheable = true},
         memory::Mapping::Flags{.shared = false}
     );
-    _dma_vstart = map.start;
-    _dma_vend = map.end;
+    _dma_vstart = map.getStart();
+    _dma_vend = map.getEnd();
+    map.release();
 
     return 0;
 }

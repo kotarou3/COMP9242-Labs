@@ -48,7 +48,7 @@ ScopedMapping UserMemory::_mapIn(size_t bytes, Attributes attributes, bool bypas
     }
 
     // Allocate some space in SOS' virtual memory for the target pages
-    auto map = process::getSosProcess().maps.insertScoped(
+    auto map = process::getSosProcess().maps.insert(
         0, pages,
         attributes, Mapping::Flags{.shared = false}
     );

@@ -43,20 +43,19 @@ void init(paddr_t start, paddr_t end) {
     size_t frameTablePages = numPages(frameTableSize);
 
     // Allocate a place in virtual memory to place the frame table
-    _table = reinterpret_cast<Frame*>(
-        process::getSosProcess().maps.insert(
-            0, frameTablePages,
-            Attributes{.read = true, .write = true},
-            Mapping::Flags{.shared = false}
-        ).start
+    auto tableMap = process::getSosProcess().maps.insert(
+        0, frameTablePages,
+        Attributes{.read = true, .write = true},
+        Mapping::Flags{.shared = false}
     );
+    _table = reinterpret_cast<Frame*>(tableMap.getAddress());
 
     // Allocate the frame table
     std::vector<std::pair<paddr_t, vaddr_t>> frameTableAddresses;
     frameTableAddresses.reserve(frameTablePages);
     for (size_t p = 0; p < frameTablePages; ++p) {
         paddr_t phys = ut_alloc(seL4_PageBits);
-        vaddr_t virt = reinterpret_cast<vaddr_t>(_table) + (p * PAGE_SIZE);
+        vaddr_t virt = tableMap.getAddress() + (p * PAGE_SIZE);
 
         process::getSosProcess().pageDirectory.map(
             Page(phys), virt,
@@ -80,6 +79,8 @@ void init(paddr_t start, paddr_t end) {
     // Check the allocations were correct
     assert(_table[0].getAddress() == start);
     assert(_table[frameCount - 1].getAddress() == end - PAGE_SIZE);
+
+    tableMap.release();
 }
 
 Page alloc() {
