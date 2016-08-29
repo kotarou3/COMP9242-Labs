@@ -48,7 +48,7 @@ void load(process::Process& process, uint8_t* file) {
         );
 
         if (fileSize > 0) {
-            memory::UserMemory(process, to).write(from, fileSize, true);
+            memory::UserMemory(process, to).write(from, from + fileSize, true);
 
             // Unify the data and instruction cache's view of the pages
             for (size_t b = 0; b < fileSize + startPadding; b += (1 << seL4_PageBits)) {
