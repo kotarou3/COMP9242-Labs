@@ -42,13 +42,18 @@ boost::future<ssize_t> ConsoleDevice::write(const std::vector<IoVector>& iov, of
         throw std::invalid_argument("Cannot seek the console device");
 
     ssize_t totalBytesWritten = 0;
-    for (const auto& vector : iov) {
-        std::vector<uint8_t> buffer = memory::UserMemory(vector.buffer).read(vector.length);
-        ssize_t bytesWritten = serial_send(_serial, reinterpret_cast<char*>(buffer.data()), buffer.size());
-        totalBytesWritten += bytesWritten;
+    try {
+        for (const auto& vector : iov) {
+            auto map = memory::UserMemory(vector.buffer).mapIn<char>(vector.length, memory::Attributes{.read = true});
+            ssize_t bytesWritten = serial_send(_serial, map.first, vector.length);
+            totalBytesWritten += bytesWritten;
 
-        if (static_cast<size_t>(bytesWritten) != buffer.size())
-            break;
+            if (static_cast<size_t>(bytesWritten) != vector.length)
+                break;
+        }
+    } catch (...) {
+        if (totalBytesWritten == 0)
+            throw;
     }
 
     boost::promise<ssize_t> promise;

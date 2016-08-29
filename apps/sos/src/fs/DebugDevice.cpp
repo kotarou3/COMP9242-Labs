@@ -13,11 +13,16 @@ boost::future<ssize_t> DebugDevice::write(const std::vector<IoVector>& iov, off6
         throw std::invalid_argument("Cannot seek the debug device");
 
     ssize_t totalBytesWritten = 0;
-    for (const auto& vector : iov) {
-        std::vector<uint8_t> buffer = memory::UserMemory(vector.buffer).read(vector.length);
-        for (char c : buffer)
-            seL4_DebugPutChar(c);
-        totalBytesWritten += vector.length;
+    try {
+        for (const auto& vector : iov) {
+            auto map = memory::UserMemory(vector.buffer).mapIn<char>(vector.length, memory::Attributes{.read = true});
+            for (size_t c = 0; c < vector.length; ++c)
+                seL4_DebugPutChar(map.first[c]);
+            totalBytesWritten += vector.length;
+        }
+    } catch (...) {
+        if (totalBytesWritten == 0)
+            throw;
     }
 
     boost::promise<ssize_t> promise;

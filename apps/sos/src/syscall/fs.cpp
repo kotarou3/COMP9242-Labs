@@ -41,8 +41,7 @@ namespace {
         if (iovcnt > IOV_MAX)
             throw std::invalid_argument("Too many IO vectors");
 
-        std::vector<iovec> _iov(iovcnt);
-        memory::UserMemory(process, iov).read(reinterpret_cast<uint8_t*>(_iov.data()), iovcnt * sizeof(iovec));
+        auto _iov = memory::UserMemory(process, iov).get<iovec>(iovcnt);
 
         std::vector<fs::IoVector> result;
         result.reserve(iovcnt);
