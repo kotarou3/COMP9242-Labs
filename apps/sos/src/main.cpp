@@ -20,6 +20,8 @@
 #include "internal/memory/PageDirectory.h"
 #include "internal/process/Thread.h"
 #include "internal/timer/timer.h"
+#include "internal/fs/DeviceFileSystem.h"
+#include "internal/fs/ConsoleDevice.h"
 
 extern "C" {
     #include <cspace/cspace.h>

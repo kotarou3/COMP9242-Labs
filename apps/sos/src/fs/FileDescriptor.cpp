@@ -17,14 +17,6 @@ uid FDTable::insert(FileDescriptor fd) {
     return upto++;
 }
 
-uid FDTable::open(std::string fileName, Mode attr) {
-    std::shared_ptr<File> of;
-    (void)fileName;
-//    if (fileName == "console")
-//        of = make_shared(ConsoleDevice());
-    return insert(FileDescriptor(of, attr));
-}
-
 void FDTable::close(uid id) {
     fds.erase(id);
 }

@@ -279,7 +279,9 @@ int main(void) {
     int i, r, done, found, new, argc;
     char *bp, *p;
 
+    printf("\n[SOS pre-Starting]\n");
     in = open("console", O_RDONLY);
+    printf("Recieved file descriptor %d\n", in);
     assert(in >= 0);
 
     bp = buf;

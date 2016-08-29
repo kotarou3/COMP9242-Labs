@@ -1,4 +1,7 @@
+#include <memory>
+
 #include <sys/uio.h>
+#include <sys/stat.h>
 
 #include "internal/fs/File.h"
 #include "internal/memory/UserMemory.h"
@@ -87,11 +90,18 @@ namespace {
 }
 
 boost::future<int> open(process::Process& process, const char* pathname, int flags, mode_t mode) noexcept {
-    (void)process;
-    (void)pathname;
+    static fs::DeviceFileSystem deviceFileSystem;
+    static bool isInited = false;
+    if (!isInited) {
+        fs::ConsoleDevice::init(deviceFileSystem);
+        isInited = true;
+    }
     (void)flags;
-    (void)mode;
-    return _returnNow(-ENOSYS);
+    auto file = deviceFileSystem.open(pathname);
+    auto fdmode = fs::Mode{.read = mode & S_IRUSR, .write = mode & S_IWUSR, .execute = mode & S_IXUSR};
+    return _returnNow(file.then(_asyncSyscallExecutor, [process, fdmode](boost::future<shared_ptr<File>> file) {
+        return process.fdTable.open(file, fdmode);
+    }));
 }
 
 boost::future<int> close(process::Process& process, int fd) noexcept {

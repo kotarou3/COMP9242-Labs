@@ -28,7 +28,6 @@ class FDTable {
 public:
     uid insert(FileDescriptor);
 
-    uid open(std::string, Mode);
     void close(uid);
 private:
     std::unordered_map <uid, FileDescriptor> fds;
