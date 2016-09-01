@@ -10,7 +10,7 @@
 #include <sys/time.h>
 #include <utils/time.h>
 
-#define BUF_SIZ 4096 // would go higher, but terminal buffer size limit is 4096
+#define BUF_SIZ 4096 * 2
 #define SMALL_BUF_SZ 2
 
 char test_str[] = "Basic test string for read/write";

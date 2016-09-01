@@ -1,8 +1,9 @@
 #include <deque>
-#include <utility>
 #include <queue>
-#include <vector>
 #include <stdexcept>
+#include <utility>
+#include <vector>
+
 #include <sys/ioctl.h>
 
 extern "C" {
@@ -10,53 +11,72 @@ extern "C" {
 }
 
 #include "internal/fs/ConsoleDevice.h"
-#include "internal/fs/File.h"
 #include "internal/fs/DeviceFileSystem.h"
 
 namespace fs {
 
 namespace {
-    serial* _serial;
-    auto buffer = std::deque<char>{};
-    auto requests = std::queue<std::pair<std::vector<IoVector>, boost::promise<ssize_t>>>{};
-    constexpr const unsigned int MAX_BUFFER_SIZE = 1<<18; // 1MB
+    constexpr const size_t MAX_BUFFER_SIZE = 1048576;
 
-    inline void tryRead(std::deque<char>::const_iterator newline) {
-        static ssize_t total = 0;
-        static size_t index = 0U;
-        auto& iov = requests.front().first[index];
-        if (newline != buffer.cend() || buffer.size() >= iov.length) {
-            if (newline != buffer.cend())
-                newline++;
-            int size = std::min(static_cast<unsigned int>(newline - buffer.cbegin()), iov.length);
+    serial* _serial;
+
+    std::deque<char> _readBuffer;
+    std::queue<std::pair<std::vector<IoVector>, boost::promise<ssize_t>>> _readRequests;
+
+    void _tryRead(std::deque<char>::const_iterator newlinePos) {
+        static ssize_t _totalBytesRead = 0;
+        static size_t _currentIovIndex = 0;
+
+        while (_readRequests.size() > 0) {
+            auto& request = _readRequests.front();
             try {
-                iov.buffer.write(buffer.cbegin(), newline, false);
-            } catch (std::runtime_error&) {
-                requests.front().second.set_value(-EINVAL);
-                requests.pop();
-                total = 0;
-                index = 0;
-                buffer.clear();
-                return;
+                for (; _currentIovIndex < request.first.size(); ++_currentIovIndex) {
+                    auto& iov = request.first[_currentIovIndex];
+
+                    size_t newlineIndex = -1U;
+                    if (newlinePos != _readBuffer.cend())
+                        newlineIndex = newlinePos - _readBuffer.cbegin();
+
+                    size_t bytesToRead;
+                    if (_readBuffer.size() >= iov.length)
+                        bytesToRead = iov.length;
+                    else if (newlineIndex != -1U)
+                        bytesToRead = std::min(newlineIndex + 1, iov.length);
+                    else
+                        return;
+
+                    iov.buffer.write(_readBuffer.cbegin(), _readBuffer.cbegin() + bytesToRead);
+                    _readBuffer.erase(_readBuffer.cbegin(), _readBuffer.cbegin() + bytesToRead);
+                    _totalBytesRead += bytesToRead;
+
+                    if (newlineIndex != -1U && newlineIndex < bytesToRead)
+                        newlinePos = std::find(_readBuffer.cbegin(), _readBuffer.cend(), '\n');
+                }
+            } catch (...) {
+                if (_totalBytesRead == 0) {
+                    request.second.set_value(-EFAULT);
+                    _readRequests.pop();
+
+                    _currentIovIndex = 0;
+                    continue;
+                }
             }
-            total += size;
-            if (++index == requests.front().first.size()) {
-                requests.front().second.set_value(total);
-                total = 0;
-                index = 0U;
-                buffer.clear();
-                requests.pop();
-            }
+
+            request.second.set_value(_totalBytesRead);
+            _readRequests.pop();
+
+            _totalBytesRead = 0;
+            _currentIovIndex = 0;
         }
     }
 
-    void serialHandler(serial*, char c) {
-        buffer.push_back(c);
-        if (buffer.size() > MAX_BUFFER_SIZE)
-            buffer.pop_front(); // just start dropping the stuff at the front
-        if (!requests.empty()) {
-            tryRead(buffer.end() - (c == '\n' ? 1 : 0));
-        }
+    void _serialHandler(serial* /*serial*/, char c) {
+        _readBuffer.push_back(c);
+        if (_readBuffer.size() > MAX_BUFFER_SIZE)
+            _readBuffer.pop_front();
+
+        if (!_readRequests.empty())
+            _tryRead(_readBuffer.cend() - (c == '\n' ? 1 : 0));
     }
 }
 
@@ -64,7 +84,7 @@ void ConsoleDevice::mountOn(DeviceFileSystem& fs, const std::string& name) {
     fs.create(name, [] {
         if (!_serial) {
             _serial = serial_init();
-            serial_register_handler(_serial, serialHandler);
+            serial_register_handler(_serial, _serialHandler);
         }
 
         boost::promise<std::shared_ptr<File>> promise;
@@ -78,15 +98,18 @@ boost::future<ssize_t> ConsoleDevice::read(const std::vector<IoVector>& iov, off
         throw std::invalid_argument("Cannot seek the console device");
 
     boost::promise<ssize_t> promise;
-    boost::future<ssize_t> future = promise.get_future();
-    requests.push(std::make_pair(iov, std::move(promise)));
-    tryRead(std::find(buffer.cbegin(), buffer.cend(), '\n'));
+    auto future = promise.get_future();
+    _readRequests.push(std::make_pair(iov, std::move(promise)));
+
+    _tryRead(std::find(_readBuffer.cbegin(), _readBuffer.cend(), '\n'));
+
     return future;
 }
 
 boost::future<ssize_t> ConsoleDevice::write(const std::vector<IoVector>& iov, off64_t offset) {
     if (offset != CURRENT_OFFSET)
         throw std::invalid_argument("Cannot seek the console device");
+
     ssize_t totalBytesWritten = 0;
     try {
         for (const auto& vector : iov) {

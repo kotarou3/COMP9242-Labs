@@ -202,9 +202,7 @@ static void _sos_init(seL4_CPtr* ipc_ep, seL4_CPtr* async_ep) try {
     /* Retrieve boot info from seL4 */
     const seL4_BootInfo* _boot_info = seL4_GetBootInfo();
     conditional_panic(!_boot_info, "Failed to retrieve boot info\n");
-    if(verbose > 0){
-        print_bootinfo(_boot_info);
-    }
+    print_bootinfo(_boot_info);
 
     /* Initialise the untyped sub system and reserve memory for DMA */
     err = ut_table_init(_boot_info);

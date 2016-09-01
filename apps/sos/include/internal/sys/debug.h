@@ -1,10 +1,12 @@
 #pragma once
 
+#define KPRINTF_VERBOSITY 5
+
 void _kprintf2(const char* colour, const char* fmt, ...);
 
 #define _kprintf(v, colour, ...)        \
     do {                                \
-        if ((v) < verbose)              \
+        if ((v) < KPRINTF_VERBOSITY)              \
             _kprintf2(colour, __VA_ARGS__); \
     } while (0)
 

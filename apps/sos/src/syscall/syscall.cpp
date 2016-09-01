@@ -8,9 +8,7 @@
 #include "internal/syscall/time.h"
 
 extern "C" {
-    #define verbose 5
     #include "internal/sys/debug.h"
-    #include "internal/sys/panic.h"
 }
 
 namespace syscall {
@@ -56,7 +54,6 @@ namespace {
 	    ADD_SYSCALL(brk);
 	    ADD_SYSCALL(mmap2);
 	    ADD_SYSCALL(munmap);
-        ADD_SYSCALL(open);
 
 	    // time
 	    ADD_SYSCALL(clock_gettime);

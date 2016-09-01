@@ -1,8 +1,10 @@
 #pragma once
 
+#include <iterator>
+#include <string>
+#include <type_traits>
 #include <utility>
 #include <vector>
-#include <string>
 
 #include "internal/memory/PageDirectory.h"
 #include "internal/process/Thread.h"
@@ -13,33 +15,43 @@ class UserMemory {
     public:
         UserMemory(process::Process& process, vaddr_t address);
 
-        void read(uint8_t* to, size_t bytes, bool bypassAttributes = false);
         std::string readString(bool bypassAttributes = false);
 
-        void write(const uint8_t* from, size_t bytes, bool bypassAttributes = false);
-        template <typename T>
-        void write(const T from, const T to, bool bypassAttributes = false) {
-            auto map = _mapIn(to - from, Attributes{.read = false, .write = true}, bypassAttributes);
-            std::copy(from, to, map.first);
+        template <typename It, typename = std::enable_if_t<std::is_pod<typename std::iterator_traits<It>::value_type>::value>>
+        void read(It begin, It end, bool bypassAttributes = false) {
+            size_t length = end - begin;
+            auto map = mapIn<typename std::iterator_traits<It>::value_type>(
+                length, Attributes{.read = true}, bypassAttributes
+            );
+            std::copy(map.first, map.first + length, begin);
+        }
+
+        template <typename It, typename = std::enable_if_t<std::is_pod<typename std::iterator_traits<It>::value_type>::value>>
+        void write(It begin, It end, bool bypassAttributes = false) {
+            size_t length = end - begin;
+            auto map = mapIn<typename std::iterator_traits<It>::value_type>(
+                length, Attributes{.read = false, .write = true}, bypassAttributes
+            );
+            std::copy(begin, end, map.first);
         }
 
         template <typename T>
         T get(bool bypassAttributes = false) {
             T result;
-            read(reinterpret_cast<uint8_t*>(&result), sizeof(result), bypassAttributes);
+            read(&result, &result + 1, bypassAttributes);
             return result;
         }
 
         template <typename T>
         std::vector<T> get(size_t length, bool bypassAttributes = false) {
             std::vector<T> result(length);
-            read(reinterpret_cast<uint8_t*>(result.data()), length * sizeof(T), bypassAttributes);
+            read(result.begin(), result.end(), bypassAttributes);
             return result;
         }
 
         template <typename T>
         void set(const T& value, bool bypassAttributes = false) {
-            write(reinterpret_cast<const uint8_t*>(&value), sizeof(T), bypassAttributes);
+            write(&value, &value + 1, bypassAttributes);
         }
 
         template <typename T>

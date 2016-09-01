@@ -12,7 +12,6 @@
 #include <stdlib.h>
 #include <sel4/sel4.h>
 
-#define verbose 1
 #include "internal/sys/debug.h"
 
 #include "internal/sys/execinfo.h" /*for backtrace()*/
