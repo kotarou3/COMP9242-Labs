@@ -38,6 +38,7 @@ extern "C" {
 #include "internal/fs/ConsoleDevice.h"
 #include "internal/fs/DebugDevice.h"
 #include "internal/fs/DeviceFileSystem.h"
+#include "internal/fs/NFSFileSystem.h"
 #include "internal/fs/FlatFileSystem.h"
 #include "internal/memory/FrameTable.h"
 #include "internal/memory/PageDirectory.h"
@@ -275,7 +276,15 @@ int main(void) {
     /* Initialise the root filesystem */
     auto rootFileSystem = std::make_unique<fs::FlatFileSystem>();
     rootFileSystem->mount(std::move(deviceFileSystem));
+    try {
+        auto nfsFileSystem = std::make_unique<fs::NFSFileSystem>();
+        rootFileSystem->mount(std::move(nfsFileSystem));
+        printf("Successfully mounted NFS filesystem\n");
+    } catch (std::runtime_error &e) {
+        printf("%s\n", e.what());
+    }
     fs::rootFileSystem = std::move(rootFileSystem);
+
 
     /* Start the user application */
     start_first_process(TTY_NAME, _sos_ipc_ep_cap);

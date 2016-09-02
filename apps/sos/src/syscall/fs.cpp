@@ -5,6 +5,7 @@
 #include "internal/memory/UserMemory.h"
 #include "internal/syscall/fs.h"
 
+
 namespace syscall {
 
 namespace {
@@ -113,6 +114,27 @@ boost::future<int> close(process::Process& process, int fd) noexcept {
         return _returnNow(0);
     else
         return _returnNow(-EBADF);
+}
+
+boost::future<int> stat(process::Process& process, memory::vaddr_t pathname, memory::vaddr_t result) {
+    std::string path;
+    try {
+        path = memory::UserMemory(process, pathname).readString();
+    } catch (...) {
+        return _returnNow(-EINVAL);
+    }
+    boost::promise<int> promise;
+    fs::rootFileSystem->stat(path, result).then(fs::asyncExecutor, [=, &process] (auto file) {
+        if (!file.get())
+            return _returnNow(-ENOENT);
+        try {
+            memory::UserMemory(process, result).write(&file.get()->attrs, &file.get()->attrs + sizeof(file.get()->attrs));
+        } catch (std::runtime_error &e) {
+            return _returnNow(-EINVAL);
+        }
+        return _returnNow(0);
+    });
+    return promise.get_future();
 }
 
 boost::future<int> read(process::Process& process, int fd, memory::vaddr_t buf, size_t count) noexcept {

@@ -44,14 +44,6 @@ extern "C" {
     #include "internal/sys/panic.h"
 }
 
-#ifndef SOS_NFS_DIR
-#  ifdef CONFIG_SOS_NFS_DIR
-#    define SOS_NFS_DIR CONFIG_SOS_NFS_DIR
-#  else
-#    define SOS_NFS_DIR ""
-#  endif
-#endif
-
 #define ARP_PRIME_TIMEOUT_MS     1000
 #define ARP_PRIME_RETRY_DELAY_MS   10
 
@@ -63,8 +55,6 @@ static struct net_irq {
 } _net_irqs[1];
 
 static seL4_CPtr _irq_ep;
-
-fhandle_t mnt_point = { { 0 } };
 
 lwip_iface_t *lwip_iface;
 
@@ -238,11 +228,6 @@ network_init(seL4_CPtr interrupt_ep) {
         if(!(err = nfs_init(&gw))){
             /* Print out the exports on this server */
             nfs_print_exports();
-            if ((err = nfs_mount(SOS_NFS_DIR, &mnt_point))){
-                printf("Error mounting path '%s'!\n", SOS_NFS_DIR);
-            }else{
-                printf("\nSuccessfully mounted '%s'\n", SOS_NFS_DIR);
-            }
         }
         if(err){
             WARN("Failed to initialise NFS\n");
