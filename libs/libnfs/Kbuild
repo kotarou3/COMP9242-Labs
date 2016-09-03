@@ -10,4 +10,4 @@
 libs-$(CONFIG_LIB_NFS) += libnfs
 libdocs-$(CONFIG_LIB_NFS) += libnfs
 
-libnfs: liblwip $(libc) libsel4 common
+libnfs: liblwip $(libc) libsel4 libboost common

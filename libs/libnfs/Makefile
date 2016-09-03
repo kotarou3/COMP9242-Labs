@@ -13,11 +13,14 @@ TARGETS := libnfs.a
 
 # Source files required to build the target
 CFILES := $(patsubst $(SOURCE_DIR)/%,%,$(wildcard $(SOURCE_DIR)/src/*.c))
+CXXFILES := $(patsubst $(SOURCE_DIR)/%,%,$(wildcard $(SOURCE_DIR)/src/*.cpp))
 
 # Header files/directories this library provides
 RHDRFILES := '$(wildcard $(SOURCE_DIR)/include/*) nfs'
 
 include $(SEL4_COMMON)/common.mk
+
+CXXFLAGS += -DBOOST_THREAD_VERSION=4 -DBOOST_SYSTEM_NO_DEPRECATED -DBOOST_THREAD_PROVIDES_EXECUTORS
 
 .PHONY: docs
 docs: docs/libnfs.pdf

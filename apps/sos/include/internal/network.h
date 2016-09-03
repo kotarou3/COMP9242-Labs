@@ -12,9 +12,6 @@
 #define NETWORK_H
 
 #include <sel4/types.h>
-#include <nfs/nfs.h>
-
-extern fhandle_t mnt_point;
 
 /**
  * Initialises the network stack
