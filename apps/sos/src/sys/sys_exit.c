@@ -8,37 +8,16 @@
  * @TAG(NICTA_BSD)
  */
 
-#include <stdio.h>
 #include <stdlib.h>
-#include <sel4/sel4.h>
 
 #include "internal/sys/debug.h"
 
-#include "internal/sys/execinfo.h" /*for backtrace()*/
-
 static void sel4_abort(void) {
-    kprintf(LOGLEVEL_EMERG, "seL4 root server aborted\n");
+    kprintf(LOGLEVEL_EMERG, "SOS aborting\n");
 
-    /* Printout backtrace*/
-    void *array[10] = {NULL};
-    int size = 0;
-
-    size = backtrace(array, 10);
-    if (size) {
-
-        kprintf(LOGLEVEL_EMERG, "Backtracing stack PCs:  ");
-
-        for (int i = 0; i < size; i++) {
-            kprintf(LOGLEVEL_EMERG, "0x%x  ", (unsigned int)array[i]);
-        }
-        kprintf(LOGLEVEL_EMERG, "\n");
-    }
-
-#if defined(CONFIG_DEBUG_BUILD)
-    seL4_DebugHalt();
-#endif
+    kprintf(LOGLEVEL_EMERG, "Waiting for debugger by spinning...\n");
     while (1)
-        ; /* We don't return after this */
+        ;
 }
 
 long
