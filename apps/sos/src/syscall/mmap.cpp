@@ -1,5 +1,7 @@
+#include <stdexcept>
+#include <system_error>
+
 #include <assert.h>
-#include <errno.h>
 #include <stdint.h>
 #include <sys/mman.h>
 
@@ -8,68 +10,58 @@
 
 namespace syscall {
 
-boost::future<int> brk(process::Process& /*process*/, memory::vaddr_t /*addr*/) noexcept {
+boost::future<int> brk(process::Process& /*process*/, memory::vaddr_t /*addr*/) {
     // We don't actually implement this - we let malloc() use mmap2() instead
-    return _returnNow(-ENOSYS);
+    throw std::system_error(ENOSYS, std::system_category(), "brk() not implemented");
 }
 
-boost::future<int> mmap2(process::Process& process, memory::vaddr_t addr, size_t length, int prot, int flags, int /*fd*/, off_t /*offset*/) noexcept {
+boost::future<int> mmap2(process::Process& process, memory::vaddr_t addr, size_t length, int prot, int flags, int /*fd*/, off_t /*offset*/) {
     if (memory::pageAlign(addr) != addr || memory::pageAlign(length) != length)
-        return _returnNow(-EINVAL);
+        throw std::invalid_argument("Invalid page or length alignment");
 
     if (prot & ~(PROT_READ | PROT_WRITE | PROT_EXEC))
-        return _returnNow(-EINVAL);
+        throw std::invalid_argument("Invalid page protection");
 
     if (flags & ~(MAP_SHARED | MAP_PRIVATE | MAP_ANONYMOUS))
-        return _returnNow(-ENOSYS);
+        throw std::invalid_argument("Invalid flags");
     if ((flags & MAP_SHARED) && (flags & MAP_PRIVATE))
-        return _returnNow(-EINVAL);
+        throw std::invalid_argument("Page cannot be both shared and private");
     if (!(flags & (MAP_SHARED | MAP_PRIVATE)))
-        return _returnNow(-EINVAL);
+        throw std::invalid_argument("Page must be either shared or private");
 
     if (!(flags & MAP_ANONYMOUS))
-        return _returnNow(-ENOSYS);
+        throw std::system_error(ENOSYS, std::system_category(), "Non-anonymous pages are not implemented");
 
-    try {
-        auto map = process.maps.insert(
-            addr, length / PAGE_SIZE,
-            memory::Attributes{
-                .read = prot & PROT_READ,
-                .write = prot & PROT_WRITE,
-                .execute = prot & PROT_EXEC
-            },
-            memory::Mapping::Flags{
-                .shared = flags & MAP_SHARED
-            }
-        );
-
-        if (process.isSosProcess) {
-            // We need to fault in all the pages if the allocation came from
-            // ourselves, since we can't handle page faults on ourself
-            for (addr = map.getStart(); addr < map.getEnd(); addr += PAGE_SIZE)
-                process.handlePageFault(addr, memory::Attributes{});
+    auto map = process.maps.insert(
+        addr, length / PAGE_SIZE,
+        memory::Attributes{
+            .read = prot & PROT_READ,
+            .write = prot & PROT_WRITE,
+            .execute = prot & PROT_EXEC
+        },
+        memory::Mapping::Flags{
+            .shared = flags & MAP_SHARED
         }
+    );
 
-        int result = static_cast<int>(map.getStart());
-        map.release();
-        return _returnNow(result);
-    } catch (const std::bad_alloc&) {
-        return _returnNow(-ENOMEM);
-    } catch (...) {
-        return _returnNow(-EINVAL);
+    if (process.isSosProcess) {
+        // We need to fault in all the pages if the allocation came from
+        // ourselves, since we can't handle page faults on ourself
+        for (addr = map.getStart(); addr < map.getEnd(); addr += PAGE_SIZE)
+            process.handlePageFault(addr, memory::Attributes{});
     }
+
+    int result = static_cast<int>(map.getStart());
+    map.release();
+    return _returnNow(result);
 }
 
-boost::future<int> munmap(process::Process& process, memory::vaddr_t addr, size_t length) noexcept {
+boost::future<int> munmap(process::Process& process, memory::vaddr_t addr, size_t length) {
     if (memory::pageAlign(addr) != addr || memory::pageAlign(length) != length)
-        return _returnNow(-EINVAL);
+        throw std::invalid_argument("Invalid page or length alignment");
 
-    try {
-        process.maps.erase(addr, length / PAGE_SIZE);
-        return _returnNow(0);
-    } catch (...) {
-        return _returnNow(-EINVAL);
-    }
+    process.maps.erase(addr, length / PAGE_SIZE);
+    return _returnNow(0);
 }
 
 }

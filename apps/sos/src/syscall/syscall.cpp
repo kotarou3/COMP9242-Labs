@@ -1,4 +1,7 @@
 #include <algorithm>
+#include <string>
+#include <system_error>
+
 #include <sys/syscall.h>
 #include <errno.h>
 
@@ -64,7 +67,7 @@ namespace {
     }
 }
 
-boost::future<int> handle(process::Thread& thread, long number, size_t argc, seL4_Word* argv) noexcept {
+boost::future<int> handle(process::Thread& thread, long number, size_t argc, seL4_Word* argv) {
     if (_getThreadSyscall(number)) {
         seL4_Word args[8] = {0};
         std::copy(argv, argv + std::min(argc, 8U), args);
@@ -79,7 +82,7 @@ boost::future<int> handle(process::Thread& thread, long number, size_t argc, seL
     }
 }
 
-boost::future<int> handle(process::Process& process, long number, size_t argc, seL4_Word* argv) noexcept {
+boost::future<int> handle(process::Process& process, long number, size_t argc, seL4_Word* argv) {
     if (_getProcessSyscall(number)) {
         seL4_Word args[8] = {0};
         std::copy(argv, argv + std::min(argc, 8U), args);
@@ -89,10 +92,37 @@ boost::future<int> handle(process::Process& process, long number, size_t argc, s
             args[0], args[1], args[2], args[3],
             args[4], args[5], args[6], args[7]
         );
-    } else {
-        kprintf(0, "Unknown syscall %d\n", number);
-        return _returnNow(-ENOSYS);
     }
+
+    throw std::system_error(ENOSYS, std::system_category(), "Unknown syscall " + std::to_string(number));
+}
+
+int exceptionToErrno(std::exception_ptr e) noexcept {
+    try {
+        try {
+            std::rethrow_exception(e);
+        } catch (std::exception_ptr e) {
+            // This happens when boost::future::set_exception() is called on a
+            // std::exception_ptr - it wraps it in it's own exception object since
+            // std::exception_ptr can't be converted to boost::exception_ptr
+            std::rethrow_exception(e);
+        }
+    } catch (const std::bad_alloc& e) {
+        kprintf(3, "Got std::bad_alloc: %s\n", e.what());
+        return ENOMEM;
+    } catch (const std::invalid_argument& e) {
+        kprintf(3, "Got std::invalid_argument: %s\n", e.what());
+        return EINVAL;
+    } catch (const std::system_error& e) {
+        if (e.code().category() != std::system_category())
+            throw;
+
+        kprintf(3, "Got std::system_error: %s\n", e.what());
+        return e.code().value();
+    }
+
+    // Intentionally don't catch (...) since we want to std::terminate() in that
+    // case (It should never happen!)
 }
 
 }

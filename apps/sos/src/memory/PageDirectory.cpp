@@ -1,5 +1,6 @@
 #include <stdexcept>
 #include <string>
+#include <system_error>
 #include <assert.h>
 
 #include "internal/memory/FrameTable.h"
@@ -58,7 +59,7 @@ const MappedPage* PageDirectory::lookup(vaddr_t address, bool noThrow) const {
     if (table == _tables.end()) {
         if (noThrow)
             return nullptr;
-        throw std::out_of_range("Address is not mapped");
+        throw std::invalid_argument("Address is not mapped");
     }
 
     return table->second.lookup(address, noThrow);
@@ -74,7 +75,7 @@ PageTable::PageTable(PageDirectory& parent, vaddr_t baseAddress):
 {
     int err = seL4_ARM_PageTable_Map(_cap.get(), _parent.getCap(), baseAddress, seL4_ARM_Default_VMAttributes);
     if (err != seL4_NoError)
-        throw std::runtime_error("Failed to map in seL4 page table: " + std::to_string(err));
+        throw std::system_error(ENOMEM, std::system_category(), "Failed to map in seL4 page table: " + std::to_string(err));
 }
 
 PageTable::~PageTable() {
@@ -103,7 +104,7 @@ const MappedPage& PageTable::map(Page page, vaddr_t address, Attributes attribut
 
         return result.first->second;
     } else {
-        throw std::runtime_error("Address is already mapped");
+        throw std::invalid_argument("Address is already mapped");
     }
 }
 
@@ -119,7 +120,7 @@ const MappedPage* PageTable::lookup(vaddr_t address, bool noThrow) const {
     if (page == _pages.end()) {
         if (noThrow)
             return nullptr;
-        throw std::out_of_range("Address is not mapped");
+        throw std::invalid_argument("Address is not mapped");
     } else {
         return &page->second;
     }
@@ -161,7 +162,7 @@ MappedPage::MappedPage(Page page, PageDirectory& directory, vaddr_t address, Att
         static_cast<seL4_ARM_VMAttributes>(vmAttributes)
     );
     if (err != seL4_NoError)
-        throw std::runtime_error("Failed to map in page: " + std::to_string(err));
+        throw std::system_error(ENOMEM, std::system_category(), "Failed to map in page: " + std::to_string(err));
 }
 
 MappedPage::~MappedPage() {

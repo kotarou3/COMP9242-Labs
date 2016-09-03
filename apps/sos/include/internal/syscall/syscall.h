@@ -1,5 +1,7 @@
 #pragma once
 
+#include <exception>
+
 #include <stdarg.h>
 #include <sys/syscall.h>
 
@@ -15,8 +17,10 @@ extern "C" {
 
 namespace syscall {
 
-boost::future<int> handle(process::Thread& thread, long number, size_t argc, seL4_Word* argv) noexcept;
-boost::future<int> handle(process::Process& process, long number, size_t argc, seL4_Word* argv) noexcept;
+boost::future<int> handle(process::Thread& thread, long number, size_t argc, seL4_Word* argv);
+boost::future<int> handle(process::Process& process, long number, size_t argc, seL4_Word* argv);
+
+int exceptionToErrno(std::exception_ptr e) noexcept;
 
 namespace {
     inline boost::future<int> _returnNow(int result) {
@@ -25,15 +29,19 @@ namespace {
         return promise.get_future();
     }
 
-    #define FORWARD_SYSCALL(name, argc)                                                      \
-        extern "C" int sys_##name(va_list ap) {                                              \
-            seL4_Word argv[argc];                                                            \
-            for (size_t a = 0; a < argc; ++a)                                                \
-                argv[a] = va_arg(ap, seL4_Word);                                             \
-                                                                                             \
-            auto result = syscall::handle(process::getSosProcess(), SYS_##name, argc, argv); \
-            assert(result.is_ready());                                                       \
-            return result.get();                                                             \
+    #define FORWARD_SYSCALL(name, argc)                                                          \
+        extern "C" int sys_##name(va_list ap) noexcept {                                         \
+            seL4_Word argv[argc];                                                                \
+            for (size_t a = 0; a < argc; ++a)                                                    \
+                argv[a] = va_arg(ap, seL4_Word);                                                 \
+                                                                                                 \
+            try {                                                                                \
+                auto result = syscall::handle(process::getSosProcess(), SYS_##name, argc, argv); \
+                assert(result.is_ready());                                                       \
+                return result.get();                                                             \
+            } catch (...) {                                                                      \
+                return -syscall::exceptionToErrno(std::current_exception());                     \
+            }                                                                                    \
         }
 }
 

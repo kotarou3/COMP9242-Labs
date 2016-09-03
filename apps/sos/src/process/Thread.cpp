@@ -1,5 +1,5 @@
-#include <stdexcept>
 #include <string>
+#include <system_error>
 
 #include <assert.h>
 #include <errno.h>
@@ -58,7 +58,7 @@ Thread::Thread(std::shared_ptr<Process> process, seL4_CPtr faultEndpoint, seL4_W
         seL4_CapData_Badge_new(faultEndpointBadge)
     );
     if (_faultEndpoint == CSPACE_NULL)
-        throw std::runtime_error("Failed to mint user fault endpoint");
+        throw std::system_error(ENOMEM, std::system_category(), "Failed to mint user fault endpoint");
     assert(_faultEndpoint == SOS_IPC_EP_CAP);
 
     // Configure the TCB
@@ -70,7 +70,7 @@ Thread::Thread(std::shared_ptr<Process> process, seL4_CPtr faultEndpoint, seL4_W
     );
     if (err != seL4_NoError) {
         assert(cspace_delete_cap(_process->_cspace.get(), _faultEndpoint) == CSPACE_NOERROR);
-        throw std::runtime_error("Failed to configure the TCB: " + std::to_string(err));
+        throw std::system_error(ENOMEM, std::system_category(), "Failed to configure the TCB: " + std::to_string(err));
     }
 
     // Start the thread
@@ -81,7 +81,7 @@ Thread::Thread(std::shared_ptr<Process> process, seL4_CPtr faultEndpoint, seL4_W
     err = seL4_TCB_WriteRegisters(_tcbCap.get(), true, 0, 2, &context);
     if (err != seL4_NoError) {
         assert(cspace_delete_cap(_process->_cspace.get(), _faultEndpoint) == CSPACE_NOERROR);
-        throw std::runtime_error("Failed to start the thread: " + std::to_string(err));
+        throw std::system_error(ENOMEM, std::system_category(), "Failed to start the thread: " + std::to_string(err));
     }
 }
 
@@ -140,32 +140,42 @@ void Thread::handleFault(const seL4_MessageInfo_t& message) noexcept {
         }
 
         case seL4_NoFault: { // Syscall
-            auto result = syscall::handle(
-                *this,
-                seL4_GetMR(0),
-                seL4_MessageInfo_get_length(message) - 1,
-                &seL4_GetIPCBuffer()->msg[1]
-            );
-            if (result.is_ready()) {
-                seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
-                seL4_SetMR(0, result.get());
-                seL4_Reply(reply);
-            } else {
-                seL4_CPtr replyCap = cspace_save_reply_cap(cur_cspace);
-                if (replyCap == CSPACE_NULL) {
-                    seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
-                    seL4_SetMR(0, -ENOMEM);
-                    seL4_Reply(reply);
-                    break;
-                }
-
-                result.then(_asyncSyscallExecutor, [replyCap](boost::future<int> result) {
+            try {
+                auto result = syscall::handle(
+                    *this,
+                    seL4_GetMR(0),
+                    seL4_MessageInfo_get_length(message) - 1,
+                    &seL4_GetIPCBuffer()->msg[1]
+                );
+                if (result.is_ready()) {
                     seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
                     seL4_SetMR(0, result.get());
-                    seL4_Send(replyCap, reply);
+                    seL4_Reply(reply);
+                } else {
+                    seL4_CPtr replyCap = cspace_save_reply_cap(cur_cspace);
+                    if (replyCap == CSPACE_NULL) {
+                        seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
+                        seL4_SetMR(0, -ENOMEM);
+                        seL4_Reply(reply);
+                        break;
+                    }
 
-                    assert(cspace_free_slot(cur_cspace, replyCap) == CSPACE_NOERROR);
-                });
+                    result.then(_asyncSyscallExecutor, [replyCap](boost::future<int> result) {
+                        seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
+                        try {
+                            seL4_SetMR(0, result.get());
+                        } catch (...) {
+                            seL4_SetMR(0, -syscall::exceptionToErrno(std::current_exception()));
+                        }
+                        seL4_Send(replyCap, reply);
+
+                        assert(cspace_free_slot(cur_cspace, replyCap) == CSPACE_NOERROR);
+                    });
+                }
+            } catch (...) {
+                seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
+                seL4_SetMR(0, -syscall::exceptionToErrno(std::current_exception()));
+                seL4_Reply(reply);
             }
             break;
         }
@@ -188,7 +198,7 @@ Process::Process():
     _cspace(cspace_create(1), [](cspace_t* cspace) {assert(cspace_destroy(cspace) == CSPACE_NOERROR);})
 {
     if (!_cspace)
-        throw std::runtime_error("Failed to create CSpace");
+        throw std::system_error(ENOMEM, std::system_category(), "Failed to create CSpace");
 }
 
 Process::Process(bool isSosProcess):
@@ -212,16 +222,16 @@ void Process::handlePageFault(memory::vaddr_t address, memory::Attributes cause)
     const memory::Mapping& map = maps.lookup(address);
 
     if (map.flags.reserved)
-        throw std::runtime_error("Attempted to access a reserved address");
+        throw std::system_error(EFAULT, std::system_category(), "Attempted to access a reserved address");
     if (map.flags.stack && address == map.start)
-        throw std::runtime_error("Attempted to access the stack guard page");
+        throw std::system_error(EFAULT, std::system_category(), "Attempted to access the stack guard page");
 
     if (cause.execute && !map.attributes.execute)
-        throw std::runtime_error("Attempted to execute a non-executable region");
+        throw std::system_error(EFAULT, std::system_category(), "Attempted to execute a non-executable region");
     if (cause.read && !map.attributes.read)
-        throw std::runtime_error("Attempted to read from a non-readable region");
+        throw std::system_error(EFAULT, std::system_category(), "Attempted to read from a non-readable region");
     if (cause.write && !map.attributes.write)
-        throw std::runtime_error("Attempted to write to a non-writeable region");
+        throw std::system_error(EFAULT, std::system_category(), "Attempted to write to a non-writeable region");
 
     auto page = pageDirectory.lookup(address, true);
     if (!page)

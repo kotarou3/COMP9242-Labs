@@ -1,6 +1,6 @@
-#include <exception>
 #include <queue>
 #include <set>
+#include <stdexcept>
 #include <string>
 #include <unordered_map>
 
@@ -58,7 +58,7 @@ Timestamp getTimestamp() noexcept {
 
 TimerId setTimer(Duration delay, const std::function<void (TimerId)>& callback, bool recurring) {
     if (delay.count() <= 0 && recurring)
-        throw std::runtime_error("Timer delay cannot be non-positive");
+        throw std::invalid_argument("Timer delay cannot be non-positive");
 
     while (timers.count(nextFree) || nextFree == 0)
         ++nextFree;
@@ -85,7 +85,7 @@ TimerId setTimer(Duration delay, const std::function<void (TimerId)>& callback, 
 void clearTimer(TimerId id) {
     // mark for removal. Actual removal only occurs upon removing the interrupt
     if (timers.count(id) == 0)
-        throw std::runtime_error("Timer id #" + std::to_string(id) + " does not exist");
+        throw std::invalid_argument("Timer id #" + std::to_string(id) + " does not exist");
 
     toRemove.insert(id);
 }
