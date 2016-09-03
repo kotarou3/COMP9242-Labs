@@ -20,7 +20,7 @@
  *
  * The UDP protocol stack provided by the LWIP library is used for all network
  * traffic. Reliable transport is assured through unique transaction IDs (XIDs)
- * and selective retransmission. Transactions that are sent to the server are 
+ * and selective retransmission. Transactions that are sent to the server are
  * held in a local transaction list until a response is received. Periodic
  * calls to @ref nfs_timeout will trigger retransmissions as necessary.
  *
@@ -33,14 +33,14 @@
  * the combined responsibility of LWIP and the application to monitor and process
  * network traffic whilst waiting for a response to an NFS transaction. When the
  * response arrives, the registered callback for the transaction will be called
- * to complete the transaction. Data provided to the call back functions are 
+ * to complete the transaction. Data provided to the call back functions are
  * available only during the execution of the call back function. It is the
  * applications responsibility to copy this data to an alternate location
  * if this data is required beyond the scope of the callback.
  *
  * This NFS client library will authenticate using UNIX_AUTH credentials. All
  * transactions are will originate from the "root" user. For this reason, it is
- * recommended that the server does not export the file system with the 
+ * recommended that the server does not export the file system with the
  * "no_root_squash" flag. The "all_squash" flag should be used with anonuid and
  * anongid optionally set as required.
  */
@@ -49,7 +49,27 @@
 #define __NFS_NFS_H
 
 #include <stdint.h>
-#include <lwip/ip_addr.h>
+
+#ifdef __cplusplus
+
+#include <functional>
+#include <utility>
+#include <vector>
+
+#define syscall(...) _syscall(__VA_ARGS__)
+#include <boost/thread/future.hpp>
+#undef syscall
+
+extern "C" {
+    #include <lwip/ip_addr.h>
+}
+
+namespace nfs {
+
+extern "C" {
+#else
+    #include <lwip/ip_addr.h>
+#endif
 
 /// The size in bytes of the opaque file handle.
 #define FHSIZE       32
@@ -66,7 +86,7 @@
  * occurred on the server side during the servicing of the procedure.
  * The error values are derived from UNIX error numbers.
  */
-typedef enum nfs_stat { 
+typedef enum nfs_stat {
 /// The call completed successfully and the results are valid
     NFS_OK             =  0,
 /// Not owner.  The caller does not have correct ownership to perform the
@@ -74,7 +94,7 @@ typedef enum nfs_stat {
     NFSERR_PERM        =  1,
 /// No such file or directory.  The file or directory specified does not exist.
     NFSERR_NOENT       =  2,
-/// Some sort of hard error occurred when the operation was in progress.  
+/// Some sort of hard error occurred when the operation was in progress.
 /// This could be a disk error, for example.
     NFSERR_IO          =  5,
 /// No such device or address.
@@ -89,7 +109,7 @@ typedef enum nfs_stat {
 /// Not a directory.  The caller specified a non-directory in a directory
 /// operation.
     NFSERR_NOTDIR      = 20,
-/// Is a directory.  The caller specified a directory in a non-directory 
+/// Is a directory.  The caller specified a directory in a non-directory
 /// operation.
     NFSERR_ISDIR       = 21,
 /// File too large.  The operation caused a file to grow beyond the servers
@@ -107,18 +127,18 @@ typedef enum nfs_stat {
 /// Disk quota exceeded.  The clients disk quota on the server has been
 /// exceeded.
     NFSERR_DQUOT       = 69,
-/// The "fhandle" given in the arguments was invalid.  That is, the file 
+/// The "fhandle" given in the arguments was invalid.  That is, the file
 /// referred to by that file handle no longer exists, or access to it has been
 /// revoked.
     NFSERR_STALE       = 70,
 /// The servers write cache used in the "WRITECACHE" call got flushed to disk.
     NFSERR_WFLUSH      = 99,
 /// A communication error occurred at the RPC layer.
-    NFSERR_COMM       = 200 
+    NFSERR_COMM       = 200
 } nfs_stat_t;
 
 /**
- * The "rpc_stat" type is returned when an asynchronous response is expected. 
+ * The "rpc_stat" type is returned when an asynchronous response is expected.
  * A value of RPC_OK indicated that the transaction was successfully sent. Note
  * that this does not always mean that the transaction was successfully delivered.
  */
@@ -166,7 +186,7 @@ typedef enum ftype {
  */
 typedef struct {
 /// The seconds portion of the time value.
-    uint32_t seconds; 
+    uint32_t seconds;
 /// The micro seconds portion of the time value.
     uint32_t useconds;
 } timeval_t;
@@ -180,7 +200,7 @@ typedef struct fattr {
     ftype_t   type;
 /// The access mode encoded as a set of bits. Notice that the file type is
 /// specified both in the mode bits and in the file type.
-/// The encoding of this field is the same as the mode bits returned by the 
+/// The encoding of this field is the same as the mode bits returned by the
 /// stat(2) system call in UNIX.
     uint32_t  mode;
 /// The number of hard links to the file (the number of different names for the
@@ -188,7 +208,7 @@ typedef struct fattr {
     uint32_t  nlink;
 /// The user identification number of the owner of the file.
     uint32_t  uid;
-/// The group identification number of the group of the file. 
+/// The group identification number of the group of the file.
     uint32_t  gid;
 /// The size in bytes of the file.
     uint32_t  size;
@@ -221,7 +241,7 @@ typedef struct fattr {
  */
 typedef struct sattr {
 /// The access mode encoded as a set of bits.
-/// The encoding of this field is the same as the mode bits returned by the 
+/// The encoding of this field is the same as the mode bits returned by the
 /// stat(2) system call in UNIX.
     uint32_t  mode;
 /// The user identification number of the owner of the file.
@@ -247,12 +267,12 @@ typedef uint32_t nfscookie_t;
  * @param[in] token  The unmodified token provided to the @ref nfs_getattr call.
  * @param[in] status The NFS call status.
  * @param[in] fattr  If status is NFS_OK, fattr will contain the attributes of
- *                   the file in question. The contents of "fattr" will be 
+ *                   the file in question. The contents of "fattr" will be
  *                   invalid once this call back returns. It is the applications
  *                   responsibility to copy this data to a more permanent
  *                   location if it is required after this call back completes.
  */
-typedef void (*nfs_getattr_cb_t)(uintptr_t token, enum nfs_stat status, 
+typedef void (*nfs_getattr_cb_t)(uintptr_t token, enum nfs_stat status,
                                  fattr_t *fattr);
 
 /**
@@ -266,12 +286,12 @@ typedef void (*nfs_getattr_cb_t)(uintptr_t token, enum nfs_stat status,
  *                   responsibility to copy this data to a more permanent
  *                   location if it is required after this call back completes.
  * @param[in] fattr  If status is NFS_OK, fattr will contain the attributes of
- *                   the file in question. The contents of "fattr" will be 
+ *                   the file in question. The contents of "fattr" will be
  *                   invalid once this call back returns. It is the applications
  *                   responsibility to copy this data to a more permanent
  *                   location if it is required after this call back completes.
  */
-typedef void (*nfs_lookup_cb_t)(uintptr_t token, enum nfs_stat status, 
+typedef void (*nfs_lookup_cb_t)(uintptr_t token, enum nfs_stat status,
                                 fhandle_t* fh, fattr_t* fattr);
 
 /**
@@ -290,7 +310,7 @@ typedef void (*nfs_lookup_cb_t)(uintptr_t token, enum nfs_stat status,
  *                   responsibility to copy this data to a more permanent
  *                   location if it is required after this call back completes.
  */
-typedef void (*nfs_create_cb_t)(uintptr_t token, enum nfs_stat status, 
+typedef void (*nfs_create_cb_t)(uintptr_t token, enum nfs_stat status,
                               fhandle_t *fh, fattr_t *fattr);
 
 /**
@@ -309,18 +329,18 @@ typedef void (*nfs_remove_cb_t)(uintptr_t token, enum nfs_stat status);
  * @param[in] status     The NFS call status.
  * @param[in] num_files  The number of file names read.
  * @param[in] file_names An array of NULL terminated file names that were read
- *                       from the directory in question. The contents of 
- *                       "file_names" will be invalid once this call back 
+ *                       from the directory in question. The contents of
+ *                       "file_names" will be invalid once this call back
  *                       returns. It is the applications responsibility to copy
  *                       this data to a more permanent location if it is
  *                       required after this call back completes.
- * @param[in] nfscookie  A cookie to be used for subsequent calls to 
+ * @param[in] nfscookie  A cookie to be used for subsequent calls to
  *                       @ref nfs_readdir in order to read the remaining file
  *                       names from the directory  The value of nfscookie will
  *                       be given as 0 when there are no more file entries to
  *                       read.
  */
-typedef void (*nfs_readdir_cb_t)(uintptr_t token, enum nfs_stat status, 
+typedef void (*nfs_readdir_cb_t)(uintptr_t token, enum nfs_stat status,
                                  int num_files, char* file_names[],
                                  nfscookie_t nfscookie);
 
@@ -335,7 +355,7 @@ typedef void (*nfs_readdir_cb_t)(uintptr_t token, enum nfs_stat status,
  *                   applications responsibility to copy this data to a more
  *                   permanent location if it is required after this call back
  *                   completes.
- * @param[in] count  If status is NFS_OK, provides the number of bytes that 
+ * @param[in] count  If status is NFS_OK, provides the number of bytes that
  *                   were read from the file.
  * @param[in] data   The memory address of the "count" bytes that were
  *                   read from the file. The contents of "data" will be invalid
@@ -343,7 +363,7 @@ typedef void (*nfs_readdir_cb_t)(uintptr_t token, enum nfs_stat status,
  *                   responsibility to copy this data to a more permanent
  *                   location if it is required after this call back completes.
  */
-typedef void (*nfs_read_cb_t)(uintptr_t token, enum nfs_stat status, 
+typedef void (*nfs_read_cb_t)(uintptr_t token, enum nfs_stat status,
                               fattr_t *fattr, int count, void* data);
 
 /**
@@ -351,7 +371,7 @@ typedef void (*nfs_read_cb_t)(uintptr_t token, enum nfs_stat status,
  * once a response is received.
  * @param[in] token  The unmodified token provided to the @ref nfs_write call.
  * @param[in] status The NFS call status.
- * @param[in] fattr  If status is NFS_OK, fattr will contain the new attributes 
+ * @param[in] fattr  If status is NFS_OK, fattr will contain the new attributes
  *                   of the file that was written. The contents of "fattr"
  *                   will be invalid once this call back returns. It is the
  *                   applications responsibility to copy this data to a more
@@ -360,12 +380,12 @@ typedef void (*nfs_read_cb_t)(uintptr_t token, enum nfs_stat status,
  * @param[in] count  If status is NFS_OK, provides the number of bytes that
  *                   were written to the file.
  */
-typedef void (*nfs_write_cb_t)(uintptr_t token, enum nfs_stat status, 
+typedef void (*nfs_write_cb_t)(uintptr_t token, enum nfs_stat status,
                                fattr_t *fattr, int count);
 
 
 /**
- * Initialises the NFS subsystem. 
+ * Initialises the NFS subsystem.
  * This function should be called once at startup with the address of your NFS
  * server. The UDP time protocol will be used to obtain a seed for transaction
  * ID numbers.
@@ -422,7 +442,7 @@ enum rpc_stat nfs_print_exports(void);
  *                     will be called once the response to this request has been
  *                     received.
  */
-enum rpc_stat nfs_getattr(const fhandle_t *fh, 
+enum rpc_stat nfs_getattr(const fhandle_t *fh,
                           nfs_getattr_cb_t callback, uintptr_t token);
 
 
@@ -431,11 +451,11 @@ enum rpc_stat nfs_getattr(const fhandle_t *fh,
  * of a file located on the server.
  * Before you are able to complete any operation on a file you must obtain a
  * handle to it. This function will find a file named "name" in the specified
- * directory. The directory is given in the form of a handle which may have 
+ * directory. The directory is given in the form of a handle which may have
  * been provided by @ref nfs_mount. When the transaction has completed, the
  * provided callback (@ref nfs_lookup_cb_t) will be executed with the provided
  * token passed, unmodified, as an argument.
- * as an argument 
+ * as an argument
  * @param[in] pfh      An NFS file handle (@ref fhandle_t) to the directory
  *                     that contains the requested file.
  * @param[in] name     The NULL terminated file name to look up.
@@ -447,7 +467,7 @@ enum rpc_stat nfs_getattr(const fhandle_t *fh,
  *                     will be called once the response to this request has been
  *                     received.
  */
-enum rpc_stat nfs_lookup(const fhandle_t *pfh, const char *name, 
+enum rpc_stat nfs_lookup(const fhandle_t *pfh, const char *name,
                          nfs_lookup_cb_t callback, uintptr_t token);
 
 
@@ -469,23 +489,23 @@ enum rpc_stat nfs_lookup(const fhandle_t *pfh, const char *name,
  *                     will be called once the response to this request has been
  *                     received.
  */
-enum rpc_stat nfs_create(const fhandle_t *pfh, const char *name, 
+enum rpc_stat nfs_create(const fhandle_t *pfh, const char *name,
                          const sattr_t *sattr,
                          nfs_create_cb_t callback, uintptr_t token);
 
 /**
- * An asynchronous function used for removing an existing file from the NFS 
+ * An asynchronous function used for removing an existing file from the NFS
  * file server.
  * This function will remove a file named "name" from the provided directory.
  * The directory takes the form of a handle that may be acquired through
- * @ref nfs_mount or @ref nfs_lookup. When the transaction has completed, 
+ * @ref nfs_mount or @ref nfs_lookup. When the transaction has completed,
  * the provided callback function (@ref nfs_remove_cb_t) will be executed
  * with "token" passed, unmodified, as an argument.
- * @param[in] pfh      An NFS file handle (@ref fhandle_t) to the directory 
+ * @param[in] pfh      An NFS file handle (@ref fhandle_t) to the directory
  *                     that contains the file to remove.
  * @param[in] name     The name of the file to remove.
  * @param[in] callback An @ref nfs_remove_cb_t callback function to call once a
- *                     response arrives. 
+ *                     response arrives.
  * @param[in] token    A token to pass, unmodified, to the callback function.
  * @return             RPC_OK if the request was successfully sent. Otherwise
  *                     an appropriate error code will be returned. "callback"
@@ -501,7 +521,7 @@ enum rpc_stat nfs_remove(const fhandle_t *pfh, const char *name,
  * This function reads the contents, that is the filenames, from the directory
  * provided by "pfh". When the transaction is complete, the provided callback
  * function (@ref nfs_readdir_cb_t) will be executed with the unmodified "token"
- * passed as an argument. The number of file names that this transaction can 
+ * passed as an argument. The number of file names that this transaction can
  * return is of course limited by the Maximum Transmission Unit (MTU) of the
  * network link. To compensate for this limitation, a "cookie" is passed as an
  * argument to the transaction. The cookie should be initially be provided with
@@ -529,10 +549,10 @@ enum rpc_stat nfs_readdir(const fhandle_t *pfh, nfscookie_t cookie,
  * An asynchronous function used for reading data from a file.
  * nfs_read will start at "offset" bytes within the file provided as "fh" and
  * read a maximum of "count" bytes of data. When the transaction has completed,
- * the provided callback function (@ref nfs_read_cb_t) will be called with 
+ * the provided callback function (@ref nfs_read_cb_t) will be called with
  * "token" passed, unmodified, as an argument. The file data and the actual
- * number of bytes read is passed to the callback but the data will only be 
- * available for the scope of the callback. It is the applications 
+ * number of bytes read is passed to the callback but the data will only be
+ * available for the scope of the callback. It is the applications
  * responsibility to ensure that any data that is required outside of this scope
  * is moved to a more permanent location before returning from the callback.
  * @param[in] fh       An NFS file handle (@ref fhandle_t) to the file which
@@ -570,7 +590,7 @@ enum rpc_stat nfs_read(const fhandle_t *fh, int offset, int count,
  *                     will be called once the response to this request has been
  *                     received.
  */
-enum rpc_stat nfs_write(const fhandle_t *fh, int offset, int count, 
+enum rpc_stat nfs_write(const fhandle_t *fh, int offset, int count,
                         const void *data,
                         nfs_write_cb_t callback, uintptr_t token);
 
@@ -585,5 +605,29 @@ enum rpc_stat nfs_write(const fhandle_t *fh, int offset, int count,
  */
 int nfs_test(char *mnt);
 
+#ifdef __cplusplus
+}
+
+/*******************************************************************************
+ * Same as above functions, but returns boost::futures and throws exceptions   *
+ *******************************************************************************/
+
+void init(const ip_addr& server);
+void timeout() noexcept;
+
+const fhandle_t mount(const std::string& dir);
+void print_exports();
+
+boost::future<std::vector<std::string>> readdir(const fhandle_t& pfh);
+boost::future<std::pair<const fhandle_t*, fattr_t*>> lookup(const fhandle_t& pfh, const std::string& name);
+boost::future<std::pair<const fhandle_t*, fattr_t*>> create(const fhandle_t& pfh, const std::string& name, const sattr_t& sattr);
+boost::future<void> remove(const fhandle_t& pfh, const std::string& name);
+
+boost::future<fattr_t*> getattr(const fhandle_t& fh);
+boost::future<std::tuple<fattr_t*, size_t, uint8_t*>> read(const fhandle_t& fh, off_t offset, size_t count);
+boost::future<std::pair<fattr_t*, size_t>> write(const fhandle_t& fh, off_t offset, size_t count, const uint8_t* data);
+
+}
+#endif
 
 #endif /* __NFS_NFS_H */
