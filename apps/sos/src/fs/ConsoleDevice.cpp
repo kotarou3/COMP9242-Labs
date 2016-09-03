@@ -1,6 +1,7 @@
 #include <deque>
 #include <queue>
 #include <stdexcept>
+#include <system_error>
 #include <utility>
 #include <vector>
 
@@ -54,7 +55,7 @@ namespace {
                 }
             } catch (...) {
                 if (_totalBytesRead == 0) {
-                    request.second.set_value(-EFAULT);
+                    request.second.set_exception(std::current_exception());
                     _readRequests.pop();
 
                     _currentIovIndex = 0;
@@ -95,7 +96,7 @@ void ConsoleDevice::mountOn(DeviceFileSystem& fs, const std::string& name) {
 
 boost::future<ssize_t> ConsoleDevice::read(const std::vector<IoVector>& iov, off64_t offset) {
     if (offset != CURRENT_OFFSET)
-        throw std::invalid_argument("Cannot seek the console device");
+        throw std::system_error(ESPIPE, std::system_category(), "Cannot seek the console device");
 
     boost::promise<ssize_t> promise;
     auto future = promise.get_future();
@@ -108,7 +109,7 @@ boost::future<ssize_t> ConsoleDevice::read(const std::vector<IoVector>& iov, off
 
 boost::future<ssize_t> ConsoleDevice::write(const std::vector<IoVector>& iov, off64_t offset) {
     if (offset != CURRENT_OFFSET)
-        throw std::invalid_argument("Cannot seek the console device");
+        throw std::system_error(ESPIPE, std::system_category(), "Cannot seek the console device");
 
     ssize_t totalBytesWritten = 0;
     try {

@@ -1,4 +1,4 @@
-#include <stdexcept>
+#include <system_error>
 
 #include "internal/fs/FlatFileSystem.h"
 #include "internal/syscall/helpers.h"
@@ -8,12 +8,12 @@ namespace fs {
 boost::future<std::shared_ptr<File>> FlatFileSystem::open(const std::string& pathname) {
     for (auto& fs : _filesystems) try {
         return fs->open(pathname);
-    } catch (...) {
-        // Do nothing
-        // TODO: Actually check that the error was because the pathname doesn't exist
+    } catch (const std::system_error& e) {
+        if (e.code() != std::error_code(ENOENT, std::system_category()))
+            throw;
     }
 
-    throw std::invalid_argument("File does not exist");
+    throw std::system_error(ENOENT, std::system_category(), "File does not exist");
 }
 
 boost::future<std::unique_ptr<fattr_t>> FlatFileSystem::stat(const std::string& pathname) {

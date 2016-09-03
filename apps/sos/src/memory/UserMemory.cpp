@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <system_error>
 #include <limits.h>
 
 #include "internal/memory/UserMemory.h"
@@ -34,7 +35,7 @@ finished:
     return result;
 }
 
-std::pair<uint8_t*, ScopedMapping> UserMemory::_mapIn(size_t bytes, Attributes attributes, bool bypassAttributes) {
+std::pair<uint8_t*, ScopedMapping> UserMemory::_mapIn(size_t bytes, Attributes attributes, bool bypassAttributes) try {
     size_t startPadding = pageOffset(_address);
     vaddr_t alignedAddress = _address - startPadding;
     size_t pages = numPages(bytes + startPadding);
@@ -80,6 +81,8 @@ std::pair<uint8_t*, ScopedMapping> UserMemory::_mapIn(size_t bytes, Attributes a
 
         return std::make_pair(reinterpret_cast<uint8_t*>(map.getAddress() + startPadding), std::move(map));
     }
+} catch (const std::invalid_argument& e) {
+    std::throw_with_nested(std::system_error(EFAULT, std::system_category(), "Failed to map in user memory"));
 }
 
 }

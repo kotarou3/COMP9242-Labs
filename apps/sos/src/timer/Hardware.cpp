@@ -1,6 +1,6 @@
 #include <algorithm>
-#include <exception>
 #include <string>
+#include <system_error>
 #include <stdint.h>
 
 extern "C" {
@@ -41,7 +41,7 @@ Hardware::Hardware(seL4_CPtr irqEndpoint):
     assert(!clock_sys_init_default(&clock));
     freq_t freq = clk_get_freq(clk_get_clock(&clock, CLK_IPG));
     if (freq % 1000000 != 0)
-        throw std::runtime_error("Non-integer MHz peripheral clock not supported");
+        throw std::system_error(ENOSYS, std::system_category(), "Non-integer MHz peripheral clock not supported");
     _registers->prescaler = freq / 1000000 - 1;
 
     // Enable interrupts only on overflow for now
@@ -55,10 +55,10 @@ Hardware::Hardware(seL4_CPtr irqEndpoint):
     // Set the endpoint to send IRQs to
     _irqCap = cspace_irq_control_get_cap(cur_cspace, seL4_CapIRQControl, GPT1_INTERRUPT);
     if (_irqCap == CSPACE_NULL)
-        throw std::runtime_error("Failed to get IRQ capability");
+        throw std::system_error(ENOMEM, std::system_category(), "Failed to get IRQ capability");
     if (int err = seL4_IRQHandler_SetEndpoint(_irqCap, irqEndpoint)) {
         assert(cspace_delete_cap(cur_cspace, _irqCap) == CSPACE_NOERROR);
-        throw std::runtime_error("Failed to set IRQ endpoint: " + std::to_string(err));
+        throw std::system_error(ENOMEM, std::system_category(), "Failed to set IRQ endpoint: " + std::to_string(err));
     }
 
     // Enable the timer!

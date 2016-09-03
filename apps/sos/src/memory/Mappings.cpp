@@ -1,3 +1,6 @@
+#include <stdexcept>
+#include <system_error>
+
 #include <assert.h>
 #include <limits.h>
 
@@ -23,7 +26,7 @@ ScopedMapping Mappings::insert(vaddr_t address, size_t pages, Attributes attribu
     _checkAddress(address, pages);
 
     if (flags.shared)
-        throw std::invalid_argument("Shared memory not implemented yet");
+        throw std::system_error(ENOSYS, std::system_category(), "Shared memory not implemented yet");
 
     if (flags.stack)
         ++pages; // Add space for guard page
@@ -60,7 +63,7 @@ ScopedMapping Mappings::insert(vaddr_t address, size_t pages, Attributes attribu
             address = overlap->end;
         } while (mmapStart < address && address < mmapEnd);
 
-        throw std::runtime_error("Could not find an empty mapping with enough space");
+        throw std::system_error(ENOMEM, std::system_category(), "Could not find an empty mapping with enough space");
     }
 
 haveValidAddress:
@@ -142,7 +145,7 @@ const Mapping& Mappings::lookup(vaddr_t address) const {
 
     const Mapping* overlap = _findFirstOverlap(address, 1);
     if (!overlap)
-        throw std::runtime_error("Address not mapped");
+        throw std::invalid_argument("Address not mapped");
 
     return *overlap;
 }

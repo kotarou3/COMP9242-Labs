@@ -1,4 +1,4 @@
-#include <stdexcept>
+#include <system_error>
 
 #include "internal/fs/FileDescriptor.h"
 
@@ -15,9 +15,9 @@ OpenFile::OpenFile(std::shared_ptr<File> file, OpenFile::Flags flags):
 
 std::shared_ptr<File> OpenFile::get(OpenFile::Flags flags) const {
     if (flags.read && !_flags.read)
-        throw std::runtime_error("File not open for reading");
+        throw std::system_error(EBADF, std::system_category(), "File not open for reading");
     if (flags.write && !_flags.write)
-        throw std::runtime_error("File not open for writing");
+        throw std::system_error(EBADF, std::system_category(), "File not open for writing");
 
     return _file;
 }
@@ -28,7 +28,7 @@ std::shared_ptr<File> OpenFile::get(OpenFile::Flags flags) const {
 
 FileDescriptor FDTable::insert(std::shared_ptr<OpenFile> file) {
     if (_table.size() >= MAX_FILE_DESCRIPTORS)
-        throw std::runtime_error("Too many file descriptors being used");
+        throw std::system_error(EMFILE, std::system_category(), "Too many file descriptors being used");
 
     auto entry = _table.cbegin();
     if (entry == _table.cend() || entry->first != 0) {
@@ -54,7 +54,11 @@ bool FDTable::erase(FileDescriptor fd) noexcept {
 }
 
 std::shared_ptr<OpenFile> FDTable::get(FileDescriptor fd) const {
-    return _table.at(fd);
+    try {
+        return _table.at(fd);
+    } catch (const std::out_of_range&) {
+        std::throw_with_nested(std::system_error(EBADF, std::system_category()));
+    }
 }
 
 std::shared_ptr<File> FDTable::get(FileDescriptor fd, OpenFile::Flags flags) const {

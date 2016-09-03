@@ -1,4 +1,5 @@
 #include <string>
+#include <system_error>
 #include <vector>
 #include <assert.h>
 
@@ -86,7 +87,7 @@ void init(paddr_t start, paddr_t end) {
 Page alloc() {
     paddr_t address = ut_alloc(seL4_PageBits);
     if (!address)
-        throw std::runtime_error("Out of physical frames\n");
+        throw std::system_error(ENOMEM, std::system_category(), "Out of physical frames");
 
     return Page(_getFrame(address));
 }
@@ -117,7 +118,7 @@ Page::Page(paddr_t address):
         cur_cspace, &_cap
     );
     if (err != seL4_NoError)
-        throw std::runtime_error("Failed to retype to a seL4 page: " + std::to_string(err));
+        throw std::system_error(ENOMEM, std::system_category(), "Failed to retype to a seL4 page: " + std::to_string(err));
 
     // The CSpace library should never return a 0 cap
     assert(_cap != 0);
@@ -154,7 +155,7 @@ Page::Page(const Page& other):
 {
     _cap = cspace_copy_cap(cur_cspace, cur_cspace, other._cap, seL4_AllRights);
     if (_cap == CSPACE_NULL)
-        throw std::runtime_error("Failed to copy page cap");
+        throw std::system_error(ENOMEM, std::system_category(), "Failed to copy page cap");
     assert(_cap != 0);
 
     _prev->_next = this;
