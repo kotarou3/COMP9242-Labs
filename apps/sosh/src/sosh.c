@@ -369,6 +369,7 @@ int main(void) {
         /* Didn't find a command */
         if (found == 0) {
             /* They might try to exec a program */
+            printf("Got argv=%p\n", argv[0]);
             if (sos_stat(argv[0], &sbuf) != 0) {
                 printf("Command \"%s\" not found\n", argv[0]);
             } else if (!(sbuf.st_fmode & FM_EXEC)) {

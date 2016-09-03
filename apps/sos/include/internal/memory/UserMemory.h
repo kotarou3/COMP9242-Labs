@@ -36,6 +36,11 @@ class UserMemory {
         }
 
         template <typename T>
+        inline void write(T* item) {
+            write(item, item + 1);
+        }
+
+        template <typename T>
         T get(bool bypassAttributes = false) {
             T result;
             read(&result, &result + 1, bypassAttributes);

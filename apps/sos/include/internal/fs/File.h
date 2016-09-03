@@ -15,6 +15,7 @@
 #include <sos.h>
 #undef syscall
 
+#include <nfs/nfs.h>
 #include "internal/memory/UserMemory.h"
 
 namespace fs {
@@ -33,8 +34,8 @@ class File {
         virtual boost::future<ssize_t> read(const std::vector<IoVector>& iov, off64_t offset);
         virtual boost::future<ssize_t> write(const std::vector<IoVector>& iov, off64_t offset);
 
+        virtual std::unique_ptr<fattr_t> getattrs();
         virtual boost::future<int> ioctl(size_t request, memory::UserMemory argp);
-        sos_stat_t attrs;
 };
 
 class FileSystem {
@@ -42,7 +43,7 @@ class FileSystem {
         virtual ~FileSystem() = default;
 
         virtual boost::future<std::shared_ptr<File>> open(const std::string& pathname) = 0;
-        virtual boost::future<std::shared_ptr<File>> stat(const std::string& pathname, memory::vaddr_t result) = 0;
+        virtual boost::future<std::unique_ptr<fattr_t>> stat(const std::string& pathname) = 0;
 };
 
 extern std::unique_ptr<FileSystem> rootFileSystem;

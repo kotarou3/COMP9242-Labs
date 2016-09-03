@@ -91,7 +91,6 @@ sos_unmap_device(void* /*cookie*/, void* addr, size_t size) {
     process::getSosProcess().maps.erase(reinterpret_cast<memory::vaddr_t>(addr), memory::numPages(size));
 }
 
-extern "C"
 void
 sos_usleep(int usecs) {
     /* We need to spin because we do not as yet have a timer interrupt */

@@ -8,6 +8,7 @@
 #undef syscall
 
 #include "internal/process/Thread.h"
+#include "internal/syscall/helpers.h"
 
 extern "C" {
     #include <sel4/types.h>
@@ -19,11 +20,7 @@ boost::future<int> handle(process::Thread& thread, long number, size_t argc, seL
 boost::future<int> handle(process::Process& process, long number, size_t argc, seL4_Word* argv) noexcept;
 
 namespace {
-    inline boost::future<int> _returnNow(int result) {
-        boost::promise<int> promise;
-        promise.set_value(result);
-        return promise.get_future();
-    }
+
 
     #define FORWARD_SYSCALL(name, argc)                                                      \
         extern "C" int sys_##name(va_list ap) {                                              \

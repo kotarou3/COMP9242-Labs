@@ -27,12 +27,11 @@ public:
     NFSFileSystem& operator=(NFSFileSystem&&) = delete;
 
     virtual boost::future <std::shared_ptr<File>> open(const std::string &pathname) override;
-
-    boost::future <std::shared_ptr<File>> lookup(std::string path);
+    boost::future <std::shared_ptr<File>> lookup(const std::string &pathname);
+    virtual boost::future <std::unique_ptr<fattr_t>> stat(const std::string &pathname) override;
 
 private:
     fhandle_t mnt_point = {{0}};
-    std::map <std::string, std::shared_ptr<File>> lookupCache; // TODO: eject old values
 };
 
 }

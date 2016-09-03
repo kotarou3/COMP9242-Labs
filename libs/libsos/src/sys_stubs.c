@@ -518,11 +518,6 @@ long sys_getitimer()
     assert(!"sys_getitimer not implemented");
     __builtin_unreachable();
 }
-long sys_stat()
-{
-    assert(!"sys_stat not implemented");
-    __builtin_unreachable();
-}
 long sys_lstat()
 {
     assert(!"sys_lstat not implemented");
@@ -693,11 +688,6 @@ long sys_setfsgid()
     assert(!"sys__llseek not implemented");
     __builtin_unreachable();
 }*/
-long sys_getdents()
-{
-    assert(!"sys_getdents not implemented");
-    __builtin_unreachable();
-}
 long sys__newselect()
 {
     assert(!"sys__newselect not implemented");
@@ -2057,11 +2047,6 @@ long sys_getitimer()
     assert(!"sys_getitimer not implemented");
     __builtin_unreachable();
 }
-long sys_stat()
-{
-    assert(!"sys_stat not implemented");
-    __builtin_unreachable();
-}
 long sys_lstat()
 {
     assert(!"sys_lstat not implemented");
@@ -2180,11 +2165,6 @@ long sys_setfsuid()
 long sys_setfsgid()
 {
     assert(!"sys_setfsgid not implemented");
-    __builtin_unreachable();
-}
-long sys_getdents()
-{
-    assert(!"sys_getdents not implemented");
     __builtin_unreachable();
 }
 long sys__newselect()

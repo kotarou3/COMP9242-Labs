@@ -159,7 +159,7 @@ _nfs_getattr_cb(void* callback, uintptr_t token, struct pbuf *pbuf)
         }
     }
 
-    (*reinterpret_cast<nfs_getattr_cb_t*>(callback))(token, status, &pattrs);
+    (*reinterpret_cast<nfs_getattr_cb_t*>(callback))(status, &pattrs);
     free(callback);
 
     return;
@@ -207,7 +207,7 @@ _nfs_lookup_cb(void* callback, uintptr_t token, struct pbuf *pbuf)
         }
     }
 
-    (*reinterpret_cast<nfs_lookup_cb_t*>(callback))(token, status, &new_fh, &pattrs);
+    (*reinterpret_cast<nfs_lookup_cb_t*>(callback))(status, &new_fh, &pattrs);
     free(callback);
 }
 
@@ -262,7 +262,7 @@ _nfs_read_cb(void* callback, uintptr_t token, struct pbuf *pbuf)
         }
     }
 
-    (*reinterpret_cast<nfs_read_cb_t*>(callback))(token, status, &pattrs, size, data);
+    (*reinterpret_cast<nfs_read_cb_t*>(callback))(status, &pattrs, size, data);
     free(callback);
 
     if(data){
@@ -319,7 +319,7 @@ _nfs_write_cb(void* callback, uintptr_t token, struct pbuf *pbuf)
         }
     }
 
-    (*reinterpret_cast<nfs_write_cb_t*>(callback))(t->token, status, &pattrs, t->count);
+    (*reinterpret_cast<nfs_write_cb_t*>(callback))(status, &pattrs, t->count);
     free(callback);
 
     free(t);
@@ -396,7 +396,7 @@ _nfs_create_cb(void* callback, uintptr_t token, struct pbuf *pbuf)
     }
 
     debug("NFS CREATE CALLBACK\n");
-    (*reinterpret_cast<nfs_create_cb_t*>(callback))(token, status, &new_fh, &pattrs);
+    (*reinterpret_cast<nfs_create_cb_t*>(callback))(status, &new_fh, &pattrs);
     free(callback);
 }
 
@@ -439,7 +439,7 @@ _nfs_remove_cb(void* callback, uintptr_t token, struct pbuf *pbuf)
     }
 
     debug("NFS REMOVE CALLBACK\n");
-    (*reinterpret_cast<nfs_remove_cb_t*>(callback))(token, status);
+    (*reinterpret_cast<nfs_remove_cb_t*>(callback))(status);
     free(callback);
 }
 
@@ -529,7 +529,7 @@ _nfs_readdir_cb(void* callback, uintptr_t token, struct pbuf *pbuf)
         }
     }
 
-    (*reinterpret_cast<nfs_readdir_cb_t*>(callback))(token, status, num_entries, entries, next_cookie);
+    (*reinterpret_cast<nfs_readdir_cb_t*>(callback))(status, num_entries, entries, next_cookie);
     free(callback);
 
     /* Clean up */

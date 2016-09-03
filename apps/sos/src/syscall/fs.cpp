@@ -116,21 +116,21 @@ boost::future<int> close(process::Process& process, int fd) noexcept {
         return _returnNow(-EBADF);
 }
 
-boost::future<int> stat(process::Process& process, memory::vaddr_t pathname, memory::vaddr_t result) {
+boost::future<int> stat(process::Process& process, memory::vaddr_t pathname, memory::vaddr_t result) noexcept {
     std::string path;
     try {
+        printf("Attempting to read path from %p\n", reinterpret_cast<void*>(pathname));
         path = memory::UserMemory(process, pathname).readString();
+        std::cout << "Read path " << path << std::endl;
     } catch (...) {
         return _returnNow(-EINVAL);
     }
     boost::promise<int> promise;
-    fs::rootFileSystem->stat(path, result).then(fs::asyncExecutor, [=, &process] (auto file) {
-        if (!file.get())
-            return _returnNow(-ENOENT);
+    fs::rootFileSystem->stat(path).then(fs::asyncExecutor, [=, &process] (auto attributes) {
         try {
-            memory::UserMemory(process, result).write(&file.get()->attrs, &file.get()->attrs + sizeof(file.get()->attrs));
-        } catch (std::runtime_error &e) {
-            return _returnNow(-EINVAL);
+            memory::UserMemory(process, result).write(attributes.get().get());
+        } catch (...) {
+            return _returnNow(-EFAULT);
         }
         return _returnNow(0);
     });
