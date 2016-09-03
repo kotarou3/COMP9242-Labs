@@ -1,7 +1,7 @@
 #pragma once
 
-#include <stdexcept>
 #include <string>
+#include <system_error>
 #include <utility>
 
 #include <assert.h>
@@ -21,12 +21,12 @@ class Capability {
         Capability() {
             _memory = ut_alloc(SizeBits);
             if (_memory == 0)
-                throw std::runtime_error("Failed to allocate seL4 memory");
+                throw std::system_error(ENOMEM, std::system_category(), "Failed to allocate seL4 memory");
 
             int err = cspace_ut_retype_addr(_memory, Type, SizeBits, cur_cspace, &_cap);
             if (err != seL4_NoError) {
                 ut_free(_memory, SizeBits);
-                throw std::runtime_error("Failed to retype seL4 memory: " + std::to_string(err));
+                throw std::system_error(ENOMEM, std::system_category(), "Failed to retype seL4 memory: " + std::to_string(err));
             }
 
             // cspace should never return a cap equal to 0
