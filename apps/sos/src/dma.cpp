@@ -28,6 +28,8 @@ extern "C" {
     #include <sel4/sel4.h>
 
     #include "internal/sys/debug.h"
+    #undef KPRINTF_VERBOSITY
+    #define KPRINTF_VERBOSITY LOGLEVEL_INFO
 }
 
 #define DMA_SIZE     (_dma_pend - _dma_pstart)
@@ -109,7 +111,7 @@ sos_dma_malloc(void* /*cookie*/, size_t size, int align, int cached, ps_mem_flag
     }else{
         dma_addr = NULL;
     }
-    kprintf(5, "DMA: 0x%x\n", (uint32_t)dma_addr);
+    kprintf(LOGLEVEL_DEBUG, "DMA: 0x%x\n", (uint32_t)dma_addr);
     /* Clean invalidate the range to prevent seL4 cache bombs */
     sos_dma_cache_op(NULL, dma_addr, size, DMA_CACHE_OP_CLEAN_INVALIDATE);
     return dma_addr;

@@ -112,10 +112,10 @@ void Thread::handleFault(const seL4_MessageInfo_t& message) noexcept {
                 ((seL4_GetMR(3) & (1 << 10)) >> (10 - 4)) |
                 (seL4_GetMR(3) & 0b1111);
             if (status == 0b000001) {
-                kprintf(0, "Would raise SIGBUS, but not implemented yet - halting thread\n");
+                kprintf(LOGLEVEL_WARNING, "Would raise SIGBUS, but not implemented yet - halting thread\n");
                 break;
             } else if (status != 0b000101 && status != 0b000111) {
-                kprintf(0, "Unknown status flag: %02x\n", status);
+                kprintf(LOGLEVEL_ERR, "Unknown status flag: %02x\n", status);
             }
 
             try {
@@ -123,17 +123,17 @@ void Thread::handleFault(const seL4_MessageInfo_t& message) noexcept {
                 seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 0);
                 seL4_Reply(reply);
             } catch (const std::exception& e) {
-                kprintf(1, "Caught %s\n", e.what());
+                kprintf(LOGLEVEL_DEBUG, "Caught %s\n", e.what());
 
-                kprintf(
-                    0, "Segmentation fault at 0x%08x, pc = 0x%08x, %c%c%c\n",
+                kprintf(LOGLEVEL_NOTICE,
+                    "Segmentation fault at 0x%08x, pc = 0x%08x, %c%c%c\n",
                     address, pc,
                     faultType.read ? 'r' : '-',
                     faultType.write ? 'w' : '-',
                     faultType.execute ? 'x' : '-'
                 );
 
-                kprintf(0, "Would raise SIGSEGV, but not implemented yet - halting thread\n");
+                kprintf(LOGLEVEL_WARNING, "Would raise SIGSEGV, but not implemented yet - halting thread\n");
             }
 
             break;
@@ -181,7 +181,7 @@ void Thread::handleFault(const seL4_MessageInfo_t& message) noexcept {
         }
 
         default:
-            kprintf(0, "Unknown fault type %u\n", seL4_MessageInfo_get_label(message));
+            kprintf(LOGLEVEL_ERR, "Unknown fault type %u\n", seL4_MessageInfo_get_label(message));
             break;
     }
 }

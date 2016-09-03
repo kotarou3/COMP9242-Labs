@@ -108,16 +108,16 @@ int exceptionToErrno(std::exception_ptr e) noexcept {
             std::rethrow_exception(e);
         }
     } catch (const std::bad_alloc& e) {
-        kprintf(3, "Got std::bad_alloc: %s\n", e.what());
+        kprintf(LOGLEVEL_DEBUG, "Got std::bad_alloc: %s\n", e.what());
         return ENOMEM;
     } catch (const std::invalid_argument& e) {
-        kprintf(3, "Got std::invalid_argument: %s\n", e.what());
+        kprintf(LOGLEVEL_DEBUG, "Got std::invalid_argument: %s\n", e.what());
         return EINVAL;
     } catch (const std::system_error& e) {
         if (e.code().category() != std::system_category())
             throw;
 
-        kprintf(3, "Got std::system_error: %s\n", e.what());
+        kprintf(LOGLEVEL_DEBUG, "Got std::system_error: %s\n", e.what());
         return e.code().value();
     }
 

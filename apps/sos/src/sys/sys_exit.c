@@ -17,7 +17,7 @@
 #include "internal/sys/execinfo.h" /*for backtrace()*/
 
 static void sel4_abort(void) {
-    kprintf(0, "seL4 root server aborted\n");
+    kprintf(LOGLEVEL_EMERG, "seL4 root server aborted\n");
 
     /* Printout backtrace*/
     void *array[10] = {NULL};
@@ -26,12 +26,12 @@ static void sel4_abort(void) {
     size = backtrace(array, 10);
     if (size) {
 
-        kprintf(0, "Backtracing stack PCs:  ");
+        kprintf(LOGLEVEL_EMERG, "Backtracing stack PCs:  ");
 
         for (int i = 0; i < size; i++) {
-            kprintf(0, "0x%x  ", (unsigned int)array[i]);
+            kprintf(LOGLEVEL_EMERG, "0x%x  ", (unsigned int)array[i]);
         }
-        kprintf(0, "\n");
+        kprintf(LOGLEVEL_EMERG, "\n");
     }
 
 #if defined(CONFIG_DEBUG_BUILD)
@@ -51,35 +51,35 @@ sys_exit()
 long
 sys_rt_sigprocmask()
 {
-    kprintf(0, "Ignoring call to %s\n", __FUNCTION__);
+    kprintf(LOGLEVEL_WARNING, "Ignoring call to %s\n", __FUNCTION__);
     return 0;
 }
 
 long
 sys_gettid()
 {
-    kprintf(0, "Ignoring call to %s\n", __FUNCTION__);
+    kprintf(LOGLEVEL_WARNING, "Ignoring call to %s\n", __FUNCTION__);
     return 0;
 }
 
 long
 sys_getpid()
 {
-    kprintf(0, "Ignoring call to %s\n", __FUNCTION__);
+    kprintf(LOGLEVEL_WARNING, "Ignoring call to %s\n", __FUNCTION__);
     return 0;
 }
 
 long
 sys_set_tid_address()
 {
-    kprintf(0, "Ignoring call to %s\n", __FUNCTION__);
+    kprintf(LOGLEVEL_WARNING, "Ignoring call to %s\n", __FUNCTION__);
     return sys_gettid();
 }
 
 long
 sys_tkill()
 {
-    kprintf(0, "%s assuming self kill\n", __FUNCTION__);
+    kprintf(LOGLEVEL_WARNING, "%s assuming self kill\n", __FUNCTION__);
     sel4_abort();
     __builtin_unreachable();
 }
@@ -87,7 +87,7 @@ sys_tkill()
 long
 sys_tgkill()
 {
-    kprintf(0, "%s assuming self kill\n", __FUNCTION__);
+    kprintf(LOGLEVEL_WARNING, "%s assuming self kill\n", __FUNCTION__);
     sel4_abort();
     __builtin_unreachable();
 }
