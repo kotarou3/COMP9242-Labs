@@ -25,11 +25,11 @@
 #include "internal/memory/FrameTable.h"
 #include "internal/memory/Mappings.h"
 #include "internal/process/Thread.h"
+#include "internal/network.h"
 
 extern "C" {
     #include <autoconf.h>
 
-    #include <nfs/nfs.h>
     #include <lwip/init.h>
     #include <netif/etharp.h>
     #include <ethdrivers/lwip.h>
@@ -38,11 +38,11 @@ extern "C" {
     #include <sel4/sel4.h>
 
     #include "internal/dma.h"
-    #include "internal/network.h"
 
     #include "internal/sys/debug.h"
     #include "internal/sys/panic.h"
 }
+#include <nfs/nfs.h>
 
 #define ARP_PRIME_TIMEOUT_MS     1000
 #define ARP_PRIME_RETRY_DELAY_MS   10

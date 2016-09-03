@@ -48,6 +48,9 @@
 #ifndef __NFS_NFS_H
 #define __NFS_NFS_H
 
+#include <functional>
+#include <memory>
+
 #include <stdint.h>
 #include <lwip/ip_addr.h>
 
@@ -252,8 +255,7 @@ typedef uint32_t nfscookie_t;
  *                   responsibility to copy this data to a more permanent
  *                   location if it is required after this call back completes.
  */
-typedef void (*nfs_getattr_cb_t)(uintptr_t token, enum nfs_stat status, 
-                                 fattr_t *fattr);
+using nfs_getattr_cb_t=std::function<void(uintptr_t, enum nfs_stat, fattr_t*)>;
 
 /**
  * A call back function provided by the caller of @ref nfs_lookup, executed
@@ -271,8 +273,7 @@ typedef void (*nfs_getattr_cb_t)(uintptr_t token, enum nfs_stat status,
  *                   responsibility to copy this data to a more permanent
  *                   location if it is required after this call back completes.
  */
-typedef void (*nfs_lookup_cb_t)(uintptr_t token, enum nfs_stat status, 
-                                fhandle_t* fh, fattr_t* fattr);
+using nfs_lookup_cb_t=std::function<void(uintptr_t, enum nfs_stat, fhandle_t*, fattr_t*)>;
 
 /**
  * A call back function provided by the caller of @ref nfs_create, executed
@@ -290,8 +291,7 @@ typedef void (*nfs_lookup_cb_t)(uintptr_t token, enum nfs_stat status,
  *                   responsibility to copy this data to a more permanent
  *                   location if it is required after this call back completes.
  */
-typedef void (*nfs_create_cb_t)(uintptr_t token, enum nfs_stat status, 
-                              fhandle_t *fh, fattr_t *fattr);
+using nfs_create_cb_t=std::function<void(uintptr_t, enum nfs_stat, fhandle_t*, fattr_t*)>;
 
 /**
  * A call back function provided by the caller of @ref nfs_remove, executed
@@ -299,7 +299,7 @@ typedef void (*nfs_create_cb_t)(uintptr_t token, enum nfs_stat status,
  * @param[in] token  The unmodified token provided to the @ref nfs_remove call.
  * @param[in] status The NFS call status.
  */
-typedef void (*nfs_remove_cb_t)(uintptr_t token, enum nfs_stat status);
+using nfs_remove_cb_t=std::function<void(uintptr_t, enum nfs_stat)>;
 
 /**
  * A call back function provided by the caller of @ref nfs_readdir, executed
@@ -320,9 +320,7 @@ typedef void (*nfs_remove_cb_t)(uintptr_t token, enum nfs_stat status);
  *                       be given as 0 when there are no more file entries to
  *                       read.
  */
-typedef void (*nfs_readdir_cb_t)(uintptr_t token, enum nfs_stat status, 
-                                 int num_files, char* file_names[],
-                                 nfscookie_t nfscookie);
+using nfs_readdir_cb_t=std::function<void(uintptr_t, enum nfs_stat, int, char*[], nfscookie_t)>;
 
 /**
  * A call back function provided by the caller of @ref nfs_read, executed
@@ -343,8 +341,7 @@ typedef void (*nfs_readdir_cb_t)(uintptr_t token, enum nfs_stat status,
  *                   responsibility to copy this data to a more permanent
  *                   location if it is required after this call back completes.
  */
-typedef void (*nfs_read_cb_t)(uintptr_t token, enum nfs_stat status, 
-                              fattr_t *fattr, int count, void* data);
+using nfs_read_cb_t=std::function<void(uintptr_t, enum nfs_stat status, fattr_t*, int, void*)>;
 
 /**
  * A call back function provided by the caller of @ref nfs_write, executed
@@ -360,8 +357,7 @@ typedef void (*nfs_read_cb_t)(uintptr_t token, enum nfs_stat status,
  * @param[in] count  If status is NFS_OK, provides the number of bytes that
  *                   were written to the file.
  */
-typedef void (*nfs_write_cb_t)(uintptr_t token, enum nfs_stat status, 
-                               fattr_t *fattr, int count);
+using nfs_write_cb_t=std::function<void(uintptr_t, enum nfs_stat, fattr_t*, int)>;
 
 
 /**
