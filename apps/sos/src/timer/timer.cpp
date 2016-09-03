@@ -110,7 +110,7 @@ void handleIrq() noexcept {
             if (timers[id].recurring) {
                 size_t skippedCallbacks = (getTimestamp() - nextInterrupt) / timers[id].delay;
                 if (skippedCallbacks > 0)
-                    kprintf(0, "Skipped %zu callbacks for id #%zu\n", skippedCallbacks, id);
+                    kprintf(LOGLEVEL_NOTICE, "Skipped %zu callbacks for id #%zu\n", skippedCallbacks, id);
 
                 interrupts.push(Interrupt{
                     .time = nextInterrupt + (skippedCallbacks + 1) * timers[id].delay,

@@ -69,49 +69,49 @@ seL4_CPtr _sos_interrupt_ep_cap;
 
 static void print_bootinfo(const seL4_BootInfo* info) {
     /* General info */
-    kprintf(1, "Info Page:  %p\n", info);
-    kprintf(1,"IPC Buffer: %p\n", info->ipcBuffer);
-    kprintf(1,"Node ID: %d (of %d)\n",info->nodeID, info->numNodes);
-    kprintf(1,"IOPT levels: %d\n",info->numIOPTLevels);
-    kprintf(1,"Init cnode size bits: %d\n", info->initThreadCNodeSizeBits);
+    kprintf(LOGLEVEL_INFO,"Info Page:  %p\n", info);
+    kprintf(LOGLEVEL_INFO,"IPC Buffer: %p\n", info->ipcBuffer);
+    kprintf(LOGLEVEL_INFO,"Node ID: %d (of %d)\n",info->nodeID, info->numNodes);
+    kprintf(LOGLEVEL_INFO,"IOPT levels: %d\n",info->numIOPTLevels);
+    kprintf(LOGLEVEL_INFO,"Init cnode size bits: %d\n", info->initThreadCNodeSizeBits);
 
     /* Cap details */
-    kprintf(1,"\nCap details:\n");
-    kprintf(1,"Type              Start      End\n");
-    kprintf(1,"Empty             0x%08x 0x%08x\n", info->empty.start, info->empty.end);
-    kprintf(1,"Shared frames     0x%08x 0x%08x\n", info->sharedFrames.start,
+    kprintf(LOGLEVEL_INFO,"\nCap details:\n");
+    kprintf(LOGLEVEL_INFO,"Type              Start      End\n");
+    kprintf(LOGLEVEL_INFO,"Empty             0x%08x 0x%08x\n", info->empty.start, info->empty.end);
+    kprintf(LOGLEVEL_INFO,"Shared frames     0x%08x 0x%08x\n", info->sharedFrames.start,
                                                    info->sharedFrames.end);
-    kprintf(1,"User image frames 0x%08x 0x%08x\n", info->userImageFrames.start,
+    kprintf(LOGLEVEL_INFO,"User image frames 0x%08x 0x%08x\n", info->userImageFrames.start,
                                                    info->userImageFrames.end);
-    kprintf(1,"User image PTs    0x%08x 0x%08x\n", info->userImagePTs.start,
+    kprintf(LOGLEVEL_INFO,"User image PTs    0x%08x 0x%08x\n", info->userImagePTs.start,
                                                    info->userImagePTs.end);
-    kprintf(1,"Untypeds          0x%08x 0x%08x\n", info->untyped.start, info->untyped.end);
+    kprintf(LOGLEVEL_INFO,"Untypeds          0x%08x 0x%08x\n", info->untyped.start, info->untyped.end);
 
     /* Untyped details */
-    kprintf(1,"\nUntyped details:\n");
-    kprintf(1,"Untyped Slot       Paddr      Bits\n");
+    kprintf(LOGLEVEL_INFO,"\nUntyped details:\n");
+    kprintf(LOGLEVEL_INFO,"Untyped Slot       Paddr      Bits\n");
     for (size_t i = 0; i < info->untyped.end-info->untyped.start; i++) {
-        kprintf(1,"%3d     0x%08x 0x%08x %d\n", i, info->untyped.start + i,
+        kprintf(LOGLEVEL_INFO,"%3d     0x%08x 0x%08x %d\n", i, info->untyped.start + i,
                                                    info->untypedPaddrList[i],
                                                    info->untypedSizeBitsList[i]);
     }
 
     /* Device untyped details */
-    kprintf(1,"\nDevice untyped details:\n");
-    kprintf(1,"Untyped Slot       Paddr      Bits\n");
+    kprintf(LOGLEVEL_INFO,"\nDevice untyped details:\n");
+    kprintf(LOGLEVEL_INFO,"Untyped Slot       Paddr      Bits\n");
     for (size_t i = 0; i < info->deviceUntyped.end-info->deviceUntyped.start; i++) {
-        kprintf(1,"%3d     0x%08x 0x%08x %d\n", i, info->deviceUntyped.start + i,
+        kprintf(LOGLEVEL_INFO,"%3d     0x%08x 0x%08x %d\n", i, info->deviceUntyped.start + i,
                                                    info->untypedPaddrList[i + (info->untyped.end - info->untyped.start)],
                                                    info->untypedSizeBitsList[i + (info->untyped.end-info->untyped.start)]);
     }
 
-    kprintf(1,"-----------------------------------------\n\n");
+    kprintf(LOGLEVEL_INFO,"-----------------------------------------\n\n");
 
     /* Print cpio data */
-    kprintf(1,"Parsing cpio data:\n");
-    kprintf(1,"--------------------------------------------------------\n");
-    kprintf(1,"| index |        name      |  address   | size (bytes) |\n");
-    kprintf(1,"|------------------------------------------------------|\n");
+    kprintf(LOGLEVEL_INFO,"Parsing cpio data:\n");
+    kprintf(LOGLEVEL_INFO,"--------------------------------------------------------\n");
+    kprintf(LOGLEVEL_INFO,"| index |        name      |  address   | size (bytes) |\n");
+    kprintf(LOGLEVEL_INFO,"|------------------------------------------------------|\n");
     for(int i = 0;; i++) {
         unsigned long size;
         const char *name;
@@ -119,12 +119,12 @@ static void print_bootinfo(const seL4_BootInfo* info) {
 
         data = cpio_get_entry(_cpio_archive, i, &name, &size);
         if(data != NULL){
-            kprintf(1,"| %3d   | %16s | %p | %12d |\n", i, name, data, size);
+            kprintf(LOGLEVEL_INFO,"| %3d   | %16s | %p | %12d |\n", i, name, data, size);
         }else{
             break;
         }
     }
-    kprintf(1,"--------------------------------------------------------\n");
+    kprintf(LOGLEVEL_INFO,"--------------------------------------------------------\n");
 }
 
 void start_first_process(const char* app_name, seL4_CPtr fault_ep) try {
@@ -145,7 +145,7 @@ void start_first_process(const char* app_name, seL4_CPtr fault_ep) try {
         assert(process->fdTable.insert(openFile) == STDERR_FILENO);
 
         /* parse the cpio image */
-        kprintf(1, "\nStarting \"%s\"...\n", app_name);
+        kprintf(LOGLEVEL_INFO, "\nStarting \"%s\"...\n", app_name);
         unsigned long elf_size;
         uint8_t* elf_base = (uint8_t*)cpio_get_file(_cpio_archive, app_name, &elf_size);
         conditional_panic(!elf_base, "Unable to locate cpio header");
@@ -157,7 +157,7 @@ void start_first_process(const char* app_name, seL4_CPtr fault_ep) try {
         );
     });
 } catch (const std::exception& e) {
-    kprintf(0, "Caught: %s\n", e.what());
+    kprintf(LOGLEVEL_EMERG, "Caught: %s\n", e.what());
     panic("Caught exception while starting first process\n");
 }
 
@@ -241,7 +241,7 @@ static void _sos_init(seL4_CPtr* ipc_ep, seL4_CPtr* async_ep) try {
 
     _sos_ipc_init(ipc_ep, async_ep);
 } catch (const std::exception& e) {
-    kprintf(0, "Caught: %s\n", e.what());
+    kprintf(LOGLEVEL_EMERG, "Caught: %s\n", e.what());
     panic("Caught exception during initialisation\n");
 }
 
@@ -256,7 +256,7 @@ static inline seL4_CPtr badge_irq_ep(seL4_CPtr ep, seL4_Word badge) {
  */
 int main(void) {
 
-    kprintf(0, "\nSOS Starting...\n");
+    kprintf(LOGLEVEL_NOTICE, "\nSOS Starting...\n");
 
     _sos_init(&_sos_ipc_ep_cap, &_sos_interrupt_ep_cap);
 
@@ -279,7 +279,7 @@ int main(void) {
     start_first_process(TTY_NAME, _sos_ipc_ep_cap);
 
     /* Wait on synchronous endpoint for IPC */
-    kprintf(0, "\nSOS entering syscall loop\n");
+    kprintf(LOGLEVEL_INFO, "\nSOS entering syscall loop\n");
 
     while (true) {
         seL4_Word badge;
@@ -294,7 +294,7 @@ int main(void) {
         } else if (badge == TTY_EP_BADGE) {
             _tty_start_thread->handleFault(message);
         } else {
-            kprintf(0, "Rootserver got an unknown message\n");
+            kprintf(LOGLEVEL_ERR, "Rootserver got an unknown message\n");
         }
     }
 }

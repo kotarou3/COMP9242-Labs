@@ -119,20 +119,20 @@ static inline void _select_largest_contiguous(void){
 
 static inline void _print_table(void){
     int i;
-    kprintf(0, "\n"
-                       "+-----------------------------------------------+\n"
-                       "|                 Untyped Table                 |\n"
-                       "|-----------------------------------------------|\n"
-                       "| ut(bi) |    start   ->    end     | size bits |\n"
-                       "|-----------------------------------------------|\n");
+    kprintf(LOGLEVEL_INFO, "\n"
+                                   "+-----------------------------------------------+\n"
+                                   "|                 Untyped Table                 |\n"
+                                   "|-----------------------------------------------|\n"
+                                   "| ut(bi) |    start   ->    end     | size bits |\n"
+                                   "|-----------------------------------------------|\n");
     for(i = 0; i < _ut.count; i++){
-        kprintf(0,     "| %2d(%2d) | 0x%08x -> 0x%08x | %9d |\n",
+        kprintf(LOGLEVEL_INFO,     "| %2d(%2d) | 0x%08x -> 0x%08x | %9d |\n",
                 i, _ut.map[i], UT_PSTART(i), UT_PEND(i), UT_SIZEBITS(i));
         if(i != _ut.count - 1 && UT_PEND(i) != UT_PSTART(i + 1)){
-            kprintf(0, "|-----------------------------------------------|\n");
+            kprintf(LOGLEVEL_INFO, "|-----------------------------------------------|\n");
         }
     }
-    kprintf(0,         "+-----------------------------------------------+\n");
+    kprintf(LOGLEVEL_INFO,         "+-----------------------------------------------+\n");
 }
 
 static int ut_translate_device(seL4_Word addr, seL4_Untyped* ret_cptr,
