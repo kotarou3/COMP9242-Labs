@@ -15,6 +15,8 @@
 #include <assert.h>
 #include <string.h>
 
+#include <nfs/nfs.h>
+
 extern "C" {
     #include <cspace/cspace.h>
 
@@ -268,6 +270,7 @@ int main(void) {
 
     /* Initialise the timer */
     timer::init(badge_irq_ep(_sos_interrupt_ep_cap, IRQ_BADGE_TIMER));
+    timer::setTimer(std::chrono::milliseconds(100), nfs::timeout);
 
     /* Initialise the device filesystem */
     auto deviceFileSystem = std::make_unique<fs::DeviceFileSystem>();

@@ -133,7 +133,7 @@ my_udp_send(struct udp_pcb* pcb, struct pbuf *pbuf)
     case ERR_OK:
         return RPC_OK;
     }
-    return static_cast<enum rpc_stat>(err);
+    return err;
 }
 
 /************************************************************
@@ -215,7 +215,7 @@ add_to_queue(struct pbuf *pbuf, struct udp_pcb* pcb,
     /* Need a lock here */
     struct rpc_queue *q_item;
     struct rpc_queue *tmp;
-    q_item = static_cast<rpc_queue*>(malloc(sizeof(struct rpc_queue)));
+    q_item = malloc(sizeof(struct rpc_queue));
     assert(q_item != NULL);
 
     q_item->next = NULL;
@@ -290,7 +290,7 @@ my_recv(void *arg, struct udp_pcb *upcb, struct pbuf *p,
 
 enum rpc_stat
 rpc_send(struct pbuf *pbuf, int len, struct udp_pcb *pcb, 
-     void (*func)(void*, uintptr_t, struct pbuf *),
+     void (*func)(void *, uintptr_t, struct pbuf *), 
      void *callback, uintptr_t token)
 {
     assert(pcb);
@@ -355,7 +355,8 @@ rpc_call(struct pbuf *pbuf, int len, struct udp_pcb *pcb,
     while(time_out >= 0){
         _usleep(CALL_TIMEOUT_MS * 1000);
         if(call_arg.complete) {
-            return RPC_OK;
+            /* Success */
+            return 0;
         }
         rpc_timeout(CALL_TIMEOUT_MS);
         time_out -= CALL_TIMEOUT_MS;

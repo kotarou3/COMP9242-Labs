@@ -14,7 +14,6 @@
 #include "portmapper.h"
 #include "pbuf_helpers.h"
 
-#include <memory>
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -140,34 +139,33 @@ nfs_init(const struct ip_addr *server)
  ******************************************/
 
 static void
-_nfs_getattr_cb(void* callback, uintptr_t token, struct pbuf *pbuf)
+_nfs_getattr_cb(void * callback, uintptr_t token, struct pbuf *pbuf)
 {
-    enum nfs_stat status = NFSERR_COMM;
+    uint32_t status = NFSERR_COMM;
     fattr_t pattrs;
-    struct rpc_reply_hdr hdr;
+    struct rpc_reply_hdr hdr; 
     int pos;
-    
+    nfs_getattr_cb_t cb = callback;
 
-    assert(callback);
+    assert(callback != NULL);
 
     if (rpc_read_hdr(pbuf, &hdr, &pos) == RPCERR_OK){
         /* get the status out */
-        pb_readl(pbuf, reinterpret_cast<uint32_t*>(&status), &pos);
+        pb_readl(pbuf, &status, &pos);
         if (status == NFS_OK) {
             /* it worked, so take out the return stuff! */
             pb_read_arrl(pbuf, (uint32_t*)&pattrs, sizeof(pattrs), &pos);
         }
     }
 
-    (*reinterpret_cast<nfs_getattr_cb_t*>(callback))(status, &pattrs);
-    free(callback);
+    cb(token, status, &pattrs);
 
     return;
 }
 
 enum rpc_stat
 nfs_getattr(const fhandle_t *fh,
-            std::unique_ptr<nfs_getattr_cb_t> func, uintptr_t token)
+            nfs_getattr_cb_t func, uintptr_t token)
 {
     struct pbuf *pbuf;
     int pos;
@@ -182,24 +180,24 @@ nfs_getattr(const fhandle_t *fh,
     pb_write(pbuf, fh, sizeof(*fh), &pos);
 
     /* send it! */
-    return rpc_send(pbuf, pos, _nfs_pcb, &_nfs_getattr_cb, reinterpret_cast<void*>(func.release()), token);
+    return rpc_send(pbuf, pos, _nfs_pcb, &_nfs_getattr_cb, func, token);
 }
 
 static void
-_nfs_lookup_cb(void* callback, uintptr_t token, struct pbuf *pbuf)
+_nfs_lookup_cb(void * callback, uintptr_t token, struct pbuf *pbuf)
 {
-    enum nfs_stat status = NFSERR_COMM;
+    uint32_t status = NFSERR_COMM;
     fhandle_t new_fh;
     fattr_t pattrs;
-    struct rpc_reply_hdr hdr;
+    struct rpc_reply_hdr hdr; 
     int pos;
-    
+    nfs_lookup_cb_t cb = callback;
 
-    assert(callback);
+    assert(callback != NULL);
 
     if (rpc_read_hdr(pbuf, &hdr, &pos) == RPCERR_OK){
         /* get the status out */
-        pb_readl(pbuf, reinterpret_cast<uint32_t*>(&status), &pos);
+        pb_readl(pbuf, &status, &pos);
         if (status == NFS_OK) {
             /* it worked, so take out the return stuff! */
             pb_read(pbuf, &new_fh, sizeof(new_fh), &pos);
@@ -207,14 +205,13 @@ _nfs_lookup_cb(void* callback, uintptr_t token, struct pbuf *pbuf)
         }
     }
 
-    (*reinterpret_cast<nfs_lookup_cb_t*>(callback))(status, &new_fh, &pattrs);
-    free(callback);
+    cb(token, status, &new_fh, &pattrs);
 }
 
 /* request a file handle */
 enum rpc_stat
 nfs_lookup(const fhandle_t *cwd, const char *name,
-           std::unique_ptr<nfs_lookup_cb_t> func, uintptr_t token)
+           nfs_lookup_cb_t func, uintptr_t token)
 {
     struct pbuf *pbuf;
     int pos;
@@ -230,40 +227,39 @@ nfs_lookup(const fhandle_t *cwd, const char *name,
     /* put in the name */
     pb_write_str(pbuf, name, strlen(name), &pos);
     /* send it! */
-    return rpc_send(pbuf, pos, _nfs_pcb, &_nfs_lookup_cb, reinterpret_cast<void*>(func.release()), token);
+    return rpc_send(pbuf, pos, _nfs_pcb, &_nfs_lookup_cb, func, token);
 }
 
 static void
-_nfs_read_cb(void* callback, uintptr_t token, struct pbuf *pbuf)
+_nfs_read_cb(void * callback, uintptr_t token, struct pbuf *pbuf)
 {
-    enum nfs_stat status = NFSERR_COMM;
+    uint32_t status = NFSERR_COMM;
     fattr_t pattrs;
     char *data = NULL;
     uint32_t size = 0;
-    struct rpc_reply_hdr hdr;
+    struct rpc_reply_hdr hdr; 
     int pos;
-    
+    nfs_read_cb_t cb = callback;
 
 
-    assert(callback);
+    assert(callback != NULL);
 
     if (rpc_read_hdr(pbuf, &hdr, &pos) == RPCERR_OK){
         /* get the status out */
-        pb_readl(pbuf, reinterpret_cast<uint32_t*>(&status), &pos);
+        pb_readl(pbuf, &status, &pos);
 
         if (status == NFS_OK) {
             /* it worked, so take out the return stuff! */
             pb_read_arrl(pbuf, (uint32_t*)&pattrs, sizeof(pattrs), &pos);
             pb_readl(pbuf, &size, &pos);
             /* malloc for data since pbuf may be part of a chain */
-            data = reinterpret_cast<char*>(malloc(size));
+            data = malloc(size);
             assert(data != NULL);
             pb_read(pbuf, data, size, &pos);
         }
     }
 
-    (*reinterpret_cast<nfs_read_cb_t*>(callback))(status, &pattrs, size, data);
-    free(callback);
+    cb(token, status, &pattrs, size, data);
 
     if(data){
         free(data);
@@ -272,7 +268,7 @@ _nfs_read_cb(void* callback, uintptr_t token, struct pbuf *pbuf)
 
 enum rpc_stat
 nfs_read(const fhandle_t *fh, int offset, int count, 
-         std::unique_ptr<nfs_read_cb_t> func, uintptr_t token)
+         nfs_read_cb_t func, uintptr_t token)
 {
     struct pbuf *pbuf;
     int pos;
@@ -290,7 +286,7 @@ nfs_read(const fhandle_t *fh, int offset, int count,
     /* total count unused as per RFC */
     pb_writel(pbuf, 0, &pos);
 
-    return rpc_send(pbuf, pos, _nfs_pcb, &_nfs_read_cb, reinterpret_cast<void*>(func.release()), token);
+    return rpc_send(pbuf, pos, _nfs_pcb, &_nfs_read_cb, func, token);
 }
 
 struct write_token_wrapper {
@@ -299,35 +295,34 @@ struct write_token_wrapper {
 };
 
 static void
-_nfs_write_cb(void* callback, uintptr_t token, struct pbuf *pbuf)
+_nfs_write_cb(void * callback, uintptr_t token, struct pbuf *pbuf)
 {
     struct write_token_wrapper *t = (struct write_token_wrapper*)token;
     struct rpc_reply_hdr hdr;
-    enum nfs_stat status = NFSERR_COMM;
+    uint32_t status = NFSERR_COMM;
     fattr_t pattrs;
     int pos;
-    
+    nfs_write_cb_t cb = callback;
 
-    assert(callback);
+    assert(callback != NULL);
 
     if (rpc_read_hdr(pbuf, &hdr, &pos) == RPCERR_OK){
         /* get the status out */
-        pb_readl(pbuf, reinterpret_cast<uint32_t*>(&status), &pos);
+        pb_readl(pbuf, &status, &pos);
         if (status == NFS_OK) {
             /* it worked, so take out the return stuff! */
             pb_read_arrl(pbuf, (uint32_t*)&pattrs, sizeof(pattrs), &pos);
         }
     }
 
-    (*reinterpret_cast<nfs_write_cb_t*>(callback))(status, &pattrs, t->count);
-    free(callback);
+    cb(t->token, status, &pattrs, t->count);
 
     free(t);
 }
 
 enum rpc_stat
 nfs_write(const fhandle_t *fh, int offset, int count, const void *data,
-          std::unique_ptr<nfs_write_cb_t> func, uintptr_t token)
+          nfs_write_cb_t func, uintptr_t token)
 {
     struct pbuf *pbuf;
     struct write_token_wrapper *t;
@@ -365,28 +360,28 @@ nfs_write(const fhandle_t *fh, int offset, int count, const void *data,
     /* Wrap the token up ready for the call back */
     t->token = token;
     t->count = count;
-    err = rpc_send(pbuf, pos, _nfs_pcb, &_nfs_write_cb, reinterpret_cast<void*>(func.release()), (uintptr_t)t);
+    err = rpc_send(pbuf, pos, _nfs_pcb, &_nfs_write_cb, func, (uintptr_t)t);
     if(err){
         free(t);
     }
-    return static_cast<enum rpc_stat>(err);
+    return err;
 }
 
 static void
-_nfs_create_cb(void* callback, uintptr_t token, struct pbuf *pbuf)
+_nfs_create_cb(void * callback, uintptr_t token, struct pbuf *pbuf)
 {
-    enum nfs_stat status = NFSERR_COMM;
+    uint32_t status = NFSERR_COMM;
     fhandle_t new_fh;
     fattr_t pattrs;
-    struct rpc_reply_hdr hdr;
+    struct rpc_reply_hdr hdr; 
     int pos;
-    
+    nfs_create_cb_t cb = callback;
 
-    assert(callback);
+    assert(callback != NULL);
 
     if (rpc_read_hdr(pbuf, &hdr, &pos) == RPCERR_OK){
         /* get the status out */
-        pb_readl(pbuf, reinterpret_cast<uint32_t*>(&status), &pos);
+        pb_readl(pbuf, &status, &pos);
 
         if (status == NFS_OK) {
             /* it worked, so take out the return stuff! */
@@ -396,13 +391,12 @@ _nfs_create_cb(void* callback, uintptr_t token, struct pbuf *pbuf)
     }
 
     debug("NFS CREATE CALLBACK\n");
-    (*reinterpret_cast<nfs_create_cb_t*>(callback))(status, &new_fh, &pattrs);
-    free(callback);
+    cb(token, status, &new_fh, &pattrs);
 }
 
 enum rpc_stat
 nfs_create(const fhandle_t *fh, const char *name, const sattr_t *sat,
-           std::unique_ptr<nfs_create_cb_t> func, uintptr_t token)
+           nfs_create_cb_t func, uintptr_t token)
 {
     struct pbuf *pbuf;
     int pos;
@@ -420,32 +414,31 @@ nfs_create(const fhandle_t *fh, const char *name, const sattr_t *sat,
     /* put in the attributes */
     pb_write_arrl(pbuf, (uint32_t*)sat, sizeof(*sat), &pos);
 
-    return rpc_send(pbuf, pos, _nfs_pcb, &_nfs_create_cb, reinterpret_cast<void*>(func.release()), token);
+    return rpc_send(pbuf, pos, _nfs_pcb, &_nfs_create_cb, func, token);
 }
 
 void
-_nfs_remove_cb(void* callback, uintptr_t token, struct pbuf *pbuf)
+_nfs_remove_cb(void * callback, uintptr_t token, struct pbuf *pbuf)
 {
-    enum nfs_stat status = NFSERR_COMM;
-    struct rpc_reply_hdr hdr;
+    uint32_t status = NFSERR_COMM;
+    struct rpc_reply_hdr hdr; 
     int pos;
-    
+    nfs_remove_cb_t cb = callback;
 
-    assert(callback);
+    assert(callback != NULL);
 
     if (rpc_read_hdr(pbuf, &hdr, &pos) == RPCERR_OK){
         /* get the status out */
-        pb_readl(pbuf, reinterpret_cast<uint32_t*>(&status), &pos);
+        pb_readl(pbuf, &status, &pos);
     }
 
     debug("NFS REMOVE CALLBACK\n");
-    (*reinterpret_cast<nfs_remove_cb_t*>(callback))(status);
-    free(callback);
+    cb(token, status);
 }
 
 enum rpc_stat
 nfs_remove(const fhandle_t *fh, const char *name, 
-           std::unique_ptr<nfs_remove_cb_t> func, uintptr_t token)
+           nfs_remove_cb_t func, uintptr_t token)
 {
     struct pbuf *pbuf;
     int pos;
@@ -461,27 +454,28 @@ nfs_remove(const fhandle_t *fh, const char *name,
     /* put in the name */
     pb_write_str(pbuf, name, strlen(name), &pos);
 
-    return rpc_send(pbuf, pos, _nfs_pcb, _nfs_remove_cb, reinterpret_cast<void*>(func.release()), token);
+    return rpc_send(pbuf, pos, _nfs_pcb, _nfs_remove_cb, func, token);
 }
 
 
 static void
-_nfs_readdir_cb(void* callback, uintptr_t token, struct pbuf *pbuf)
+_nfs_readdir_cb(void * callback, uintptr_t token, struct pbuf *pbuf)
 {
     nfs_readdir_cb_t cb;
     int num_entries = 0;
     char **entries = NULL;
     uint32_t next_cookie = 0;
-    enum nfs_stat status = NFSERR_COMM;
+    uint32_t status = NFSERR_COMM;
     struct rpc_reply_hdr hdr; 
     int pos;
 
     debug("NFS READDIR CALLBACK\n");
-    assert(callback);
+    cb = callback;
+    assert(callback != NULL);
 
     if (rpc_read_hdr(pbuf, &hdr, &pos) == RPCERR_OK){
         /* get the status out */
-        pb_readl(pbuf, reinterpret_cast<uint32_t*>(&status), &pos);
+        pb_readl(pbuf, &status, &pos);
         if (status == NFS_OK) {
             struct filelist {
                 char *file;
@@ -529,8 +523,7 @@ _nfs_readdir_cb(void* callback, uintptr_t token, struct pbuf *pbuf)
         }
     }
 
-    (*reinterpret_cast<nfs_readdir_cb_t*>(callback))(status, num_entries, entries, next_cookie);
-    free(callback);
+    cb(token, status, num_entries, entries, next_cookie);
 
     /* Clean up */
     if (entries){
@@ -545,7 +538,7 @@ _nfs_readdir_cb(void* callback, uintptr_t token, struct pbuf *pbuf)
 /* send a request for a directory item */
 enum rpc_stat
 nfs_readdir(const fhandle_t *pfh, nfscookie_t cookie,
-        std::unique_ptr<nfs_readdir_cb_t> func, uintptr_t token)
+        nfs_readdir_cb_t func, uintptr_t token)
 {
     struct pbuf *pbuf;
     int pos;
@@ -559,7 +552,7 @@ nfs_readdir(const fhandle_t *pfh, nfscookie_t cookie,
     pb_writel(pbuf, cookie, &pos);
     pb_writel(pbuf, READDIR_BUF_SIZE, &pos); 
     /* make the call! */
-    return rpc_send(pbuf, pos, _nfs_pcb, &_nfs_readdir_cb, reinterpret_cast<void*>(func.release()), token);
+    return rpc_send(pbuf, pos, _nfs_pcb, &_nfs_readdir_cb, func, token);
 }
 
 

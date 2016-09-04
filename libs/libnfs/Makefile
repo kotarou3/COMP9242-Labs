@@ -20,6 +20,8 @@ RHDRFILES := '$(wildcard $(SOURCE_DIR)/include/*) nfs'
 
 include $(SEL4_COMMON)/common.mk
 
+CXXFLAGS += -DBOOST_THREAD_VERSION=4 -DBOOST_SYSTEM_NO_DEPRECATED -DBOOST_THREAD_PROVIDES_EXECUTORS
+
 .PHONY: docs
 docs: docs/libnfs.pdf
 
