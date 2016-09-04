@@ -960,11 +960,6 @@ long sys_ftruncate64()
     assert(!"sys_ftruncate64 not implemented");
     __builtin_unreachable();
 }
-long sys_stat64()
-{
-    assert(!"sys_stat64 not implemented");
-    __builtin_unreachable();
-}
 long sys_lstat64()
 {
     assert(!"sys_lstat64 not implemented");
@@ -2443,11 +2438,6 @@ long sys_truncate64()
 long sys_ftruncate64()
 {
     assert(!"sys_ftruncate64 not implemented");
-    __builtin_unreachable();
-}
-long sys_stat64()
-{
-    assert(!"sys_stat64 not implemented");
     __builtin_unreachable();
 }
 long sys_lstat64()

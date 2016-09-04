@@ -16,8 +16,8 @@ boost::future<std::shared_ptr<File>> FlatFileSystem::open(const std::string& pat
     throw std::system_error(ENOENT, std::system_category(), "File does not exist");
 }
 
-boost::future<std::unique_ptr<fattr_t>> FlatFileSystem::stat(const std::string& pathname) {
-    boost::future<std::unique_ptr<fattr_t>> result;
+boost::future<std::unique_ptr<nfs::fattr_t>> FlatFileSystem::stat(const std::string& pathname) {
+    boost::future<std::unique_ptr<nfs::fattr_t>> result;
     for (auto& fs : _filesystems) {
         result = fs->stat(pathname);
         if (!result.has_exception()) {

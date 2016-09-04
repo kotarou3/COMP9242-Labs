@@ -10,7 +10,7 @@ class FlatFileSystem : public FileSystem {
 
         // pathname will be checked through the mounted filesystems in the order of mounting
         virtual boost::future<std::shared_ptr<File>> open(const std::string& pathname) override;
-        virtual boost::future<std::unique_ptr<fattr_t>> stat(const std::string&) override;
+        virtual boost::future<std::unique_ptr<nfs::fattr_t>> stat(const std::string&) override;
 
         void mount(std::unique_ptr<FileSystem> fs);
 

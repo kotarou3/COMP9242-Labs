@@ -14,7 +14,7 @@ boost::future<std::shared_ptr<File>> DeviceFileSystem::open(const std::string& p
     }
 }
 
-boost::future<std::unique_ptr<fattr_t>> DeviceFileSystem::stat(const std::string& pathname) {
+boost::future<std::unique_ptr<nfs::fattr_t>> DeviceFileSystem::stat(const std::string& pathname) {
     (void)pathname;
     throw syscall::err(ENOSYS);
 }

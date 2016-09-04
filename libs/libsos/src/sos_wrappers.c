@@ -34,9 +34,10 @@ int sos_getdirent(int pos, char *name, size_t nbyte) {
     return _unimplemented();
 }
 
-int sys_stat(const char *path, sos_stat_t *buf);
+int sys_stat64(const char *path, sos_stat_t *buf);
 int sos_stat(const char *path, sos_stat_t *buf) {
-    return sys_stat(path, buf);
+    printf("Got path=%p\n", (void*)path);
+    return sys_stat64(path, buf);
 }
 
 pid_t sos_process_create(const char *path) {

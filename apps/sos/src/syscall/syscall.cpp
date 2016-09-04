@@ -40,7 +40,7 @@ namespace {
 	    // fs
         ADD_SYSCALL(open);
         ADD_SYSCALL(close);
-        ADD_SYSCALL(stat);
+        ADD_SYSCALL(stat64);
 
         ADD_SYSCALL(read);
         ADD_SYSCALL(readv);

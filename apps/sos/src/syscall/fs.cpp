@@ -103,28 +103,24 @@ boost::future<int> close(process::Process& process, int fd) {
     throw std::system_error(EBADF, std::system_category());
 }
 
-boost::future<int> stat(process::Process& process, memory::vaddr_t pathname, memory::vaddr_t result) noexcept {
-    std::string path;
-    try {
-        printf("Attempting to read path from %p\n", reinterpret_cast<void*>(pathname));
-        path = memory::UserMemory(process, pathname).readString();
-        std::cout << "Read path " << path << std::endl;
-    } catch (...) {
-        return _returnNow(-EINVAL);
-    }
-    boost::promise<int> promise;
-    fs::rootFileSystem->stat(path).then(fs::asyncExecutor, [=, &process] (auto attributes) {
+boost::future<int> stat64(process::Process& process, memory::vaddr_t pathname, memory::vaddr_t result) {
+    printf("Attempting to read path from %p\n", reinterpret_cast<void*>(pathname));
+    std::string path = memory::UserMemory(process, pathname).readString();
+    std::cout << "Read path " << path << std::endl;
+
+    auto promise = std::make_shared<boost::promise<int>>();
+    fs::rootFileSystem->stat(path).then(fs::asyncExecutor, [&process, promise, result] (auto attributes) {
         try {
-            memory::UserMemory(process, result).write(attributes.get().get());
+            memory::UserMemory(process, result).set(*attributes.get());
         } catch (...) {
-            return _returnNow(-EFAULT);
+            promise->set_exception(std::current_exception());
         }
-        return _returnNow(0);
+        promise->set_value(0);
     });
-    return promise.get_future();
+    return promise->get_future();
 }
 
-boost::future<int> read(process::Process& process, int fd, memory::vaddr_t buf, size_t count) noexcept {
+boost::future<int> read(process::Process& process, int fd, memory::vaddr_t buf, size_t count) {
     return _preadwrite(false, process, fd, buf, count, fs::CURRENT_OFFSET);
 }
 boost::future<int> readv(process::Process& process, int fd, memory::vaddr_t iov, size_t iovcnt) {
@@ -166,6 +162,7 @@ boost::future<int> ioctl(process::Process& process, int fd, size_t request, memo
 
 FORWARD_SYSCALL(open, 3);
 FORWARD_SYSCALL(close, 1);
+FORWARD_SYSCALL(stat64, 2);
 
 FORWARD_SYSCALL(read, 3);
 FORWARD_SYSCALL(readv, 3);

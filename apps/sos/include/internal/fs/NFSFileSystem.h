@@ -28,10 +28,10 @@ public:
 
     virtual boost::future <std::shared_ptr<File>> open(const std::string &pathname) override;
     boost::future <std::shared_ptr<File>> lookup(const std::string &pathname);
-    virtual boost::future <std::unique_ptr<fattr_t>> stat(const std::string &pathname) override;
+    virtual boost::future <std::unique_ptr<nfs::fattr_t>> stat(const std::string &pathname) override;
 
 private:
-    fhandle_t mnt_point = {{0}};
+    nfs::fhandle_t mnt_point = {{0}};
 };
 
 }

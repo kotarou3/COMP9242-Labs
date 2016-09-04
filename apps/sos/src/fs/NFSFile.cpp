@@ -2,7 +2,7 @@
 
 namespace fs {
 
-NFSFile::NFSFile(fhandle_t* fh, fattr_t* attrs) {
+NFSFile::NFSFile(const nfs::fhandle_t* fh, const nfs::fattr_t* attrs) {
     handle = *fh;
     this->attrs = *attrs;
 

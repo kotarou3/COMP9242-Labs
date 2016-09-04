@@ -221,20 +221,5 @@ network_init(seL4_CPtr interrupt_ep) {
      */
     network_prime_arp(&gw);
 
-    /* initialise and mount NFS */
-    if(strlen(SOS_NFS_DIR)) {
-        /* Initialise NFS */
-        int err;
-        printf("\nMounting NFS\n");
-        if(!(err = nfs_init(&gw))){
-            /* Print out the exports on this server */
-            nfs_print_exports();
-        }
-        if(err){
-            WARN("Failed to initialise NFS\n");
-        }
-    }else{
-        WARN("Skipping Network initialisation since no mount point was "
-             "specified\n");
-    }
+    nfs::init(gw);
 }
