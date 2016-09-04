@@ -1,9 +1,18 @@
+#include <sys/stat.h>
+#include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <math.h>
+#include <string.h>
 #include <time.h>
 #include <unistd.h>
 
+#undef st_ctime
+#undef st_atime
+
 #include "sos.h"
+
+#define UMASK 0002
 
 static int _unimplemented(void) {
     fprintf(stderr, "system call not implemented\n");
@@ -11,8 +20,19 @@ static int _unimplemented(void) {
     return -1;
 }
 
-int sos_sys_open(const char* path, fmode_t mode) {
-    return open(path, mode);
+static long posix_to_sos_time(struct timespec time) {
+    // should convert time since epoch to ms since boot.
+    // for now, assume epoch = boot time
+    return time.tv_sec * 1000 + time.tv_nsec / 1000000;
+}
+
+static fmode_t posix_to_sos_fmode(mode_t mode) {
+    // TODO
+    return mode;
+}
+
+int sos_sys_open(const char* path, int flags) {
+    return open(path, flags);
 }
 
 int sos_sys_close(int file) {
@@ -28,16 +48,56 @@ int sos_sys_write(int file, const char *buf, size_t nbyte) {
 }
 
 int sos_getdirent(int pos, char *name, size_t nbyte) {
-    (void)pos;
-    (void)name;
-    (void)nbyte;
-    return _unimplemented();
+    static DIR *dirp;
+    static int curPos;
+
+    if (pos < 0) {
+        errno = EINVAL;
+        return -1;
+    } else if (!dirp) {
+        dirp = opendir(".");
+        curPos = 0;
+    } else if (pos < curPos) {
+        closedir(dirp);
+        dirp = opendir(".");
+        curPos = 0;
+    }
+
+    if (!dirp)
+        return -1;
+
+    while (1) {
+        errno = 0;
+        struct dirent *dp = readdir(dirp);
+        if (dp) {
+            ++curPos;
+
+            if (curPos - 1 == pos) {
+                strncpy(name, dp->d_name, nbyte - 1);
+                name[nbyte - 1] = 0;
+                return strlen(name);
+            }
+        } else {
+            int prevErrno = errno;
+            closedir(dirp);
+
+            errno = prevErrno;
+            return errno ? -1 : 0;
+        }
+    }
 }
 
 int sos_stat(const char *path, sos_stat_t *buf) {
-    (void)path;
-    (void)buf;
-    return _unimplemented();
+    struct stat s;
+    int err = stat(path, &s);
+    if (!err) {
+        buf->st_type = S_ISREG(s.st_mode) ? ST_FILE : ST_SPECIAL;
+        buf->st_fmode = posix_to_sos_fmode(s.st_mode);
+        buf->st_size = s.st_size;
+        buf->st_ctime = posix_to_sos_time(s.st_ctim);
+        buf->st_atime = posix_to_sos_time(s.st_atim);
+    }
+    return err;
 }
 
 pid_t sos_process_create(const char *path) {
