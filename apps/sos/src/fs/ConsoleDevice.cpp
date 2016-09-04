@@ -82,7 +82,7 @@ namespace {
 }
 
 void ConsoleDevice::mountOn(DeviceFileSystem& fs, const std::string& name) {
-    fs.create(name, [] {
+    fs.create(name, [](auto /*flags*/) {
         if (!_serial) {
             _serial = serial_init();
             serial_register_handler(_serial, _serialHandler);
