@@ -17,13 +17,14 @@ class NFSFile : public File {
 
         virtual std::unique_ptr<nfs::fattr_t> getattrs() override {return std::make_unique<nfs::fattr_t>(_attrs);}
     private:
-        NFSFile(const nfs::fhandle_t& handle, const nfs::fattr_t* attrs);
+        NFSFile(const nfs::fhandle_t& handle, const nfs::fattr_t& attrs);
         friend class NFSFileSystem;
 
         nfs::fhandle_t _handle;
         off64_t _currentOffset;
 
-        nfs_fattrs_t _attrs
+        // temporary until caching is working
+        nfs::fattr_t _attrs;
 };
 
 }

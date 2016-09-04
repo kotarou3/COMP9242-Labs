@@ -219,6 +219,4 @@ network_init(seL4_CPtr interrupt_ep) {
      * table is cheap and can save a lot of heart ache
      */
     network_prime_arp(&gw);
-
-    nfs::init(gw);
 }

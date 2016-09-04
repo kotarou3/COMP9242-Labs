@@ -280,7 +280,6 @@ int main(void) {
         if (new) {
             printf("$ ");
         }
-        stat("bootimg.elf", &sbuf);
         new = 0;
         found = 0;
 

@@ -6,10 +6,10 @@
 
 namespace fs {
 
-NFSFile::NFSFile(const nfs::fhandle_t& handle, const nfs::fattr_t* attrs):
+NFSFile::NFSFile(const nfs::fhandle_t& handle, const nfs::fattr_t& attrs):
     _handle(handle),
-    _attrs(*attrs),
-    _currentOffset(0)
+    _currentOffset(0),
+    _attrs(attrs)
 {}
 
 boost::future<ssize_t> NFSFile::read(const std::vector<IoVector>& iov, off64_t offset) {

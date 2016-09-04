@@ -4,6 +4,26 @@
 #include <unistd.h>
 
 #include "sos.h"
+#include <sys/stat.h>
+
+#undef st_ctime
+#undef st_atime
+
+static long posix_to_sos_time(time_t time) {
+    // should convert seconds since epoch to ms since boot
+    // for now, lets just return seconds since epoch
+    return time;
+}
+
+// TODO: work out what actual bits sos open uses. It says FM_R/W/E,
+// but it also says it takes in O_RDWR, O_RDONLY, O_WROLNY...
+static mode_t sos_to_posix_fmode(fmode_t mode) {
+    return mode;
+}
+
+static fmode_t posix_to_sos_fmode(mode_t mode) {
+    return mode;
+}
 
 static int _unimplemented(void) {
     fprintf(stderr, "system call not implemented\n");
@@ -12,7 +32,7 @@ static int _unimplemented(void) {
 }
 
 int sos_sys_open(const char* path, fmode_t mode) {
-    return open(path, mode);
+    return open(path, sos_to_posix_fmode(mode));
 }
 
 int sos_sys_close(int file) {
@@ -34,10 +54,18 @@ int sos_getdirent(int pos, char *name, size_t nbyte) {
     return _unimplemented();
 }
 
-int sys_stat64(const char *path, sos_stat_t *buf);
+int sys_stat64(const char *path, struct stat *buf);
 int sos_stat(const char *path, sos_stat_t *buf) {
-    printf("Got path=%p\n", (void*)path);
-    return sys_stat64(path, buf);
+    struct stat s;
+    int err = sys_stat64(path, &s);
+    if (!err) {
+        buf->st_type = S_ISREG(s.st_mode) ? ST_FILE : ST_SPECIAL;
+        buf->st_fmode = posix_to_sos_fmode(s.st_mode);
+        buf->st_size = s.st_size;
+        buf->st_ctime = posix_to_sos_time(s.st_ctim.tv_sec);
+        buf->st_atime = posix_to_sos_time(s.st_atim.tv_sec);
+    }
+    return err;
 }
 
 pid_t sos_process_create(const char *path) {
