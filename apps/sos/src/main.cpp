@@ -41,6 +41,7 @@ extern "C" {
 #include "internal/fs/DebugDevice.h"
 #include "internal/fs/DeviceFileSystem.h"
 #include "internal/fs/FlatFileSystem.h"
+#include "internal/fs/NFSFileSystem.h"
 #include "internal/memory/FrameTable.h"
 #include "internal/memory/PageDirectory.h"
 #include "internal/process/Thread.h"
@@ -267,7 +268,6 @@ int main(void) {
 
     /* Initialise the timer */
     timer::init(badge_irq_ep(_sos_interrupt_ep_cap, IRQ_BADGE_TIMER));
-    timer::setTimer(std::chrono::milliseconds(100), nfs::timeout, true);
 
     /* Initialise the device filesystem */
     auto deviceFileSystem = std::make_unique<fs::DeviceFileSystem>();
@@ -276,6 +276,7 @@ int main(void) {
     /* Initialise the root filesystem */
     auto rootFileSystem = std::make_unique<fs::FlatFileSystem>();
     rootFileSystem->mount(std::move(deviceFileSystem));
+    rootFileSystem->mount(std::make_unique<fs::NFSFileSystem>(CONFIG_SOS_GATEWAY, CONFIG_SOS_NFS_DIR));
     fs::rootFileSystem = std::move(rootFileSystem);
 
     /* Start the user application */
