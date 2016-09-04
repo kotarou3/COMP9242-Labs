@@ -41,6 +41,7 @@ extern "C" {
 #include "internal/fs/DebugDevice.h"
 #include "internal/fs/DeviceFileSystem.h"
 #include "internal/fs/FlatFileSystem.h"
+#include "internal/fs/NFSFileSystem.h"
 #include "internal/memory/FrameTable.h"
 #include "internal/memory/PageDirectory.h"
 #include "internal/process/Thread.h"
@@ -131,33 +132,34 @@ static void print_bootinfo(const seL4_BootInfo* info) {
 
 void start_first_process(const char* app_name, seL4_CPtr fault_ep) try {
     /* open the console device */
-    fs::rootFileSystem->open("console").then(fs::asyncExecutor, [=](auto file) {
-        auto process = std::make_shared<process::Process>();
-        auto openFile = std::make_shared<fs::OpenFile>(
-            file.get(),
-            fs::OpenFile::Flags{
-                .read = true,
-                .write = true
-            }
-        );
+    fs::rootFileSystem->open("console", fs::FileSystem::OpenFlags{.read = true, .write = true})
+        .then(fs::asyncExecutor, [=](auto file) {
+            auto process = std::make_shared<process::Process>();
+            auto openFile = std::make_shared<fs::OpenFile>(
+                file.get(),
+                fs::OpenFile::Flags{
+                    .read = true,
+                    .write = true
+                }
+            );
 
-        /* attach the console device to stdin/out/err */
-        assert(process->fdTable.insert(openFile) == STDIN_FILENO);
-        assert(process->fdTable.insert(openFile) == STDOUT_FILENO);
-        assert(process->fdTable.insert(openFile) == STDERR_FILENO);
+            /* attach the console device to stdin/out/err */
+            assert(process->fdTable.insert(openFile) == STDIN_FILENO);
+            assert(process->fdTable.insert(openFile) == STDOUT_FILENO);
+            assert(process->fdTable.insert(openFile) == STDERR_FILENO);
 
-        /* parse the cpio image */
-        kprintf(LOGLEVEL_INFO, "\nStarting \"%s\"...\n", app_name);
-        unsigned long elf_size;
-        uint8_t* elf_base = (uint8_t*)cpio_get_file(_cpio_archive, app_name, &elf_size);
-        conditional_panic(!elf_base, "Unable to locate cpio header");
+            /* parse the cpio image */
+            kprintf(LOGLEVEL_INFO, "\nStarting \"%s\"...\n", app_name);
+            unsigned long elf_size;
+            uint8_t* elf_base = (uint8_t*)cpio_get_file(_cpio_archive, app_name, &elf_size);
+            conditional_panic(!elf_base, "Unable to locate cpio header");
 
-        elf::load(*process, elf_base);
+            elf::load(*process, elf_base);
 
-        _tty_start_thread = std::make_unique<process::Thread>(
-            process, fault_ep, TTY_EP_BADGE, elf_getEntryPoint(elf_base)
-        );
-    });
+            _tty_start_thread = std::make_unique<process::Thread>(
+                process, fault_ep, TTY_EP_BADGE, elf_getEntryPoint(elf_base)
+            );
+        });
 } catch (const std::exception& e) {
     kprintf(LOGLEVEL_EMERG, "Caught: %s\n", e.what());
     panic("Caught exception while starting first process\n");
@@ -267,7 +269,6 @@ int main(void) {
 
     /* Initialise the timer */
     timer::init(badge_irq_ep(_sos_interrupt_ep_cap, IRQ_BADGE_TIMER));
-    timer::setTimer(std::chrono::milliseconds(100), nfs::timeout, true);
 
     /* Initialise the device filesystem */
     auto deviceFileSystem = std::make_unique<fs::DeviceFileSystem>();
@@ -276,6 +277,7 @@ int main(void) {
     /* Initialise the root filesystem */
     auto rootFileSystem = std::make_unique<fs::FlatFileSystem>();
     rootFileSystem->mount(std::move(deviceFileSystem));
+    rootFileSystem->mount(std::make_unique<fs::NFSFileSystem>(CONFIG_SOS_GATEWAY, CONFIG_SOS_NFS_DIR));
     fs::rootFileSystem = std::move(rootFileSystem);
 
     /* Start the user application */
