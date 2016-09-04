@@ -17,14 +17,15 @@ boost::future<std::shared_ptr<File>> FlatFileSystem::open(const std::string& pat
 }
 
 boost::future<std::unique_ptr<nfs::fattr_t>> FlatFileSystem::stat(const std::string& pathname) {
-    boost::future<std::unique_ptr<nfs::fattr_t>> result;
     for (auto& fs : _filesystems) {
-        result = fs->stat(pathname);
-        if (!result.has_exception()) {
-            return result;
+        try {
+            return fs->stat(pathname);
+        } catch (const std::system_error& e) {
+            if (e.code() != std::error_code(ENOENT, std::system_category()))
+                throw;
         }
     }
-    return result;
+    throw std::system_error(ENOENT, std::system_category(), "File does not exist");
 }
 
 void FlatFileSystem::mount(std::unique_ptr<FileSystem> fs) {

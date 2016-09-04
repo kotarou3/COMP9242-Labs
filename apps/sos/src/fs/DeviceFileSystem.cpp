@@ -15,8 +15,15 @@ boost::future<std::shared_ptr<File>> DeviceFileSystem::open(const std::string& p
 }
 
 boost::future<std::unique_ptr<nfs::fattr_t>> DeviceFileSystem::stat(const std::string& pathname) {
-    (void)pathname;
-    throw syscall::err(ENOSYS);
+    auto promise = std::make_shared<boost::promise<std::unique_ptr<nfs::fattr_t>>>();
+    open(pathname).then(asyncExecutor, [promise] (auto result) {
+        if (result.has_exception()) {
+            promise->set_exception(syscall::getException(result));
+        } else {
+            promise->set_exception(syscall::err(ENOSYS));
+        }
+    });
+    return promise->get_future();
 }
 
 void DeviceFileSystem::create(const std::string& name, const DeviceFileSystem::OpenCallback& openCallback) {

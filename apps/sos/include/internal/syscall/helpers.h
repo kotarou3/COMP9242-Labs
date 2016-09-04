@@ -9,10 +9,13 @@ inline boost::future<int> _returnNow(int result) {
 }
 
 template <typename T>
-inline boost::future<int> sameException(boost::future<T> orig) {
-    orig.get();
-    boost::promise<int> promise;
-    return promise.get_future();
+inline std::exception_ptr getException(boost::future<T>& future) {
+    try {
+        future.get();
+    } catch (...) {
+        return std::current_exception();
+    }
+    return nullptr;
 };
 
 inline std::system_error err(int syscall_no, const std::string& description="No reason given") {

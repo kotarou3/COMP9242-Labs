@@ -104,9 +104,7 @@ boost::future<int> close(process::Process& process, int fd) {
 }
 
 boost::future<int> stat64(process::Process& process, memory::vaddr_t pathname, memory::vaddr_t result) {
-    printf("Attempting to read path from %p\n", reinterpret_cast<void*>(pathname));
     std::string path = memory::UserMemory(process, pathname).readString();
-    std::cout << "Read path " << path << std::endl;
 
     auto promise = std::make_shared<boost::promise<int>>();
     fs::rootFileSystem->stat(path).then(fs::asyncExecutor, [&process, promise, result] (auto attributes) {

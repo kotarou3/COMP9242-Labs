@@ -265,8 +265,10 @@ int main(void) {
     int i, r, done, found, new, argc;
     char *bp, *p;
 
+
     in = open("console", O_RDONLY);
     assert(in >= 0);
+
 
     bp = buf;
     done = 0;
@@ -278,6 +280,7 @@ int main(void) {
         if (new) {
             printf("$ ");
         }
+        stat("bootimg.elf", &sbuf);
         new = 0;
         found = 0;
 
