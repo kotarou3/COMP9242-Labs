@@ -960,11 +960,11 @@ long sys_ftruncate64()
     assert(!"sys_ftruncate64 not implemented");
     __builtin_unreachable();
 }
-long sys_stat64()
+/*long sys_stat64()
 {
     assert(!"sys_stat64 not implemented");
     __builtin_unreachable();
-}
+}*/
 long sys_lstat64()
 {
     assert(!"sys_lstat64 not implemented");
@@ -1090,16 +1090,16 @@ long sys_madvise1()
     assert(!"sys_madvise1 not implemented");
     __builtin_unreachable();
 }
-long sys_getdents64()
+/*long sys_getdents64()
 {
     assert(!"sys_getdents64 not implemented");
     __builtin_unreachable();
-}
-long sys_fcntl64()
+}*/
+/*long sys_fcntl64()
 {
     assert(!"sys_fcntl64 not implemented");
     __builtin_unreachable();
-}
+}*/
 /*long sys_gettid()
 {
     assert(!"sys_gettid not implemented");
@@ -2445,11 +2445,11 @@ long sys_ftruncate64()
     assert(!"sys_ftruncate64 not implemented");
     __builtin_unreachable();
 }
-long sys_stat64()
+/*long sys_stat64()
 {
     assert(!"sys_stat64 not implemented");
     __builtin_unreachable();
-}
+}*/
 long sys_lstat64()
 {
     assert(!"sys_lstat64 not implemented");
@@ -2555,11 +2555,11 @@ long sys_setfsgid32()
     assert(!"sys_setfsgid32 not implemented");
     __builtin_unreachable();
 }
-long sys_getdents64()
+/*long sys_getdents64()
 {
     assert(!"sys_getdents64 not implemented");
     __builtin_unreachable();
-}
+}*/
 long sys_pivot_root()
 {
     assert(!"sys_pivot_root not implemented");
@@ -2575,11 +2575,11 @@ long sys_madvise()
     assert(!"sys_madvise not implemented");
     __builtin_unreachable();
 }
-long sys_fcntl64()
+/*long sys_fcntl64()
 {
     assert(!"sys_fcntl64 not implemented");
     __builtin_unreachable();
-}
+}*/
 /*long sys_gettid()
 {
     assert(!"sys_gettid not implemented");
