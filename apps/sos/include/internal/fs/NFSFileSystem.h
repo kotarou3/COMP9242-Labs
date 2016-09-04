@@ -1,37 +1,23 @@
 #pragma once
 
-#include "internal/fs/File.h"
 #include <nfs/nfs.h>
 
-#ifndef SOS_NFS_DIR
-#  ifdef CONFIG_SOS_NFS_DIR
-#    define SOS_NFS_DIR CONFIG_SOS_NFS_DIR
-#  else
-#    define SOS_NFS_DIR ""
-#  endif
-#endif
-
+#include "internal/fs/File.h"
+#include "internal/timer/timer.h"
 
 namespace fs {
 
 class NFSFileSystem : public FileSystem {
-public:
-    NFSFileSystem();
+    public:
+        NFSFileSystem(const std::string& serverIp, const std::string& nfsDir);
+        virtual ~NFSFileSystem() override;
 
-    virtual ~NFSFileSystem() override = default;
+        virtual boost::future<std::shared_ptr<File>> open(const std::string& pathname) override;
+        virtual boost::future<std::unique_ptr<nfs::fattr_t>> stat(const std::string& pathname) override;
 
-    // can't copy or move. This way it can be passed as a reference to the lambda functions
-    NFSFileSystem(const NFSFileSystem&) = delete;
-    NFSFileSystem(NFSFileSystem&&) = delete;
-    NFSFileSystem& operator=(const NFSFileSystem&) = delete;
-    NFSFileSystem& operator=(NFSFileSystem&&) = delete;
-
-    virtual boost::future <std::shared_ptr<File>> open(const std::string &pathname) override;
-    boost::future <std::shared_ptr<File>> lookup(const std::string &pathname);
-    virtual boost::future <std::unique_ptr<nfs::fattr_t>> stat(const std::string &pathname) override;
-
-private:
-    nfs::fhandle_t mnt_point = {{0}};
+    private:
+        nfs::fhandle_t _handle;
+        timer::TimerId _timeoutTimer;
 };
 
 }

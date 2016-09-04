@@ -166,7 +166,7 @@ void Thread::handleFault(const seL4_MessageInfo_t& message) noexcept {
                         try {
                             seL4_SetMR(0, result.get());
                         } catch (...) {
-                            seL4_SetMR(0, syscall::exceptionToErrno(std::current_exception()));
+                            seL4_SetMR(0, -syscall::exceptionToErrno(std::current_exception()));
                         }
                         seL4_Send(replyCap, reply);
 
@@ -175,7 +175,7 @@ void Thread::handleFault(const seL4_MessageInfo_t& message) noexcept {
                 }
             } catch (...) {
                 seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
-                seL4_SetMR(0, syscall::exceptionToErrno(std::current_exception()));
+                seL4_SetMR(0, -syscall::exceptionToErrno(std::current_exception()));
                 seL4_Reply(reply);
             }
             break;

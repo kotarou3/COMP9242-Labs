@@ -48,8 +48,6 @@ extern "C" {
 #include "internal/syscall/fs.h"
 #include "internal/timer/timer.h"
 
-#define verbose 5
-
 /* To differencient between async and and sync IPC, we assign a
  * badge to the async endpoint. The badge that we receive will
  * be the bitwise 'OR' of the async endpoint badge and the badges
@@ -279,13 +277,7 @@ int main(void) {
     /* Initialise the root filesystem */
     auto rootFileSystem = std::make_unique<fs::FlatFileSystem>();
     rootFileSystem->mount(std::move(deviceFileSystem));
-    try {
-        auto nfsFileSystem = std::make_unique<fs::NFSFileSystem>();
-        rootFileSystem->mount(std::move(nfsFileSystem));
-        printf("Successfully mounted NFS filesystem\n");
-    } catch (std::runtime_error &e) {
-        printf("%s\n", e.what());
-    }
+    rootFileSystem->mount(std::make_unique<fs::NFSFileSystem>(CONFIG_SOS_GATEWAY, CONFIG_SOS_NFS_DIR));
     fs::rootFileSystem = std::move(rootFileSystem);
 
 

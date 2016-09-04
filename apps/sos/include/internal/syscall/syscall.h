@@ -37,7 +37,7 @@ namespace {
                 assert(result.is_ready());                                                       \
                 return result.get();                                                             \
             } catch (...) {                                                                      \
-                return syscall::exceptionToErrno(std::current_exception());                      \
+                return -syscall::exceptionToErrno(std::current_exception());                     \
             }                                                                                    \
         }
 }

@@ -44,7 +44,6 @@ extern "C" {
 }
 #include <nfs/nfs.h>
 
-
 #define ARP_PRIME_TIMEOUT_MS     1000
 #define ARP_PRIME_RETRY_DELAY_MS   10
 

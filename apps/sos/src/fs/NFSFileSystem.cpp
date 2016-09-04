@@ -1,17 +1,24 @@
-#include "internal/fs/NFSFileSystem.h"
-#include "internal/fs/NFSFile.h"
-#include "internal/syscall/helpers.h"
-#include <nfs/nfs.h>
-#include <memory>
-
 #include <stdexcept>
 
+extern "C" {
+    #include <autoconf.h>
+}
+
+#include "internal/fs/NFSFile.h"
+#include "internal/fs/NFSFileSystem.h"
 
 namespace fs {
 
-NFSFileSystem::NFSFileSystem() {
-    mnt_point = nfs::mount(SOS_NFS_DIR);
+NFSFileSystem::NFSFileSystem(const std::string& serverIp, const std::string& nfsDir) {
+    ip_addr ip;
+    if (!ipaddr_aton(CONFIG_SOS_GATEWAY, &ip))
+        throw std::invalid_argument(serverIp + " is not a valid IPv4 address");
+    nfs::init(ip);
+
+    _handle = nfs::mount(nfsDir);
+    _timeoutTimer = timer::setTimer(std::chrono::milliseconds(100), nfs::timeout, true);
 }
+
 
 boost::future<std::unique_ptr<nfs::fattr_t>> NFSFileSystem::stat(const std::string& path) {
     boost::promise<std::unique_ptr<nfs::fattr_t>> promise;
@@ -20,26 +27,15 @@ boost::future<std::unique_ptr<nfs::fattr_t>> NFSFileSystem::stat(const std::stri
     return promise.get_future();
 }
 
-boost::future<std::shared_ptr<File>> NFSFileSystem::open(const std::string& path) {
-    auto promise = std::make_shared<boost::promise<std::shared_ptr<File>>>();
-    printf("About to lookup\n");
-    nfs::lookup(mnt_point, path.c_str()).then(asyncExecutor,
-            [this, promise, path](auto results) {
-                printf("Got results\n");
-                if (results.get().second->type == nfs::NFNON) {
-                    // sos files can only be regular files
-//                    this->lookupCache.emplace(path, std::make_shared<File>(fh, fattr));
-//                    promise->set_value(this->lookupCache.find(path)->second);
-                    try {
-                        promise->set_value(std::make_shared<NFSFile>(results.get().first, results.get().second));
-                    } catch (...) {
-                        promise->set_exception(std::current_exception());
-                    }
-                } else
-                    promise->set_exception(std::system_error(ENOENT, std::system_category(), "File was not a regular file"));
-            }
-    );
-    return promise->get_future();
+NFSFileSystem::~NFSFileSystem() {
+    timer::clearTimer(_timeoutTimer);
+}
+
+boost::future<std::shared_ptr<File>> NFSFileSystem::open(const std::string& pathname) {
+    return nfs::lookup(_handle, pathname)
+        .then(asyncExecutor, [](auto result) {
+            return std::shared_ptr<File>(new NFSFile(*result.get().first), *result.get.second());
+        });
 }
 
 }
