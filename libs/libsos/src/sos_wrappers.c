@@ -33,7 +33,7 @@ static fmode_t posix_to_sos_fmode(mode_t mode) {
 }
 
 int sos_sys_open(const char* path, int flags) {
-    return open(path, flags);
+    return open(path, flags | O_CREAT, 0666);
 }
 
 int sos_sys_close(int file) {

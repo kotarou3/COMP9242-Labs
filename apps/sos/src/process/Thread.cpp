@@ -199,7 +199,6 @@ Process::Process():
 {
     if (!_cspace)
         throw std::system_error(ENOMEM, std::system_category(), "Failed to create CSpace");
-    fdTable = fs::FDTable{};
 }
 
 Process::Process(bool isSosProcess):
@@ -216,7 +215,6 @@ Process::Process(bool isSosProcess):
     flags.fixed = true;
     flags.reserved = true;
     maps.insert(0, memory::MMAP_START / PAGE_SIZE, memory::Attributes{}, flags).release();
-    fdTable = fs::FDTable{};
 }
 
 void Process::handlePageFault(memory::vaddr_t address, memory::Attributes cause) {
