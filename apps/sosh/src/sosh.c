@@ -272,10 +272,8 @@ int main(void) {
     int i, r, done, found, new, argc;
     char *bp, *p;
 
-
     in = open("console", O_RDONLY);
     assert(in >= 0);
-
 
     bp = buf;
     done = 0;
@@ -378,7 +376,6 @@ int main(void) {
         /* Didn't find a command */
         if (found == 0) {
             /* They might try to exec a program */
-            printf("Got argv=%p\n", argv[0]);
             if (sos_stat(argv[0], &sbuf) != 0) {
                 printf("Command \"%s\" not found\n", argv[0]);
             } else if (!(sbuf.st_fmode & FM_EXEC)) {
