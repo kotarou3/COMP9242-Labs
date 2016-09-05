@@ -92,16 +92,6 @@ int sos_getdirent(int pos, char *name, size_t nbyte) {
 
 int sos_stat(const char *path, sos_stat_t *buf) {
     struct stat s;
-    int err = sys_stat64(path, &s);
-    if (!err) {
-        buf->st_type = S_ISREG(s.st_mode) ? ST_FILE : ST_SPECIAL;
-        buf->st_fmode = posix_to_sos_fmode(s.st_mode);
-        buf->st_size = s.st_size;
-        buf->st_ctime = posix_to_sos_time(s.st_ctim.tv_sec);
-        buf->st_atime = posix_to_sos_time(s.st_atim.tv_sec);
-    }
-    return err;
-    struct stat s;
     int err = stat(path, &s);
     if (!err) {
         buf->st_type = S_ISREG(s.st_mode) ? ST_FILE : ST_SPECIAL;
