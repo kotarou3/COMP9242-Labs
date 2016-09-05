@@ -24,6 +24,8 @@
 /* Your OS header file */
 #include <sos.h>
 
+#include "benchmark.h"
+
 #define BUF_SIZ    6144
 #define MAX_ARGS   32
 
@@ -250,6 +252,10 @@ static int kill(int argc, char *argv[]) {
     return sos_process_delete(pid);
 }
 
+static int benchmark(int argc, char *argv[]) {
+    return sos_benchmark();
+}
+
 struct command {
     char *name;
     int (*command)(int argc, char **argv);
@@ -257,7 +263,8 @@ struct command {
 
 struct command commands[] = { { "dir", dir }, { "ls", dir }, { "cat", cat }, {
         "cp", cp }, { "ps", ps }, { "exec", exec }, {"sleep",second_sleep}, {"msleep",milli_sleep},
-        {"time", second_time}, {"mtime", micro_time}, {"kill", kill} };
+        {"time", second_time}, {"mtime", micro_time}, {"kill", kill},
+        {"benchmark", benchmark}};
 
 int main(void) {
     char buf[BUF_SIZ];
