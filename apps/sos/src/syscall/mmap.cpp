@@ -53,7 +53,7 @@ boost::future<int> mmap2(process::Process& process, memory::vaddr_t addr, size_t
 
     int result = static_cast<int>(map.getStart());
     map.release();
-    return _returnNow(result);
+    return boost::make_ready_future(result);
 }
 
 boost::future<int> munmap(process::Process& process, memory::vaddr_t addr, size_t length) {
@@ -61,7 +61,7 @@ boost::future<int> munmap(process::Process& process, memory::vaddr_t addr, size_
         throw std::invalid_argument("Invalid page or length alignment");
 
     process.maps.erase(addr, length / PAGE_SIZE);
-    return _returnNow(0);
+    return boost::make_ready_future(0);
 }
 
 }

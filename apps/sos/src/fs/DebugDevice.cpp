@@ -27,9 +27,7 @@ boost::future<ssize_t> DebugDevice::write(const std::vector<IoVector>& iov, off6
             throw;
     }
 
-    boost::promise<ssize_t> promise;
-    promise.set_value(totalBytesWritten);
-    return promise.get_future();
+    return boost::make_ready_future(totalBytesWritten);
 }
 
 boost::future<int> DebugDevice::ioctl(size_t request, memory::UserMemory argp) {
@@ -44,9 +42,7 @@ boost::future<int> DebugDevice::ioctl(size_t request, memory::UserMemory argp) {
         .ws_ypixel = 480
     });
 
-    boost::promise<ssize_t> promise;
-    promise.set_value(0);
-    return promise.get_future();
+    return boost::make_ready_future(0);
 }
 
 }

@@ -12,7 +12,7 @@ namespace syscall {
 namespace {
     boost::future<ssize_t> _preadwritev2(bool isWrite, process::Process& process, int fd, const std::vector<fs::IoVector>& iov, off64_t offset) {
         if (iov.size() == 0)
-            return _returnNow(0);
+            return boost::make_ready_future(0);
 
         fs::OpenFile::Flags flags = {
             .read = !isWrite,
@@ -98,7 +98,7 @@ boost::future<int> open(process::Process& process, memory::vaddr_t pathname, int
 
 boost::future<int> close(process::Process& process, int fd) {
     if (process.fdTable.erase(fd))
-        return _returnNow(0);
+        return boost::make_ready_future(0);
 
     throw std::system_error(EBADF, std::system_category());
 }

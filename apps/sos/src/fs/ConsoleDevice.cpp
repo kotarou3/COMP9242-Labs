@@ -88,9 +88,7 @@ void ConsoleDevice::mountOn(DeviceFileSystem& fs, const std::string& name) {
             serial_register_handler(_serial, _serialHandler);
         }
 
-        boost::promise<std::shared_ptr<File>> promise;
-        promise.set_value(std::shared_ptr<File>(new ConsoleDevice));
-        return promise.get_future();
+        return boost::make_ready_future(std::shared_ptr<File>(new ConsoleDevice));
     });
 }
 
@@ -126,9 +124,7 @@ boost::future<ssize_t> ConsoleDevice::write(const std::vector<IoVector>& iov, of
             throw;
     }
 
-    boost::promise<ssize_t> promise;
-    promise.set_value(totalBytesWritten);
-    return promise.get_future();
+    return boost::make_ready_future(totalBytesWritten);
 }
 
 boost::future<int> ConsoleDevice::ioctl(size_t request, memory::UserMemory argp) {
@@ -143,9 +139,7 @@ boost::future<int> ConsoleDevice::ioctl(size_t request, memory::UserMemory argp)
         .ws_ypixel = 480
     });
 
-    boost::promise<ssize_t> promise;
-    promise.set_value(0);
-    return promise.get_future();
+    return boost::make_ready_future(0);
 }
 
 }

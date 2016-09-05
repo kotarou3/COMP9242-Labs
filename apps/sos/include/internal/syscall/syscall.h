@@ -22,27 +22,19 @@ boost::future<int> handle(process::Process& process, long number, size_t argc, s
 
 int exceptionToErrno(std::exception_ptr e) noexcept;
 
-namespace {
-    inline boost::future<int> _returnNow(int result) {
-        boost::promise<int> promise;
-        promise.set_value(result);
-        return promise.get_future();
+#define FORWARD_SYSCALL(name, argc)                                                          \
+    extern "C" int sys_##name(va_list ap) noexcept {                                         \
+        seL4_Word argv[argc];                                                                \
+        for (size_t a = 0; a < argc; ++a)                                                    \
+            argv[a] = va_arg(ap, seL4_Word);                                                 \
+                                                                                             \
+        try {                                                                                \
+            auto result = syscall::handle(process::getSosProcess(), SYS_##name, argc, argv); \
+            assert(result.is_ready());                                                       \
+            return result.get();                                                             \
+        } catch (...) {                                                                      \
+            return -syscall::exceptionToErrno(std::current_exception());                     \
+        }                                                                                    \
     }
-
-    #define FORWARD_SYSCALL(name, argc)                                                          \
-        extern "C" int sys_##name(va_list ap) noexcept {                                         \
-            seL4_Word argv[argc];                                                                \
-            for (size_t a = 0; a < argc; ++a)                                                    \
-                argv[a] = va_arg(ap, seL4_Word);                                                 \
-                                                                                                 \
-            try {                                                                                \
-                auto result = syscall::handle(process::getSosProcess(), SYS_##name, argc, argv); \
-                assert(result.is_ready());                                                       \
-                return result.get();                                                             \
-            } catch (...) {                                                                      \
-                return -syscall::exceptionToErrno(std::current_exception());                     \
-            }                                                                                    \
-        }
-}
 
 }
