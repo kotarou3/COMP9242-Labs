@@ -18,6 +18,7 @@
 #include <time.h>
 #include <sys/time.h>
 #include <utils/util.h>
+#include <sel4/sel4.h>
 
 #include <sos.h>
 
