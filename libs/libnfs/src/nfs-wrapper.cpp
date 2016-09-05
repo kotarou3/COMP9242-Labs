@@ -5,6 +5,10 @@
 
 #include <assert.h>
 
+extern "C" {
+    #include <lwip/pbuf.h>
+}
+
 #include "nfs.h"
 
 namespace nfs {
@@ -152,51 +156,93 @@ namespace {
         _getattrRequests.erase(id);
     }
 
-    std::unordered_map<size_t, boost::promise<std::tuple<fattr_t*, size_t, uint8_t*>>> _readRequests;
-    size_t _readRequestsNextId;
-    void _readCallback(size_t id, nfs_stat_t e, fattr_t* attr, int length, void* data) noexcept try {
-        if (e != NFS_OK)
-            _throwNfsError(e, "Failed to read from a NFS file");
-        if (length < 0)
-            throw std::system_error(ECOMM, std::system_category(), "NFS returned a negative length");
+    struct ReadRequest {
+        fhandle_t handle;
+        off_t offset;
+        size_t count;
+        uint8_t* data;
 
-        _readRequests.at(id).set_value(std::make_tuple(attr, static_cast<size_t>(length), reinterpret_cast<uint8_t*>(data)));
+        size_t readBytes;
+        boost::promise<size_t> promise;
+    };
+    std::unordered_map<size_t, ReadRequest> _readRequests;
+    size_t _readRequestsNextId;
+    void _readCallback(size_t id, nfs_stat_t e, fattr_t* attr, pbuf* packet, int length, int pos) noexcept try {
+        auto& request = _readRequests.at(id);
+
+        if (e != NFS_OK) {
+            if (request.readBytes != 0)
+                goto resolvePromise;
+            _throwNfsError(e, "Failed to read from a NFS file");
+        }
+        if (length < 0 || pos < 0) {
+            if (request.readBytes != 0)
+                goto resolvePromise;
+            throw std::system_error(ECOMM, std::system_category(), "NFS returned a negative length");
+        }
+
+        pbuf_copy_partial(packet, request.data + request.readBytes, length, pos);
+        request.readBytes += length;
+
+        if (length > 0 && request.readBytes < request.count) {
+            rpc_stat_t e = nfs_read(
+                &request.handle,
+                request.offset + request.readBytes,
+                request.count - request.readBytes,
+                _readCallback, id
+            );
+            if (e == RPC_OK)
+                return;
+        }
+
+    resolvePromise:
+        request.promise.set_value(static_cast<size_t>(request.readBytes));
         _readRequests.erase(id);
     } catch (...) {
-        _readRequests.at(id).set_exception(std::current_exception());
+        _readRequests.at(id).promise.set_exception(std::current_exception());
         _readRequests.erase(id);
     }
 
-    struct writeOp {
-        const fhandle_t* fh;
+    struct WriteRequest {
+        fhandle_t handle;
         off_t offset;
-        size_t count, completed;
+        size_t count;
         const uint8_t* data;
-        boost::promise<std::pair<fattr_t*, size_t>> promise;
-    };
-    std::unordered_map<size_t, writeOp> _writeRequests;
-    size_t _writeRequestsNextId;
-    void _writeCallback(size_t id, nfs_stat_t e, fattr_t* attr, int length) noexcept try {
-        if (e != NFS_OK)
-            _throwNfsError(e, "Failed to write to a NFS file");
-        if (length < 0)
-            throw std::system_error(ECOMM, std::system_category(), "NFS returned a negative length");
-        auto& req = _writeRequests.at(id);
-        req.completed += length;
-        if (length > 0 && req.completed < req.count) {
-            rpc_stat_t e = nfs_write(req.fh,
-                    req.offset + req.completed, req.count - req.completed,
-                    req.data + req.completed, _writeCallback, id
-            );
-            if (e != RPC_OK) {
-                _writeRequests.erase(id);
-                _throwRpcError(e, "Failed to write to a NFS file");
-            }
 
-            return;
+        size_t writtenBytes;
+        boost::promise<size_t> promise;
+    };
+    std::unordered_map<size_t, WriteRequest> _writeRequests;
+    size_t _writeRequestsNextId;
+    void _writeCallback(size_t id, nfs_stat_t e, fattr_t* /*attr*/, int length) noexcept try {
+        auto& request = _writeRequests.at(id);
+
+        if (e != NFS_OK) {
+            if (request.writtenBytes != 0)
+                goto resolvePromise;
+            _throwNfsError(e, "Failed to write to a NFS file");
+        }
+        if (length < 0) {
+            if (request.writtenBytes != 0)
+                goto resolvePromise;
+            throw std::system_error(ECOMM, std::system_category(), "NFS returned a negative length");
         }
 
-        _writeRequests.at(id).promise.set_value(std::make_pair(attr, static_cast<size_t>(req.completed)));
+        request.writtenBytes += length;
+        if (length > 0 && request.writtenBytes < request.count) {
+            rpc_stat_t e = nfs_write(
+                &request.handle,
+                request.offset + request.writtenBytes,
+                request.count - request.writtenBytes,
+                request.data + request.writtenBytes,
+                _writeCallback, id
+            );
+            if (e == RPC_OK)
+                return;
+        }
+
+    resolvePromise:
+        request.promise.set_value(static_cast<size_t>(request.writtenBytes));
         _writeRequests.erase(id);
     } catch (...) {
         _writeRequests.at(id).promise.set_exception(std::current_exception());
@@ -309,17 +355,17 @@ boost::future<fattr_t*> getattr(const fhandle_t& fh) {
     return future;
 }
 
-boost::future<std::tuple<fattr_t*, size_t, uint8_t*>> read(const fhandle_t& fh, off_t offset, size_t count) {
+boost::future<size_t> read(const fhandle_t& fh, off_t offset, size_t count, uint8_t* data) {
     if (count > std::numeric_limits<int>::max())
         throw std::invalid_argument("Count is bigger than what an int can store");
 
     while (_readRequests.count(_readRequestsNextId) > 0)
         ++_readRequestsNextId;
     size_t id = _readRequestsNextId++;
-    auto& request = _readRequests[id];
-    auto future = request.get_future();
+    auto& request = _readRequests[id] = {.handle = fh, .offset = offset, .count = count, .data = data};
+    auto future = request.promise.get_future();
 
-    rpc_stat_t e = nfs_read(&fh, offset, count, _readCallback, id);
+    rpc_stat_t e = nfs_read(&request.handle, offset, count, _readCallback, id);
     if (e != RPC_OK) {
         _readRequests.erase(id);
         _throwRpcError(e, "Failed to read from a NFS file");
@@ -328,20 +374,17 @@ boost::future<std::tuple<fattr_t*, size_t, uint8_t*>> read(const fhandle_t& fh, 
     return future;
 }
 
-boost::future<std::pair<fattr_t*, size_t>> write(const fhandle_t& fh, off_t offset, size_t count, const uint8_t* data) {
+boost::future<size_t> write(const fhandle_t& fh, off_t offset, size_t count, const uint8_t* data) {
     if (count > std::numeric_limits<int>::max())
         throw std::invalid_argument("Count is bigger than what an int can store");
 
     while (_writeRequests.count(_writeRequestsNextId) > 0)
         ++_writeRequestsNextId;
     size_t id = _writeRequestsNextId++;
-    _writeRequests.insert(std::make_pair(id, writeOp{
-            .fh=&fh, .offset=offset, .count=count,
-            .completed=0U, .data=data}));
-    auto& request = _writeRequests[id];
+    auto& request = _writeRequests[id] = {.handle = fh, .offset = offset, .count = count, .data = data};
     auto future = request.promise.get_future();
 
-    rpc_stat_t e = nfs_write(&fh, offset, count, data, _writeCallback, id);
+    rpc_stat_t e = nfs_write(&request.handle, offset, count, data, _writeCallback, id);
     if (e != RPC_OK) {
         _writeRequests.erase(id);
         _throwRpcError(e, "Failed to write to a NFS file");
