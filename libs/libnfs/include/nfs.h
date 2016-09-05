@@ -625,7 +625,7 @@ boost::future<void> remove(const fhandle_t& pfh, const std::string& name);
 
 boost::future<fattr_t*> getattr(const fhandle_t& fh);
 boost::future<std::tuple<fattr_t*, size_t, uint8_t*>> read(const fhandle_t& fh, off_t offset, size_t count);
-boost::future<std::pair<fattr_t*, size_t>> write(const fhandle_t& fh, off_t offset, size_t count, const uint8_t* data);
+boost::future<size_t> write(const fhandle_t& fh, off_t offset, size_t count, const uint8_t* data);
 
 }
 #endif
