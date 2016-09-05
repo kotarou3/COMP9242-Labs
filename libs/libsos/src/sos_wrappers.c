@@ -26,12 +26,10 @@ static long posix_to_sos_time(struct timespec time) {
     return time.tv_sec * 1000 + time.tv_nsec / 1000000;
 }
 
-static mode_t sos_to_posix_fmode(fmode_t mode) {
-    return mode;
-}
-
 static fmode_t posix_to_sos_fmode(mode_t mode) {
-    return mode;
+    return (mode & S_IRUSR ? FM_READ : 0) |
+           (mode & S_IWUSR ? FM_WRITE : 0) |
+           (mode & S_IXUSR ? FM_EXEC : 0);
 }
 
 int sos_sys_open(const char* path, int flags) {

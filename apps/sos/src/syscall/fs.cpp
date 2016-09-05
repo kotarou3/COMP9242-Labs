@@ -128,21 +128,6 @@ boost::future<int> close(process::Process& process, int fd) {
     throw std::system_error(EBADF, std::system_category());
 }
 
-boost::future<int> stat64(process::Process& process, memory::vaddr_t pathname, memory::vaddr_t result) {
-    std::string path = memory::UserMemory(process, pathname).readString();
-
-    auto promise = std::make_shared<boost::promise<int>>();
-    fs::rootFileSystem->stat(path).then(fs::asyncExecutor, [&process, promise, result] (auto attributes) {
-        try {
-            memory::UserMemory(process, result).set(*attributes.get());
-        } catch (...) {
-            promise->set_exception(std::current_exception());
-        }
-        promise->set_value(0);
-    });
-    return promise->get_future();
-}
-
 boost::future<int> read(process::Process& process, int fd, memory::vaddr_t buf, size_t count) {
     return _preadwrite(false, process, fd, buf, count, fs::CURRENT_OFFSET);
 }
@@ -207,7 +192,6 @@ boost::future<int> ioctl(process::Process& process, int fd, size_t request, memo
 FORWARD_SYSCALL(stat64, 2);
 FORWARD_SYSCALL(open, 3);
 FORWARD_SYSCALL(close, 1);
-FORWARD_SYSCALL(stat64, 2);
 
 FORWARD_SYSCALL(read, 3);
 FORWARD_SYSCALL(readv, 3);
