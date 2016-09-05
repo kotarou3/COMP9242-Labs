@@ -6,7 +6,6 @@
 #include <dirent.h>
 
 #include "internal/fs/DeviceFileSystem.h"
-#include "internal/syscall/helpers.h"
 
 namespace fs {
 
@@ -48,16 +47,6 @@ boost::future<std::shared_ptr<File>> DeviceFileSystem::open(const std::string& p
     }
 }
 
-boost::future<std::unique_ptr<nfs::fattr_t>> DeviceFileSystem::stat(const std::string& pathname) {
-    auto promise = boost::promise<std::unique_ptr<nfs::fattr_t>>();
-    open(pathname).then(asyncExecutor, [] (auto result) {
-        // TODO: actually check read / write attributes of the device
-        (void)result;
-        return std::unique_ptr<nfs::fattr_t>(new nfs::fattr_t{});
-    });
-    return promise.get_future();
-}
-
 void DeviceFileSystem::create(const std::string& name, const DeviceFileSystem::OpenCallback& openCallback) {
     timespec now;
     if (clock_gettime(CLOCK_REALTIME, &now) != 0)
@@ -92,23 +81,20 @@ boost::future<ssize_t> DeviceDirectory::getdents(memory::UserMemory dirp, size_t
     for (; _currentPosition != _fs._devices.cend(); ++_currentPosition) {
         auto& name = _currentPosition->first;
 
-        size_t size = std::min(
-            offsetof(dirent, d_name) + name.size() + 1,
-            static_cast<size_t>(std::numeric_limits<decltype(curDirent->d_reclen)>::max())
-        );
-        if (writtenBytes + size > length)
+        dirent* nextDirent = _alignNextDirent(curDirent, name.size());
+        size_t size = reinterpret_cast<size_t>(nextDirent) - reinterpret_cast<size_t>(curDirent);
+        size_t nameLength = size - 1 - offsetof(dirent, d_name);
+
+        if (size > length - writtenBytes)
             break;
 
-        *curDirent = {0};
+        curDirent->d_ino = 0;
         curDirent->d_off = entryCount++;
         curDirent->d_reclen = size;
         curDirent->d_type = DT_CHR;
+        curDirent->d_name[name.copy(curDirent->d_name, nameLength)] = 0;
 
-        size_t nameLength = size - 1 - offsetof(dirent, d_name);
-        name.copy(curDirent->d_name, nameLength);
-        curDirent->d_name[nameLength] = 0;
-
-        curDirent = reinterpret_cast<dirent*>(reinterpret_cast<uint8_t*>(curDirent) + size);
+        curDirent = nextDirent;
         writtenBytes += size;
     }
 

@@ -17,6 +17,8 @@
 
 #include "internal/memory/UserMemory.h"
 
+struct dirent;
+
 namespace fs {
 
 constexpr const off64_t CURRENT_OFFSET = -1;
@@ -44,6 +46,9 @@ class Directory : public File {
         virtual boost::future<ssize_t> write(const std::vector<IoVector>& iov, off64_t offset) override;
 
         virtual boost::future<ssize_t> getdents(memory::UserMemory dirp, size_t length) = 0;
+
+    protected:
+        static dirent* _alignNextDirent(dirent* curDirent, size_t nameLength);
 };
 
 class FileSystem {

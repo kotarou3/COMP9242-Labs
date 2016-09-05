@@ -83,6 +83,7 @@ int sos_getdirent(int pos, char *name, size_t nbyte) {
         } else {
             int prevErrno = errno;
             closedir(dirp);
+            dirp = NULL;
 
             errno = prevErrno;
             return errno ? -1 : 0;

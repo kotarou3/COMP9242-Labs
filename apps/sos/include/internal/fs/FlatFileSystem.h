@@ -16,6 +16,22 @@ class FlatFileSystem : public FileSystem {
 
     private:
         std::vector<std::unique_ptr<FileSystem>> _filesystems;
+
+        friend class FlatDirectory;
+};
+
+class FlatDirectory : public Directory {
+    public:
+        FlatDirectory(FlatFileSystem& fs);
+        virtual ~FlatDirectory() override = default;
+
+        virtual boost::future<ssize_t> getdents(memory::UserMemory dirp, size_t length);
+
+    private:
+        FlatFileSystem& _fs;
+
+        size_t _currentFsIndex;
+        std::shared_ptr<Directory> _currentFsDirectory;
 };
 
 }

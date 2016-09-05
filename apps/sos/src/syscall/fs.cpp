@@ -1,12 +1,15 @@
 #include <stdexcept>
 #include <system_error>
+
 #include <sys/uio.h>
+#include <dirent.h>
 
 #include "internal/fs/File.h"
 #include "internal/fs/FileDescriptor.h"
 #include "internal/memory/UserMemory.h"
 #include "internal/syscall/fs.h"
 
+#undef getdents64
 #undef stat64
 
 namespace syscall {
@@ -108,7 +111,7 @@ boost::future<int> open(process::Process& process, memory::vaddr_t pathname, int
         .then(fs::asyncExecutor, [flags, openFlags, &process](auto file) {
             auto _file = file.get();
 
-            if ((flags & O_DIRECTORY) && !dynamic_cast<fs::Directory*>(_file.get()))
+            if ((flags & O_DIRECTORY) && !std::dynamic_pointer_cast<fs::Directory>(_file))
                 throw std::system_error(ENOTDIR, std::system_category(), "O_DIRECTORY set but file isn't a directory");
 
             return process.fdTable.insert(std::make_shared<fs::OpenFile>(
@@ -175,8 +178,11 @@ boost::future<int> pwritev(process::Process& process, int fd, memory::vaddr_t io
 }
 
 boost::future<int> getdents64(process::Process& process, int fd, memory::vaddr_t dirp, size_t count) {
+    if (dirp & ~-alignof(dirent))
+        throw std::system_error(EFAULT, std::system_category(), "Result buffer isn't aligned");
+
     auto file = process.fdTable.get(fd, fs::OpenFile::Flags{});
-    auto directory = dynamic_cast<fs::Directory*>(file.get());
+    auto directory = std::dynamic_pointer_cast<fs::Directory>(file);
     if (!directory)
         throw std::system_error(ENOTDIR, std::system_category());
 

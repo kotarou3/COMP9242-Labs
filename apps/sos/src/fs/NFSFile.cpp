@@ -90,21 +90,21 @@ boost::future<ssize_t> NFSDirectory::getdents(memory::UserMemory dirp, size_t le
         for (; this->_currentPosition < _names.size(); ++this->_currentPosition) {
             auto& name = _names[this->_currentPosition];
 
-            size_t size = std::min(
-                offsetof(dirent, d_name) + name.size() + 1,
-                static_cast<size_t>(std::numeric_limits<decltype(curDirent->d_reclen)>::max())
-            );
-            if (writtenBytes + size > length)
+            dirent* nextDirent = _alignNextDirent(curDirent, name.size());
+            size_t size = reinterpret_cast<size_t>(nextDirent) - reinterpret_cast<size_t>(curDirent);
+            size_t nameLength = size - 1 - offsetof(dirent, d_name);
+
+            if (size > length - writtenBytes)
                 break;
 
             // XXX: Could fill out more by calling stat()
-            *curDirent = {0};
+            curDirent->d_ino = 0;
+            curDirent->d_off = 0;
+            curDirent->d_reclen = size;
+            curDirent->d_type = DT_UNKNOWN;
+            curDirent->d_name[name.copy(curDirent->d_name, nameLength)] = 0;
 
-            size_t nameLength = size - 1 - offsetof(dirent, d_name);
-            name.copy(curDirent->d_name, nameLength);
-            curDirent->d_name[nameLength] = 0;
-
-            curDirent = reinterpret_cast<dirent*>(reinterpret_cast<uint8_t*>(curDirent) + size);
+            curDirent = nextDirent;
             writtenBytes += size;
         }
 
