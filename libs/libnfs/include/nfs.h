@@ -50,6 +50,8 @@
 
 #include <stdint.h>
 
+struct pbuf;
+
 #ifdef __cplusplus
 
 #include <functional>
@@ -355,16 +357,15 @@ typedef void (*nfs_readdir_cb_t)(uintptr_t token, enum nfs_stat status,
  *                   applications responsibility to copy this data to a more
  *                   permanent location if it is required after this call back
  *                   completes.
+ * @param[in] pbuf   The packet buffer containing the NFS response.
  * @param[in] count  If status is NFS_OK, provides the number of bytes that
  *                   were read from the file.
- * @param[in] data   The memory address of the "count" bytes that were
- *                   read from the file. The contents of "data" will be invalid
- *                   once this call back returns. It is the applications
- *                   responsibility to copy this data to a more permanent
- *                   location if it is required after this call back completes.
+ * @param[in] pos    Starting position of the file data. Pass with count to
+ *                   pbuf_copy_partial() to read the data.
  */
 typedef void (*nfs_read_cb_t)(uintptr_t token, enum nfs_stat status,
-                              fattr_t *fattr, int count, void* data);
+                              fattr_t *fattr,
+                              struct pbuf *pbuf, int count, int pos);
 
 /**
  * A call back function provided by the caller of @ref nfs_write, executed
@@ -624,7 +625,7 @@ boost::future<std::pair<const fhandle_t*, fattr_t*>> create(const fhandle_t& pfh
 boost::future<void> remove(const fhandle_t& pfh, const std::string& name);
 
 boost::future<fattr_t*> getattr(const fhandle_t& fh);
-boost::future<std::tuple<fattr_t*, size_t, uint8_t*>> read(const fhandle_t& fh, off_t offset, size_t count);
+boost::future<size_t> read(const fhandle_t& fh, off_t offset, size_t count, uint8_t* data);
 boost::future<size_t> write(const fhandle_t& fh, off_t offset, size_t count, const uint8_t* data);
 
 }
