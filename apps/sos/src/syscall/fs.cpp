@@ -7,6 +7,8 @@
 #include "internal/memory/UserMemory.h"
 #include "internal/syscall/fs.h"
 
+#undef stat64
+
 namespace syscall {
 
 namespace {
@@ -69,30 +71,50 @@ namespace {
     }
 }
 
+boost::future<int> stat64(process::Process& process, memory::vaddr_t pathname, memory::vaddr_t buf) {
+    return fs::rootFileSystem->stat(memory::UserMemory(process, pathname).readString())
+        .then(fs::asyncExecutor, [&process, buf](auto stat) mutable {
+            memory::UserMemory(process, buf).set(stat.get());
+            return 0;
+        });
+}
+
 boost::future<int> open(process::Process& process, memory::vaddr_t pathname, int flags, mode_t mode) {
-    fs::OpenFile::Flags openFileFlags = {0};
+    fs::FileSystem::OpenFlags openFlags = {0};
     int access = flags & O_ACCMODE;
     if (access == O_RDONLY) {
-        openFileFlags.read = true;
+        openFlags.read = true;
     } else if (access == O_WRONLY) {
-        openFileFlags.write = true;
+        openFlags.write = true;
     } else if (access == O_RDWR) {
-        openFileFlags.read = true;
-        openFileFlags.write = true;
+        openFlags.read = true;
+        openFlags.write = true;
     } else {
         throw std::invalid_argument("File must be opened with some permissions");
     }
 
     // XXX: Ignore these flags for now
-    flags &= ~(O_CREAT | O_TRUNC | O_LARGEFILE);
-    (void)mode;
+    flags &= ~(O_TRUNC | O_LARGEFILE | O_CLOEXEC);
 
-    if (flags & ~O_ACCMODE)
+    openFlags.createOnMissing = flags & O_CREAT;
+    openFlags.mode = mode;
+
+    if (flags & ~(O_ACCMODE | O_CREAT | O_DIRECTORY))
         throw std::invalid_argument("Invalid flags");
+    if (mode & ~07777)
+        throw std::invalid_argument("Invalid mode");
 
-    return fs::rootFileSystem->open(memory::UserMemory(process, pathname).readString())
-        .then(fs::asyncExecutor, [openFileFlags, &process](auto file) {
-            return process.fdTable.insert(std::make_shared<fs::OpenFile>(file.get(), openFileFlags));
+    return fs::rootFileSystem->open(memory::UserMemory(process, pathname).readString(), openFlags)
+        .then(fs::asyncExecutor, [flags, openFlags, &process](auto file) {
+            auto _file = file.get();
+
+            if ((flags & O_DIRECTORY) && !dynamic_cast<fs::Directory*>(_file.get()))
+                throw std::system_error(ENOTDIR, std::system_category(), "O_DIRECTORY set but file isn't a directory");
+
+            return process.fdTable.insert(std::make_shared<fs::OpenFile>(
+                _file,
+                fs::OpenFile::Flags{.read = openFlags.read, .write = openFlags.write}
+            ));
         });
 }
 
@@ -152,12 +174,31 @@ boost::future<int> pwritev(process::Process& process, int fd, memory::vaddr_t io
     return _preadwritev(true, process, fd, iov, iovcnt, offset);
 }
 
+boost::future<int> getdents64(process::Process& process, int fd, memory::vaddr_t dirp, size_t count) {
+    auto file = process.fdTable.get(fd, fs::OpenFile::Flags{});
+    auto directory = dynamic_cast<fs::Directory*>(file.get());
+    if (!directory)
+        throw std::system_error(ENOTDIR, std::system_category());
+
+    return directory->getdents(memory::UserMemory(process, dirp), count);
+}
+
+boost::future<int> fcntl64(process::Process& process, int fd, int cmd, int arg) {
+    process.fdTable.get(fd, fs::OpenFile::Flags{});
+
+    if (cmd == F_SETFD && arg == FD_CLOEXEC)
+        return _returnNow(0); // XXX: Ignore for now
+
+    throw std::system_error(ENOSYS, std::system_category());
+}
+
 boost::future<int> ioctl(process::Process& process, int fd, size_t request, memory::vaddr_t argp) {
     return process.fdTable.get(fd, fs::OpenFile::Flags{})->ioctl(request, memory::UserMemory(process, argp));
 }
 
 }
 
+FORWARD_SYSCALL(stat64, 2);
 FORWARD_SYSCALL(open, 3);
 FORWARD_SYSCALL(close, 1);
 FORWARD_SYSCALL(stat64, 2);
@@ -172,4 +213,7 @@ FORWARD_SYSCALL(writev, 3);
 FORWARD_SYSCALL(pwrite64, 6);
 FORWARD_SYSCALL(pwritev, 6);
 
+FORWARD_SYSCALL(getdents64, 3);
+
+FORWARD_SYSCALL(fcntl64, 3);
 FORWARD_SYSCALL(ioctl, 3);

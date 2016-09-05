@@ -4,6 +4,7 @@
 #include <string>
 
 #include <fcntl.h>
+#include <sys/stat.h>
 
 #define syscall(...) _syscall(__VA_ARGS__)
 // Includes missing from inline_executor.hpp
@@ -12,10 +13,8 @@
 
 #include <boost/thread/executors/inline_executor.hpp>
 #include <boost/thread/future.hpp>
-#include <sos.h>
 #undef syscall
 
-#include <nfs/nfs.h>
 #include "internal/memory/UserMemory.h"
 
 namespace fs {
@@ -34,16 +33,32 @@ class File {
         virtual boost::future<ssize_t> read(const std::vector<IoVector>& iov, off64_t offset);
         virtual boost::future<ssize_t> write(const std::vector<IoVector>& iov, off64_t offset);
 
-        virtual std::unique_ptr<nfs::fattr_t> getattrs();
         virtual boost::future<int> ioctl(size_t request, memory::UserMemory argp);
+};
+
+class Directory : public File {
+    public:
+        virtual ~Directory() = default;
+
+        virtual boost::future<ssize_t> read(const std::vector<IoVector>& iov, off64_t offset) override;
+        virtual boost::future<ssize_t> write(const std::vector<IoVector>& iov, off64_t offset) override;
+
+        virtual boost::future<ssize_t> getdents(memory::UserMemory dirp, size_t length) = 0;
 };
 
 class FileSystem {
     public:
+        struct OpenFlags {
+            bool read:1, write:1;
+
+            bool createOnMissing:1;
+            mode_t mode;
+        };
+
         virtual ~FileSystem() = default;
 
-        virtual boost::future<std::shared_ptr<File>> open(const std::string& pathname) = 0;
-        virtual boost::future<std::unique_ptr<nfs::fattr_t>> stat(const std::string& pathname) = 0;
+        virtual boost::future<struct stat> stat(const std::string& pathname) = 0;
+        virtual boost::future<std::shared_ptr<File>> open(const std::string& pathname, OpenFlags flags) = 0;
 };
 
 extern std::unique_ptr<FileSystem> rootFileSystem;

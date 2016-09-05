@@ -60,6 +60,11 @@ long sys_unlink()
     assert(!"sys_unlink not implemented");
     __builtin_unreachable();
 }
+long sys_execve()
+{
+    assert(!"sys_execve not implemented");
+    __builtin_unreachable();
+}
 long sys_chdir()
 {
     assert(!"sys_chdir not implemented");
@@ -178,6 +183,11 @@ long sys_ftime()
 long sys_sync()
 {
     assert(!"sys_sync not implemented");
+    __builtin_unreachable();
+}
+long sys_kill()
+{
+    assert(!"sys_kill not implemented");
     __builtin_unreachable();
 }
 long sys_rename()
@@ -518,6 +528,11 @@ long sys_getitimer()
     assert(!"sys_getitimer not implemented");
     __builtin_unreachable();
 }
+long sys_stat()
+{
+    assert(!"sys_stat not implemented");
+    __builtin_unreachable();
+}
 long sys_lstat()
 {
     assert(!"sys_lstat not implemented");
@@ -688,6 +703,11 @@ long sys_setfsgid()
     assert(!"sys__llseek not implemented");
     __builtin_unreachable();
 }*/
+long sys_getdents()
+{
+    assert(!"sys_getdents not implemented");
+    __builtin_unreachable();
+}
 long sys__newselect()
 {
     assert(!"sys__newselect not implemented");
@@ -940,11 +960,11 @@ long sys_ftruncate64()
     assert(!"sys_ftruncate64 not implemented");
     __builtin_unreachable();
 }
-long sys_stat()
+/*long sys_stat64()
 {
-    assert(!"sys_stat not implemented");
+    assert(!"sys_stat64 not implemented");
     __builtin_unreachable();
-}
+}*/
 long sys_lstat64()
 {
     assert(!"sys_lstat64 not implemented");
@@ -1070,16 +1090,16 @@ long sys_madvise1()
     assert(!"sys_madvise1 not implemented");
     __builtin_unreachable();
 }
-long sys_getdents64()
+/*long sys_getdents64()
 {
     assert(!"sys_getdents64 not implemented");
     __builtin_unreachable();
-}
-long sys_fcntl64()
+}*/
+/*long sys_fcntl64()
 {
     assert(!"sys_fcntl64 not implemented");
     __builtin_unreachable();
-}
+}*/
 /*long sys_gettid()
 {
     assert(!"sys_gettid not implemented");
@@ -1373,6 +1393,11 @@ long sys_mq_getsetattr()
 long sys_kexec_load()
 {
     assert(!"sys_kexec_load not implemented");
+    __builtin_unreachable();
+}
+long sys_waitid()
+{
+    assert(!"sys_waitid not implemented");
     __builtin_unreachable();
 }
 long sys_add_key()
@@ -1724,6 +1749,11 @@ long sys_unlink()
     assert(!"sys_unlink not implemented");
     __builtin_unreachable();
 }
+long sys_execve()
+{
+    assert(!"sys_execve not implemented");
+    __builtin_unreachable();
+}
 long sys_chdir()
 {
     assert(!"sys_chdir not implemented");
@@ -1787,6 +1817,11 @@ long sys_nice()
 long sys_sync()
 {
     assert(!"sys_sync not implemented");
+    __builtin_unreachable();
+}
+long sys_kill()
+{
+    assert(!"sys_kill not implemented");
     __builtin_unreachable();
 }
 long sys_rename()
@@ -2047,6 +2082,11 @@ long sys_getitimer()
     assert(!"sys_getitimer not implemented");
     __builtin_unreachable();
 }
+long sys_stat()
+{
+    assert(!"sys_stat not implemented");
+    __builtin_unreachable();
+}
 long sys_lstat()
 {
     assert(!"sys_lstat not implemented");
@@ -2165,6 +2205,11 @@ long sys_setfsuid()
 long sys_setfsgid()
 {
     assert(!"sys_setfsgid not implemented");
+    __builtin_unreachable();
+}
+long sys_getdents()
+{
+    assert(!"sys_getdents not implemented");
     __builtin_unreachable();
 }
 long sys__newselect()
@@ -2400,11 +2445,11 @@ long sys_ftruncate64()
     assert(!"sys_ftruncate64 not implemented");
     __builtin_unreachable();
 }
-long sys_stat()
+/*long sys_stat64()
 {
-    assert(!"sys_stat not implemented");
+    assert(!"sys_stat64 not implemented");
     __builtin_unreachable();
-}
+}*/
 long sys_lstat64()
 {
     assert(!"sys_lstat64 not implemented");
@@ -2510,11 +2555,11 @@ long sys_setfsgid32()
     assert(!"sys_setfsgid32 not implemented");
     __builtin_unreachable();
 }
-long sys_getdents64()
+/*long sys_getdents64()
 {
     assert(!"sys_getdents64 not implemented");
     __builtin_unreachable();
-}
+}*/
 long sys_pivot_root()
 {
     assert(!"sys_pivot_root not implemented");
@@ -2530,11 +2575,11 @@ long sys_mincore()
     assert(!"sys_madvise not implemented");
     __builtin_unreachable();
 }*/
-long sys_fcntl64()
+/*long sys_fcntl64()
 {
     assert(!"sys_fcntl64 not implemented");
     __builtin_unreachable();
-}
+}*/
 /*long sys_gettid()
 {
     assert(!"sys_gettid not implemented");
@@ -2803,6 +2848,11 @@ long sys_mq_notify()
 long sys_mq_getsetattr()
 {
     assert(!"sys_mq_getsetattr not implemented");
+    __builtin_unreachable();
+}
+long sys_waitid()
+{
+    assert(!"sys_waitid not implemented");
     __builtin_unreachable();
 }
 long sys_socket()

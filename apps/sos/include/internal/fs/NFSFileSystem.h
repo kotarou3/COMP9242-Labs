@@ -12,8 +12,8 @@ class NFSFileSystem : public FileSystem {
         NFSFileSystem(const std::string& serverIp, const std::string& nfsDir);
         virtual ~NFSFileSystem() override;
 
-        virtual boost::future<std::shared_ptr<File>> open(const std::string& pathname) override;
-        virtual boost::future<std::unique_ptr<nfs::fattr_t>> stat(const std::string& pathname) override;
+        virtual boost::future<struct stat> stat(const std::string& pathname) override;
+        virtual boost::future<std::shared_ptr<File>> open(const std::string& pathname, OpenFlags flags) override;
 
     private:
         nfs::fhandle_t _handle;

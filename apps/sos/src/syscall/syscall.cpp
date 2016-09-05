@@ -38,6 +38,7 @@ namespace {
         #define ADD_SYSCALL(name) if (number == SYS_##name) return reinterpret_cast<ProcessSyscall>(syscall::name)
 
 	    // fs
+        ADD_SYSCALL(stat64);
         ADD_SYSCALL(open);
         ADD_SYSCALL(close);
         ADD_SYSCALL(stat64);
@@ -52,6 +53,9 @@ namespace {
         ADD_SYSCALL(pwrite64);
         ADD_SYSCALL(pwritev);
 
+        ADD_SYSCALL(getdents64);
+
+        ADD_SYSCALL(fcntl64);
         ADD_SYSCALL(ioctl);
 
 	    // mmap
