@@ -8,6 +8,7 @@
  * @TAG(NICTA_BSD)
  */
 
+#include <lwip/pbuf.h>
 #include <nfs/nfs.h>
 #include <stdio.h>
 #include <assert.h>
@@ -347,15 +348,17 @@ struct my_read_arg {
 };
 
 static void
-my_read_cb(uintptr_t token, enum nfs_stat stat, fattr_t * fattr, int read, void* _data){
+my_read_cb(uintptr_t token, enum nfs_stat stat, fattr_t * fattr, struct pbuf * pbuf, int read, int pos){
     struct my_read_arg *arg = (struct my_read_arg*)token;
-    char *data = (char*)_data;
     (void)fattr;
     /* Stat error */
     if(stat != NFS_OK){
         arg->stat = stat;
         arg->v = 1;
     }else if(read > 0){
+        char data[read];
+        pbuf_copy_partial(pbuf, data, read, pos);
+
         int i;
         for(i = 0; i < read; i++){
             if(arg->data[i] != data[i]){

@@ -235,7 +235,6 @@ _nfs_read_cb(void * callback, uintptr_t token, struct pbuf *pbuf)
 {
     uint32_t status = NFSERR_COMM;
     fattr_t pattrs;
-    char *data = NULL;
     uint32_t size = 0;
     struct rpc_reply_hdr hdr; 
     int pos;
@@ -252,18 +251,10 @@ _nfs_read_cb(void * callback, uintptr_t token, struct pbuf *pbuf)
             /* it worked, so take out the return stuff! */
             pb_read_arrl(pbuf, (uint32_t*)&pattrs, sizeof(pattrs), &pos);
             pb_readl(pbuf, &size, &pos);
-            /* malloc for data since pbuf may be part of a chain */
-            data = malloc(size);
-            assert(data != NULL);
-            pb_read(pbuf, data, size, &pos);
         }
     }
 
-    cb(token, status, &pattrs, size, data);
-
-    if(data){
-        free(data);
-    }
+    cb(token, status, &pattrs, pbuf, size, pos);
 }
 
 enum rpc_stat
