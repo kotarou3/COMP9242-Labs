@@ -167,18 +167,39 @@ namespace {
         _readRequests.erase(id);
     }
 
-    std::unordered_map<size_t, boost::promise<std::pair<fattr_t*, size_t>>> _writeRequests;
+    struct writeOp {
+        const fhandle_t* fh;
+        off_t offset;
+        size_t count, completed;
+        const uint8_t* data;
+        boost::promise<std::pair<fattr_t*, size_t>> promise;
+    };
+    std::unordered_map<size_t, writeOp> _writeRequests;
     size_t _writeRequestsNextId;
     void _writeCallback(size_t id, nfs_stat_t e, fattr_t* attr, int length) noexcept try {
         if (e != NFS_OK)
             _throwNfsError(e, "Failed to write to a NFS file");
         if (length < 0)
             throw std::system_error(ECOMM, std::system_category(), "NFS returned a negative length");
+        auto& req = _writeRequests.at(id);
+        req.completed += length;
+        if (length > 0 && req.completed < req.count) {
+            rpc_stat_t e = nfs_write(req.fh,
+                    req.offset + req.completed, req.count - req.completed,
+                    req.data + req.completed, _writeCallback, id
+            );
+            if (e != RPC_OK) {
+                _writeRequests.erase(id);
+                _throwRpcError(e, "Failed to write to a NFS file");
+            }
 
-        _writeRequests.at(id).set_value(std::make_pair(attr, static_cast<size_t>(length)));
+            return;
+        }
+
+        _writeRequests.at(id).promise.set_value(std::make_pair(attr, static_cast<size_t>(req.completed)));
         _writeRequests.erase(id);
     } catch (...) {
-        _writeRequests.at(id).set_exception(std::current_exception());
+        _writeRequests.at(id).promise.set_exception(std::current_exception());
         _writeRequests.erase(id);
     }
 }
@@ -314,8 +335,11 @@ boost::future<std::pair<fattr_t*, size_t>> write(const fhandle_t& fh, off_t offs
     while (_writeRequests.count(_writeRequestsNextId) > 0)
         ++_writeRequestsNextId;
     size_t id = _writeRequestsNextId++;
+    _writeRequests.insert(std::make_pair(id, writeOp{
+            .fh=&fh, .offset=offset, .count=count,
+            .completed=0U, .data=data}));
     auto& request = _writeRequests[id];
-    auto future = request.get_future();
+    auto future = request.promise.get_future();
 
     rpc_stat_t e = nfs_write(&fh, offset, count, data, _writeCallback, id);
     if (e != RPC_OK) {
