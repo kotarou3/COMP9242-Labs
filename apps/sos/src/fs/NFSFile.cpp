@@ -62,7 +62,7 @@ boost::future<ssize_t> NFSFile::write(const std::vector<IoVector>& iov, off64_t 
     );
     return nfs::write(_handle, actualOffset, currentIov.length, map->first)
         .then(asyncExecutor, [this, map](auto result) {
-            size_t written = result.get().second;
+            size_t written = result.get();
             this->_currentOffset += written;
 
             return static_cast<ssize_t>(written);
