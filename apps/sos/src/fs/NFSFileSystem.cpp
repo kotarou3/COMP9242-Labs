@@ -62,6 +62,16 @@ boost::future<std::shared_ptr<File>> NFSFileSystem::open(const std::string& path
             try {
                 if (result.has_exception())
                     result.get();
+                else if (flags.truncate) {
+                    return nfs::create(this->_handle, pathname, nfs::sattr_t{
+                            .mode = flags.mode,
+                            .uid = -1U,
+                            .gid = -1U,
+                            .size = 0,
+                            .atime = {.seconds = -1U, .useconds = -1U},
+                            .mtime = {.seconds = -1U, .useconds = -1U}
+                    });
+                }
                 return result;
             } catch (const std::system_error& e) {
                 if (e.code() != std::error_code(ENOENT, std::system_category()))

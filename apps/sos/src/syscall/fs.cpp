@@ -97,12 +97,13 @@ boost::future<int> open(process::Process& process, memory::vaddr_t pathname, int
     }
 
     // XXX: Ignore these flags for now
-    flags &= ~(O_TRUNC | O_LARGEFILE | O_CLOEXEC);
+    flags &= ~(O_LARGEFILE | O_CLOEXEC);
 
     openFlags.createOnMissing = flags & O_CREAT;
+    openFlags.truncate = flags & O_TRUNC;
     openFlags.mode = mode;
 
-    if (flags & ~(O_ACCMODE | O_CREAT | O_DIRECTORY))
+    if (flags & ~(O_ACCMODE | O_CREAT | O_DIRECTORY | O_TRUNC))
         throw std::invalid_argument("Invalid flags");
     if (mode & ~07777)
         throw std::invalid_argument("Invalid mode");
