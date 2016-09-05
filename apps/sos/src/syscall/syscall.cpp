@@ -99,14 +99,7 @@ boost::future<int> handle(process::Process& process, long number, size_t argc, s
 
 int exceptionToErrno(std::exception_ptr e) noexcept {
     try {
-        try {
-            std::rethrow_exception(e);
-        } catch (std::exception_ptr e) {
-            // This happens when boost::future::set_exception() is called on a
-            // std::exception_ptr - it wraps it in it's own exception object since
-            // std::exception_ptr can't be converted to boost::exception_ptr
-            std::rethrow_exception(e);
-        }
+        std::rethrow_exception(e);
     } catch (const std::bad_alloc& e) {
         kprintf(LOGLEVEL_DEBUG, "Got std::bad_alloc: %s\n", e.what());
         return ENOMEM;
