@@ -280,7 +280,6 @@ int main(void) {
     rootFileSystem->mount(std::make_unique<fs::NFSFileSystem>(CONFIG_SOS_GATEWAY, CONFIG_SOS_NFS_DIR));
     fs::rootFileSystem = std::move(rootFileSystem);
 
-
     /* Start the user application */
     start_first_process(TTY_NAME, _sos_ipc_ep_cap);
 

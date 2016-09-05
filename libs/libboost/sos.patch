@@ -1,0 +1,28 @@
+diff -ru a/boost/exception/detail/exception_ptr.hpp b/boost/exception/detail/exception_ptr.hpp
+--- a/boost/exception/detail/exception_ptr.hpp	2016-05-06 07:11:29.000000000 +1000
++++ b/boost/exception/detail/exception_ptr.hpp	2016-09-05 20:39:47.060115291 +1000
+@@ -33,6 +33,16 @@
+ namespace
+ boost
+     {
++    using std::current_exception;
++    using std::rethrow_exception;
++    using std::exception_ptr;
++
++    template <class E>
++    exception_ptr copy_exception(E e) {
++        return std::make_exception_ptr(e);
++    }
++
++    #if 0
+     class exception_ptr;
+     BOOST_NORETURN void rethrow_exception( exception_ptr const & );
+     exception_ptr current_exception();
+@@ -505,6 +515,7 @@
+             }
+         return r;
+         }
++    #endif
+     }
+ 
+ #if defined(_MSC_VER) && !defined(BOOST_EXCEPTION_ENABLE_WARNINGS)

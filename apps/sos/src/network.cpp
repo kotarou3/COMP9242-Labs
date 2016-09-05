@@ -25,7 +25,6 @@
 #include "internal/memory/FrameTable.h"
 #include "internal/memory/Mappings.h"
 #include "internal/process/Thread.h"
-#include "internal/network.h"
 
 extern "C" {
     #include <autoconf.h>
@@ -42,7 +41,7 @@ extern "C" {
     #include "internal/sys/debug.h"
     #include "internal/sys/panic.h"
 }
-#include <nfs/nfs.h>
+#include "internal/network.h"
 
 #define ARP_PRIME_TIMEOUT_MS     1000
 #define ARP_PRIME_RETRY_DELAY_MS   10

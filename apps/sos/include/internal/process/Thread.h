@@ -6,7 +6,6 @@
 #include "internal/fs/FileDescriptor.h"
 #include "internal/memory/Mappings.h"
 #include "internal/memory/PageDirectory.h"
-#include "internal/fs/FileDescriptor.h"
 #include "internal/Capability.h"
 
 extern "C" {
@@ -63,7 +62,6 @@ class Process {
         friend Process& getSosProcess() noexcept;
 
         std::unique_ptr<cspace_t, std::function<void (cspace_t*)>> _cspace;
-
 
         friend class Thread;
 };

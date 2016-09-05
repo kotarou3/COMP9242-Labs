@@ -78,8 +78,12 @@ boost::future<std::shared_ptr<File>> NFSFileSystem::open(const std::string& path
                     .mtime = {.seconds = -1U, .useconds = -1U}
                 });
             }
-        }).then(asyncExecutor, [](auto result) {
-            auto _result = result.get().get();
+        }).unwrap().then(asyncExecutor, [](auto result) {
+            auto _result = result.get();
+
+            // TODO: Check permissions here (already done by NFS during
+            //           read/write, but better to have an early failure)
+
             if (S_ISDIR(_result.second->mode))
                 return std::shared_ptr<File>(new NFSDirectory(*_result.first));
             else

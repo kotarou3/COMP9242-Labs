@@ -25,20 +25,15 @@ boost::future<struct stat> DeviceFileSystem::stat(const std::string& pathname) {
         result.st_mtim = device.modifyTime;
         result.st_ctim = device.changeTime;
 
-        boost::promise<struct stat> promise;
-        promise.set_value(result);
-        return promise.get_future();
+        return boost::make_ready_future(result);
     } catch (const std::out_of_range&) {
         std::throw_with_nested(std::system_error(ENOENT, std::system_category(), "No such device"));
     }
 }
 
 boost::future<std::shared_ptr<File>> DeviceFileSystem::open(const std::string& pathname, OpenFlags flags) {
-    if (pathname == ".") {
-        boost::promise<std::shared_ptr<File>> promise;
-        promise.set_value(std::make_shared<DeviceDirectory>(*this));
-        return promise.get_future();
-    }
+    if (pathname == ".")
+        return boost::make_ready_future(std::shared_ptr<File>(new DeviceDirectory(*this)));
 
     try {
         return _devices.at(pathname).openCallback(flags);
@@ -101,9 +96,7 @@ boost::future<ssize_t> DeviceDirectory::getdents(memory::UserMemory dirp, size_t
     if (writtenBytes == 0 && _currentPosition != _fs._devices.cend())
         throw std::invalid_argument("Result buffer is too small");
 
-    boost::promise<ssize_t> promise;
-    promise.set_value(writtenBytes);
-    return promise.get_future();
+    return boost::make_ready_future(static_cast<ssize_t>(writtenBytes));
 }
 
 }

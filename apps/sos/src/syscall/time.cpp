@@ -26,7 +26,7 @@ boost::future<int> clock_gettime(process::Process& process, clockid_t clk_id, me
         .tv_nsec = static_cast<long>((nanoseconds(timestamp) - nanoseconds(secs)).count())
     });
 
-    return _returnNow(0);
+    return boost::make_ready_future(0);
 }
 
 boost::future<int> nanosleep(process::Process& process, memory::vaddr_t req, memory::vaddr_t /*rem*/) {

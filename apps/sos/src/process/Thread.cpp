@@ -15,7 +15,6 @@
 #include "internal/memory/layout.h"
 #include "internal/process/Thread.h"
 #include "internal/syscall/syscall.h"
-#include "internal/fs/FileDescriptor.h"
 
 extern "C" {
     #include <sos.h>

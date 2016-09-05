@@ -15,6 +15,7 @@
 
 #include <stdio.h>
 #include <stdint.h>
+#include <sel4/sel4.h>
 
 /* System calls for SOS */
 

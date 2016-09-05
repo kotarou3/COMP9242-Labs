@@ -15,6 +15,9 @@ class FlatFileSystem : public FileSystem {
         void mount(std::unique_ptr<FileSystem> fs);
 
     private:
+        boost::future<struct stat> _statLoop(const std::string& pathname, std::vector<std::unique_ptr<FileSystem>>::iterator fs);
+        boost::future<std::shared_ptr<File>> _openLoop(const std::string& pathname, OpenFlags flags, std::vector<std::unique_ptr<FileSystem>>::iterator fs);
+
         std::vector<std::unique_ptr<FileSystem>> _filesystems;
 
         friend class FlatDirectory;

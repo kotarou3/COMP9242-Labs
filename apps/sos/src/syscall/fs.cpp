@@ -17,7 +17,7 @@ namespace syscall {
 namespace {
     boost::future<ssize_t> _preadwritev2(bool isWrite, process::Process& process, int fd, const std::vector<fs::IoVector>& iov, off64_t offset) {
         if (iov.size() == 0)
-            return _returnNow(0);
+            return boost::make_ready_future(0);
 
         fs::OpenFile::Flags flags = {
             .read = !isWrite,
@@ -111,8 +111,13 @@ boost::future<int> open(process::Process& process, memory::vaddr_t pathname, int
         .then(fs::asyncExecutor, [flags, openFlags, &process](auto file) {
             auto _file = file.get();
 
-            if ((flags & O_DIRECTORY) && !std::dynamic_pointer_cast<fs::Directory>(_file))
-                throw std::system_error(ENOTDIR, std::system_category(), "O_DIRECTORY set but file isn't a directory");
+            if (std::dynamic_pointer_cast<fs::Directory>(_file)) {
+                if (openFlags.write)
+                    throw std::system_error(EISDIR, std::system_category(), "Cannot open a directory for writing");
+            } else {
+                if (flags & O_DIRECTORY)
+                    throw std::system_error(ENOTDIR, std::system_category(), "O_DIRECTORY set but file isn't a directory");
+            }
 
             return process.fdTable.insert(std::make_shared<fs::OpenFile>(
                 _file,
@@ -123,7 +128,7 @@ boost::future<int> open(process::Process& process, memory::vaddr_t pathname, int
 
 boost::future<int> close(process::Process& process, int fd) {
     if (process.fdTable.erase(fd))
-        return _returnNow(0);
+        return boost::make_ready_future(0);
 
     throw std::system_error(EBADF, std::system_category());
 }
@@ -178,7 +183,7 @@ boost::future<int> fcntl64(process::Process& process, int fd, int cmd, int arg) 
     process.fdTable.get(fd, fs::OpenFile::Flags{});
 
     if (cmd == F_SETFD && arg == FD_CLOEXEC)
-        return _returnNow(0); // XXX: Ignore for now
+        return boost::make_ready_future(0); // XXX: Ignore for now
 
     throw std::system_error(ENOSYS, std::system_category());
 }

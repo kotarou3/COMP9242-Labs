@@ -9,47 +9,92 @@ namespace fs {
 ////////////////////
 
 boost::future<struct stat> FlatFileSystem::stat(const std::string& pathname) {
-    for (auto& fs : _filesystems) try {
-        return fs->stat(pathname);
-    } catch (const std::system_error& e) {
-        if (e.code() != std::error_code(ENOENT, std::system_category()))
-            throw;
-    }
-
-    throw std::system_error(ENOENT, std::system_category(), "File does not exist");
+    return _statLoop(pathname, _filesystems.begin());
 }
 
 boost::future<std::shared_ptr<File>> FlatFileSystem::open(const std::string& pathname, OpenFlags flags) {
-    if (pathname == ".") {
-        boost::promise<std::shared_ptr<File>> promise;
-        promise.set_value(std::make_shared<FlatDirectory>(*this));
-        return promise.get_future();
-    }
-
-    // XXX: Loop is broken due to async - needs fixing
+    if (pathname == ".")
+        return boost::make_ready_future(std::shared_ptr<File>(new FlatDirectory(*this)));
 
     OpenFlags _flags = flags;
-    _flags.createOnMissing = false;
-
-    for (auto& fs : _filesystems) try {
-        return fs->open(pathname, _flags);
-    } catch (const std::system_error& e) {
-        if (e.code() != std::error_code(ENOENT, std::system_category()))
-            throw;
+    if (flags.createOnMissing) {
+        // First scan through without creation (so we don't accidentally create
+        // a file when it exists in a later filesystem)
+        _flags.createOnMissing = false;
     }
 
-    for (auto& fs : _filesystems) try {
-        return fs->open(pathname, flags);
+    boost::future<std::shared_ptr<File>> future;
+    try {
+        future = _openLoop(pathname, _flags, _filesystems.begin());
     } catch (const std::system_error& e) {
-        if (e.code() != std::error_code(ENOENT, std::system_category()))
+        if (!flags.createOnMissing)
             throw;
+
+        future = boost::make_exceptional_future<std::shared_ptr<File>>(e);
     }
 
-    throw std::system_error(ENOENT, std::system_category(), "File does not exist");
+    if (!flags.createOnMissing)
+        return future;
+
+    return future.then(asyncExecutor, [this, pathname, flags](auto file) {
+        try {
+            return boost::make_ready_future(file.get());
+        } catch (const std::system_error& e) {
+            if (e.code() != std::error_code(ENOENT, std::system_category()))
+                throw;
+            return this->_openLoop(pathname, flags, _filesystems.begin());
+        }
+    });
 }
 
 void FlatFileSystem::mount(std::unique_ptr<FileSystem> fs) {
     _filesystems.emplace_back(std::move(fs));
+}
+
+boost::future<struct stat> FlatFileSystem::_statLoop(const std::string& pathname, std::vector<std::unique_ptr<FileSystem>>::iterator fs) {
+    if (fs == _filesystems.end())
+        throw std::system_error(ENOENT, std::system_category(), "File does not exist");
+
+    try {
+        return (*fs)->stat(pathname).then(asyncExecutor, [=](auto stat) mutable {
+            try {
+                return boost::make_ready_future(stat.get());
+            } catch (const std::system_error& e) {
+                if (e.code() != std::error_code(ENOENT, std::system_category()))
+                    throw;
+                return this->_statLoop(pathname, ++fs);
+            }
+        });
+    } catch (const std::system_error& e) {
+        if (e.code() != std::error_code(ENOENT, std::system_category()))
+            throw;
+        return _statLoop(pathname, ++fs);
+    }
+}
+
+boost::future<std::shared_ptr<File>> FlatFileSystem::_openLoop(const std::string& pathname, OpenFlags flags, std::vector<std::unique_ptr<FileSystem>>::iterator fs) {
+    if (fs == _filesystems.end()) {
+        throw std::system_error(
+            ENOENT, std::system_category(),
+            flags.createOnMissing ? "Filesystems failed to create file" : "File does not exist"
+        );
+    }
+
+    try {
+        return (*fs)->open(pathname, flags).then(asyncExecutor, [=](auto file) mutable {
+            try {
+                return boost::make_ready_future(file.get());
+            } catch (const std::system_error& e) {
+                if (e.code() != std::error_code(ENOENT, std::system_category()))
+                    throw;
+                return this->_openLoop(pathname, flags, ++fs);
+            }
+        });
+    } catch (const std::system_error& e) {
+        if (e.code() != std::error_code(ENOENT, std::system_category()))
+            throw;
+        return _openLoop(pathname, flags, ++fs);
+    }
 }
 
 ///////////////////
@@ -62,11 +107,8 @@ FlatDirectory::FlatDirectory(FlatFileSystem& fs):
 {}
 
 boost::future<ssize_t> FlatDirectory::getdents(memory::UserMemory dirp, size_t length) {
-    if (_currentFsIndex >= _fs._filesystems.size()) {
-        boost::promise<ssize_t> promise;
-        promise.set_value(0);
-        return promise.get_future();
-    }
+    if (_currentFsIndex >= _fs._filesystems.size())
+        return boost::make_ready_future(0);
 
     if (!_currentFsDirectory) {
         return _fs._filesystems[_currentFsIndex]->open(".", FileSystem::OpenFlags{})
@@ -90,9 +132,7 @@ boost::future<ssize_t> FlatDirectory::getdents(memory::UserMemory dirp, size_t l
                 return this->getdents(dirp, length);
             }
 
-            boost::promise<ssize_t> promise;
-            promise.set_value(_bytesWritten);
-            return promise.get_future();
+            return boost::make_ready_future(_bytesWritten);
         }).unwrap();
 }
 
