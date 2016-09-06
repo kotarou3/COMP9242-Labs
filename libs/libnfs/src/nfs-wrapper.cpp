@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <limits>
 #include <stdexcept>
 #include <system_error>
@@ -188,7 +189,7 @@ namespace {
             rpc_stat_t e = nfs_read(
                 &request.handle,
                 request.offset + request.readBytes,
-                request.count - request.readBytes,
+                std::min(request.count - request.readBytes, 6U*1026U),
                 _readCallback, id
             );
             if (e == RPC_OK)
@@ -365,7 +366,7 @@ boost::future<size_t> read(const fhandle_t& fh, off_t offset, size_t count, uint
     auto& request = _readRequests[id] = {.handle = fh, .offset = offset, .count = count, .data = data};
     auto future = request.promise.get_future();
 
-    rpc_stat_t e = nfs_read(&request.handle, offset, count, _readCallback, id);
+    rpc_stat_t e = nfs_read(&request.handle, offset, std::min(count, 6U*1026U), _readCallback, id);
     if (e != RPC_OK) {
         _readRequests.erase(id);
         _throwRpcError(e, "Failed to read from a NFS file");
