@@ -79,13 +79,14 @@ struct udp_pcb* rpc_new_udp(const struct ip_addr* server, int remote_port,
  * @param[in] prog The program number
  * @param[in] vers The version number
  * @param[in] proc The proceedure number
+ * @param[in] size The RPC body size to allocate
  * @param[out] pos The position is assumed to initially be zero. The
  *                 value at this address will contain the next position to
  *                 write to when the call completes.
  * @return On success; A reference to the newly allocated pbuf.
  *         Otherwise; NULL.
  */
-struct pbuf * rpcpbuf_init(int prog, int vers, int proc, int* pos);
+struct pbuf * rpcpbuf_init(int prog, int vers, int proc, uint16_t size, int* pos);
 
 /**
  * Read and check the rpc header from the pbuf

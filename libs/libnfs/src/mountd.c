@@ -104,7 +104,7 @@ mountd_print_exports(const struct ip_addr *server)
     assert(mnt_pcb);
 
     /* construct the call */
-    pbuf = rpcpbuf_init(MNT_NUMBER, MNT_VERSION, MNTPROC_EXPORT, &pos);
+    pbuf = rpcpbuf_init(MNT_NUMBER, MNT_VERSION, MNTPROC_EXPORT, 0, &pos);
     assert(pbuf != NULL);
 
     /* Make the call */
@@ -175,7 +175,9 @@ mountd_mount(const struct ip_addr *server, const char *dir, fhandle_t *pfh)
     assert(mnt_pcb);
 
     /* Construct the call */
-    pbuf = rpcpbuf_init(MNT_NUMBER, MNT_VERSION, MNTPROC_MNT, &pos);
+    size_t pbuf_size = sizeof(uint32_t) + strlen(dir);
+    pb_alignul(&pbuf_size);
+    pbuf = rpcpbuf_init(MNT_NUMBER, MNT_VERSION, MNTPROC_MNT, pbuf_size, &pos);
     if(pbuf == NULL){
         udp_remove(mnt_pcb);
         return RPCERR_NOBUF;

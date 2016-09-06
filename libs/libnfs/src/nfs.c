@@ -88,6 +88,7 @@
  * packets start getting dropped, with exactly 5 full IPv4 fragments at 1500 MTU.
  */
 #define READ_BLOCK_SIZE  7292
+#define WRITE_BLOCK_SIZE 8192
 
 static struct udp_pcb *_nfs_pcb = NULL;
 
@@ -181,7 +182,7 @@ nfs_getattr(const fhandle_t *fh,
     int pos;
 
     /* now the user data struct is setup, do some call stuff! */
-    pbuf = rpcpbuf_init(NFS_NUMBER, NFS_VERSION, NFSPROC_GETATTR, &pos);
+    pbuf = rpcpbuf_init(NFS_NUMBER, NFS_VERSION, NFSPROC_GETATTR, sizeof(*fh), &pos);
     if(pbuf == NULL){
         return RPCERR_NOBUF;
     }
@@ -227,7 +228,9 @@ nfs_lookup(const fhandle_t *cwd, const char *name,
     int pos;
 
     /* now the user data struct is setup, do some call stuff! */
-    pbuf = rpcpbuf_init(NFS_NUMBER, NFS_VERSION, NFSPROC_LOOKUP, &pos);
+    size_t pbuf_size = sizeof(*cwd) + sizeof(uint32_t) + strlen(name);
+    pb_alignul(&pbuf_size);
+    pbuf = rpcpbuf_init(NFS_NUMBER, NFS_VERSION, NFSPROC_LOOKUP, pbuf_size, &pos);
     if(pbuf == NULL){
         return RPCERR_NOBUF;
     }
@@ -280,7 +283,8 @@ nfs_read(const fhandle_t *fh, int offset, int count,
     }
 
     /* now the user data struct is setup, do some call stuff! */
-    pbuf = rpcpbuf_init(NFS_NUMBER, NFS_VERSION, NFSPROC_READ, &pos);
+    size_t pbuf_size = sizeof(*fh) + 3 * sizeof(uint32_t);
+    pbuf = rpcpbuf_init(NFS_NUMBER, NFS_VERSION, NFSPROC_READ, pbuf_size, &pos);
     if(pbuf == NULL){
         return RPCERR_NOBUF;
     }
@@ -332,7 +336,6 @@ nfs_write(const fhandle_t *fh, int offset, int count, const void *data,
 {
     struct pbuf *pbuf;
     struct write_token_wrapper *t;
-    int limit;
     int pos;
     int err;
 
@@ -341,8 +344,15 @@ nfs_write(const fhandle_t *fh, int offset, int count, const void *data,
         return RPCERR_NOMEM;
     }
 
+    /* limit the write size to the block size */
+    if (count > WRITE_BLOCK_SIZE) {
+        count = WRITE_BLOCK_SIZE;
+    }
+
     /* now the user data struct is setup, do some call stuff! */
-    pbuf = rpcpbuf_init(NFS_NUMBER, NFS_VERSION, NFSPROC_WRITE, &pos);
+    size_t pbuf_size = sizeof(*fh) + 4 * sizeof(uint32_t) + count;
+    pb_alignul(&pbuf_size);
+    pbuf = rpcpbuf_init(NFS_NUMBER, NFS_VERSION, NFSPROC_WRITE, pbuf_size, &pos);
     if(pbuf == NULL){
         free(t);
         return RPCERR_NOBUF;
@@ -353,12 +363,6 @@ nfs_write(const fhandle_t *fh, int offset, int count, const void *data,
     pb_writel(pbuf, 0 /* Unused: see RFC */, &pos);
     pb_writel(pbuf, offset, &pos);
     pb_writel(pbuf, 0 /* Unused: see RFC */, &pos);
-    /* Limit the number of bytes to send to fit the packet */
-    limit = pbuf->tot_len - pos - sizeof(count);
-    if(count > limit){
-        count = limit;
-    }
-    /* put the data in */
     pb_writel(pbuf, count, &pos);
     pb_write(pbuf, data, count, &pos);
     pb_alignl(&pos);
@@ -408,7 +412,9 @@ nfs_create(const fhandle_t *fh, const char *name, const sattr_t *sat,
     int pos;
 
     /* now the user data struct is setup, do some call stuff! */
-    pbuf = rpcpbuf_init(NFS_NUMBER, NFS_VERSION, NFSPROC_CREATE, &pos);
+    size_t pbuf_size = sizeof(*fh) + sizeof(uint32_t) + strlen(name) + sizeof(*sat);
+    pb_alignul(&pbuf_size);
+    pbuf = rpcpbuf_init(NFS_NUMBER, NFS_VERSION, NFSPROC_CREATE, pbuf_size, &pos);
     if(pbuf == NULL){
         return RPCERR_NOBUF;
     }
@@ -450,7 +456,9 @@ nfs_remove(const fhandle_t *fh, const char *name,
     int pos;
 
     /* now the user data struct is setup, do some call stuff! */
-    pbuf = rpcpbuf_init(NFS_NUMBER, NFS_VERSION, NFSPROC_REMOVE, &pos);
+    size_t pbuf_size = sizeof(*fh) + sizeof(uint32_t) + strlen(name);
+    pb_alignul(&pbuf_size);
+    pbuf = rpcpbuf_init(NFS_NUMBER, NFS_VERSION, NFSPROC_REMOVE, pbuf_size, &pos);
     if(pbuf == NULL){
         return RPCERR_NOBUF;
     }
@@ -549,7 +557,8 @@ nfs_readdir(const fhandle_t *pfh, nfscookie_t cookie,
     struct pbuf *pbuf;
     int pos;
     /* Initialise the request packet */
-    pbuf = rpcpbuf_init(NFS_NUMBER, NFS_VERSION, NFSPROC_READDIR, &pos);
+    size_t pbuf_size = sizeof(*pfh) + 2 * sizeof(uint32_t);
+    pbuf = rpcpbuf_init(NFS_NUMBER, NFS_VERSION, NFSPROC_READDIR, pbuf_size, &pos);
     if(pbuf == NULL){
         return RPCERR_NOBUF;
     }

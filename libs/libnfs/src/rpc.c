@@ -46,9 +46,9 @@
 #define ROOT_PORT_MIN 45
 #define ROOT_PORT_MAX 1024
 
-#define UDP_PAYLOAD 1400
-
 #define RETRANSMIT_DELAY_MS 500
+
+#define RPC_HEADER_SIZE (63 + strlen(NFS_MACHINE_NAME))
 
 
 /************************************************************
@@ -492,13 +492,15 @@ rpc_write_hdr(struct pbuf* pbuf, int prog, int vers, int proc, int* pos)
     pb_write_arrl(pbuf, ids, sizeof(ids), pos);
     /* Verifier */
     pb_write_arrl(pbuf, (uint32_t*)&verif, sizeof(verif), pos);
+
+    assert(*pos == RPC_HEADER_SIZE);
 }
 
 struct pbuf *
-rpcpbuf_init(int prognum, int vernum, int procnum, int* pos)
+rpcpbuf_init(int prognum, int vernum, int procnum, uint16_t size, int* pos)
 {
     struct pbuf* pbuf;
-    pbuf = pbuf_alloc(PBUF_TRANSPORT, UDP_PAYLOAD, PBUF_RAM);
+    pbuf = pbuf_alloc(PBUF_TRANSPORT, size + RPC_HEADER_SIZE, PBUF_RAM);
     if(pbuf) {
         rpc_write_hdr(pbuf, prognum, vernum, procnum, pos);
     }

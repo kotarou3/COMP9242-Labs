@@ -61,7 +61,7 @@ portmapper_getport(const struct ip_addr *server, uint32_t prog, uint32_t vers)
 
     debug("Getting port\n");
     /* Initialise the request packet */
-    pbuf = rpcpbuf_init(PMAP_NUMBER, PMAP_VERSION, PMAPPROC_GETPORT, &pos);
+    pbuf = rpcpbuf_init(PMAP_NUMBER, PMAP_VERSION, PMAPPROC_GETPORT, 4 * sizeof(uint32_t), &pos);
     assert(pbuf != NULL);
 
     /* Fill the call data */

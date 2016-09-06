@@ -31,6 +31,11 @@ void pb_alignl(int* pos)
     *pos = ROUNDUP(*pos, sizeof(uint32_t));
 }
 
+void pb_alignul(unsigned int* pos)
+{
+    *pos = ROUNDUP(*pos, sizeof(uint32_t));
+}
+
 
 /* LWIP should really provide this for us... */
 static u16_t
