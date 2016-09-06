@@ -24,7 +24,10 @@
 #define __aligned(x) __attribute__((aligned(x)))
 #define unlikely(x) __builtin_expect(!!(x), 0)
 
-#define MAX_PKT_SIZE    1536
+#define ETH_MTU             1500
+#define ETH_MAX_HEADER_SIZE (14 + 4)                            // Excludes checksum
+#define ETH_FRAME_LEN       (ETH_MTU + ETH_MAX_HEADER_SIZE + 4) // Includes checksum
+#define MAX_PKT_SIZE        ((ETH_FRAME_LEN + 15) & -16)        // Alignment (see ENET_MRBR)
 
 #define BITS_PER_LONG 32
 

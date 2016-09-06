@@ -233,9 +233,6 @@ enet_get_regs(struct enet* enet){
 /* TX descriptor active */
 #define TDAR_TDAR     BIT(24) /* TX descriptor active */
 
-/* TODO this should be defined elsewhere */
-#define FRAME_LEN 1518
-
 #define PAUSE_FRAME_TYPE_FIELD 0x8808 /* fixed magic */
 #define PAUSE_OPCODE_FIELD     0x0001 /* Fixed magic opcode used when sending pause frames */
 /* configurable */
@@ -545,7 +542,7 @@ enet_init(struct desc_data desc_data, ps_io_ops_t *io_ops) {
     regs->mrbr = desc_data.rx_bufsize;
 
     /* Receive control - Set frame length and RGMII mode */
-    regs->rcr = RCR_MAX_FL(FRAME_LEN) | RCR_RGMII_EN | RCR_MII_MODE;
+    regs->rcr = RCR_MAX_FL(ETH_FRAME_LEN) | RCR_RGMII_EN | RCR_MII_MODE;
     /* Transmit control - Full duplex mode */
     regs->tcr = TCR_FDEN;
 
