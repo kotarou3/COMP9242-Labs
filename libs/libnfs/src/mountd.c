@@ -46,7 +46,7 @@
  *** Helpers
  ******************************************/
 
-static struct udp_pcb* 
+static struct udp_pcb*
 mnt_new_udp(const struct ip_addr *server)
 {
     int port = portmapper_getport(server, MNT_NUMBER, MNT_VERSION);
@@ -61,7 +61,7 @@ struct mountd_exports_token {
     enum rpc_reply_err err;
 };
 
-static void 
+static void
 mountd_print_exports_cb(void* callback, uintptr_t token, struct pbuf *pbuf)
 {
     struct mountd_exports_token *t = (struct mountd_exports_token*)token;
@@ -100,7 +100,7 @@ mountd_print_exports(const struct ip_addr *server)
     int err;
 
     /* open a port */
-    mnt_pcb = mnt_new_udp(server); 
+    mnt_pcb = mnt_new_udp(server);
     assert(mnt_pcb);
 
     /* construct the call */
@@ -108,7 +108,7 @@ mountd_print_exports(const struct ip_addr *server)
     assert(pbuf != NULL);
 
     /* Make the call */
-    err = rpc_call(pbuf, pos, mnt_pcb, &mountd_print_exports_cb, NULL, 
+    err = rpc_call(pbuf, pos, mnt_pcb, &mountd_print_exports_cb, NULL,
                     (uintptr_t)&token);
     udp_remove(mnt_pcb);
 
@@ -171,7 +171,7 @@ mountd_mount(const struct ip_addr *server, const char *dir, fhandle_t *pfh)
     enum rpc_stat stat;
 
     /* open a port */
-    mnt_pcb = mnt_new_udp(server); 
+    mnt_pcb = mnt_new_udp(server);
     assert(mnt_pcb);
 
     /* Construct the call */
@@ -202,5 +202,3 @@ mountd_mount(const struct ip_addr *server, const char *dir, fhandle_t *pfh)
         return RPC_OK;
     }
 }
-
-

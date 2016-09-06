@@ -47,7 +47,7 @@ getport_cb(void *callback, uintptr_t token, struct pbuf *pbuf)
     }
 }
 
-int 
+int
 portmapper_getport(const struct ip_addr *server, uint32_t prog, uint32_t vers)
 {
     struct udp_pcb* rpc_pcb;
@@ -84,5 +84,3 @@ portmapper_getport(const struct ip_addr *server, uint32_t prog, uint32_t vers)
         return port;
     }
 }
-
-

@@ -35,7 +35,7 @@
  * @return            RPC_OK on success, otherwise and appropriate error
  *                    code it returned.
  */
-enum rpc_stat mountd_mount(const struct ip_addr *server, const char *dir, 
+enum rpc_stat mountd_mount(const struct ip_addr *server, const char *dir,
                            fhandle_t *pfh);
 
 /**

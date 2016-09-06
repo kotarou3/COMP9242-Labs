@@ -50,7 +50,7 @@ struct rpc_reply_hdr {
 
 
 /*******************************
- *** Transport layer interface 
+ *** Transport layer interface
  *******************************/
 
 /* rpc callback functions called when a packet is received */
@@ -64,18 +64,18 @@ typedef void (*rpc_cb_fn)(void* cb, uintptr_t token, struct pbuf* pbuf);
 int init_rpc(const struct ip_addr *server);
 
 /**
- * Create a new udp pcb for use with the rpc_send and rpc_call functions 
+ * Create a new udp pcb for use with the rpc_send and rpc_call functions
  * @param[in] server      The IP address of the server to connect to
  * @param[in] remote_port The remote port to connect to
  * @param[in] local_port  The range of port addresses to use.
  * @return On success; return a reference to the newly created udp pcb
  *         Otherwise; NULL.
  */
-struct udp_pcb* rpc_new_udp(const struct ip_addr* server, int remote_port, 
+struct udp_pcb* rpc_new_udp(const struct ip_addr* server, int remote_port,
                             enum port_type local_port);
 
 /**
- * Allocates a pbuf and writes the rpc header 
+ * Allocates a pbuf and writes the rpc header
  * @param[in] prog The program number
  * @param[in] vers The version number
  * @param[in] proc The proceedure number
@@ -96,13 +96,13 @@ struct pbuf * rpcpbuf_init(int prog, int vers, int proc, int* pos);
  *                 read from when the call completes.
  * Return rpc error code
  */
-enum rpc_reply_err rpc_read_hdr(struct pbuf* pbuf, 
+enum rpc_reply_err rpc_read_hdr(struct pbuf* pbuf,
                                 struct rpc_reply_hdr* hdr, int* pos);
 
 
 /**
  * Send an RPC packet, add a callback for this packet to the queue and
- * retransmitt as necessary. 
+ * retransmitt as necessary.
  * Free the pbuf only once the response is handled.
  * @param[in] pbuf     The pbuf to send
  * @param[in] len      The length of the payload
@@ -113,7 +113,7 @@ enum rpc_reply_err rpc_read_hdr(struct pbuf* pbuf,
  * @return             RPC_OK if the request was successfully sent. Otherwise,
  *                     and appropriate error is returned.
  */
-enum rpc_stat rpc_send(struct pbuf *pbuf, int len, struct udp_pcb *pcb, 
+enum rpc_stat rpc_send(struct pbuf *pbuf, int len, struct udp_pcb *pcb,
                        rpc_cb_fn func, void *callback, uintptr_t token);
 
 /**
@@ -128,7 +128,7 @@ enum rpc_stat rpc_send(struct pbuf *pbuf, int len, struct udp_pcb *pcb,
  * @return             RPC_OK if the request was successfully sent. Otherwise,
  *                     and appropriate error is returned.
  */
-enum rpc_stat rpc_call(struct pbuf *pbuf, int len, struct udp_pcb *pcb, 
+enum rpc_stat rpc_call(struct pbuf *pbuf, int len, struct udp_pcb *pcb,
                        rpc_cb_fn func, void *callback, uintptr_t token);
 
 
