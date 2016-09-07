@@ -79,6 +79,16 @@
  */
 #define READDIR_BUF_SIZE   1024
 
+/*
+ * Block sizes to use (max: 8192 for NFSv2).
+ *
+ * Read block size is set to a lower value than max because libethdrivers
+ * can't read packets fast enough and starts dropping them, which consequently
+ * kills performance. 7292 was empirically found to be the highest before
+ * packets start getting dropped, with exactly 5 full IPv4 fragments at 1500 MTU.
+ */
+#define READ_BLOCK_SIZE  7292
+
 static struct udp_pcb *_nfs_pcb = NULL;
 
 void
@@ -263,6 +273,11 @@ nfs_read(const fhandle_t *fh, int offset, int count,
 {
     struct pbuf *pbuf;
     int pos;
+
+    /* limit the read size to the block size */
+    if (count > READ_BLOCK_SIZE) {
+        count = READ_BLOCK_SIZE;
+    }
 
     /* now the user data struct is setup, do some call stuff! */
     pbuf = rpcpbuf_init(NFS_NUMBER, NFS_VERSION, NFSPROC_READ, &pos);
