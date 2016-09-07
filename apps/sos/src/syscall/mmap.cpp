@@ -85,5 +85,10 @@ extern "C" int sys_mremap() {
     __builtin_unreachable();
 }
 
+extern "C" int sys_madvise() {
+    // free() needs this
+    return -ENOSYS;
+}
+
 FORWARD_SYSCALL(mmap2, 6);
 FORWARD_SYSCALL(munmap, 2);

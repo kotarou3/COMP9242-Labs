@@ -1080,11 +1080,11 @@ long sys_mincore()
     assert(!"sys_mincore not implemented");
     __builtin_unreachable();
 }
-long sys_madvise()
+/*long sys_madvise()
 {
     assert(!"sys_madvise not implemented");
     __builtin_unreachable();
-}
+}*/
 long sys_madvise1()
 {
     assert(!"sys_madvise1 not implemented");
@@ -2570,11 +2570,11 @@ long sys_mincore()
     assert(!"sys_mincore not implemented");
     __builtin_unreachable();
 }
-long sys_madvise()
+/*long sys_madvise()
 {
     assert(!"sys_madvise not implemented");
     __builtin_unreachable();
-}
+}*/
 /*long sys_fcntl64()
 {
     assert(!"sys_fcntl64 not implemented");
