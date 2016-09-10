@@ -142,27 +142,33 @@ MappedPage::MappedPage(Page page, PageDirectory& directory, vaddr_t address, Att
     _address(address),
     _attributes(attributes)
 {
-    int rights = 0;
-    if (attributes.read)
-        rights |= seL4_CanRead;
-    if (attributes.write)
-        rights |= seL4_CanRead | seL4_CanWrite; // ARM requires read permissions to write
-    if (attributes.execute)
-        rights |= seL4_CanRead; // XXX: No execute right on our version of seL4
-
-    int vmAttributes = seL4_ARM_Default_VMAttributes;
-    if (!attributes.execute)
-        vmAttributes |= seL4_ARM_ExecuteNever;
-    if (attributes.notCacheable)
-        vmAttributes &= ~seL4_ARM_PageCacheable;
 
     int err = seL4_ARM_Page_Map(
         _page.getCap(), directory.getCap(), address,
-        static_cast<seL4_CapRights>(rights),
-        static_cast<seL4_ARM_VMAttributes>(vmAttributes)
+        seL4Rights(), seL4Attributes()
     );
     if (err != seL4_NoError)
         throw std::system_error(ENOMEM, std::system_category(), "Failed to map in page: " + std::to_string(err));
+}
+
+seL4_CapRights MappedPage::seL4Rights() {
+    int rights = 0;
+    if (_attributes.read)
+        rights |= seL4_CanRead;
+    if (_attributes.write)
+        rights |= seL4_CanRead | seL4_CanWrite; // ARM requires read permissions to write
+    if (_attributes.execute)
+        rights |= seL4_CanRead; // XXX: No execute right on our version of seL4
+    return static_cast<seL4_CapRights>(rights);
+}
+
+seL4_ARM_VMAttributes MappedPage::seL4Attributes() {
+    int vmAttributes = seL4_ARM_Default_VMAttributes;
+    if (!_attributes.execute)
+        vmAttributes |= seL4_ARM_ExecuteNever;
+    if (_attributes.notCacheable)
+        vmAttributes &= ~seL4_ARM_PageCacheable;
+    return static_cast<seL4_ARM_VMAttributes>(vmAttributes);
 }
 
 MappedPage::~MappedPage() {

@@ -48,6 +48,7 @@ def main():
             return -1
 
         samples = [ kb_per_s(sample, row['file_size']) for sample in row['samples']]
+        print samples
         all_samples = all_samples + samples
         # compute mean and stddev
         average = numpy.mean (samples)

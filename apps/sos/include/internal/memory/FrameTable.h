@@ -6,6 +6,9 @@ extern "C" {
     #include <sel4/types.h>
 }
 
+namespace process {class Process;}
+class MappedPage;
+
 namespace memory {
 
 using paddr_t = size_t;
@@ -23,9 +26,21 @@ constexpr size_t numPages(size_t bytes) {
 }
 
 class Page;
+class MappedPage;
 
 namespace FrameTable {
+    struct Frame {
+        Page* pages;
+        bool pinned;
+        // true if any of the pages associated with it have the reference bit set
+        bool reference = true;
+
+        inline paddr_t getAddress() const;
+    };
     void init(paddr_t start, paddr_t end);
+
+    void disableReference(Frame&);
+    void enableReference(process::Process&, MappedPage&);
 
     Page alloc();
     Page alloc(paddr_t address);
@@ -46,12 +61,14 @@ class Page {
 
         explicit operator bool() const noexcept {return _cap;}
 
-    private:
+private:
         Page(FrameTable::Frame& frame);
         Page(paddr_t address);
 
         Page(const Page& other);
         Page& operator=(const Page&) = delete;
+        bool paged = false;
+        mutable bool reference = true;
 
         seL4_ARM_Page _cap;
         FrameTable::Frame* _frame;
@@ -59,6 +76,8 @@ class Page {
         Page* _prev;
         mutable Page* _next;
 
+        friend void FrameTable::disableReference(FrameTable::Frame &);
+        friend void FrameTable::enableReference(process::Process &, MappedPage &);
         friend void FrameTable::init(paddr_t start, paddr_t end);
         friend Page FrameTable::alloc();
         friend Page FrameTable::alloc(paddr_t address);

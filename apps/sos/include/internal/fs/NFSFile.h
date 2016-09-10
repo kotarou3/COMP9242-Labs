@@ -12,6 +12,7 @@ class NFSFile : public File {
 
         virtual boost::future<ssize_t> read(const std::vector<IoVector>& iov, off64_t offset) override;
         virtual boost::future<ssize_t> write(const std::vector<IoVector>& iov, off64_t offset) override;
+        void lseek(off64_t offset) {_currentOffset = offset;}
 
     private:
         NFSFile(const nfs::fhandle_t& handle);
