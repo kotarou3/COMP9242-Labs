@@ -151,7 +151,7 @@ MappedPage::MappedPage(Page page, PageDirectory& directory, vaddr_t address, Att
         throw std::system_error(ENOMEM, std::system_category(), "Failed to map in page: " + std::to_string(err));
 }
 
-seL4_CapRights MappedPage::seL4Rights() {
+seL4_CapRights MappedPage::seL4Rights() const {
     int rights = 0;
     if (_attributes.read)
         rights |= seL4_CanRead;
@@ -162,7 +162,7 @@ seL4_CapRights MappedPage::seL4Rights() {
     return static_cast<seL4_CapRights>(rights);
 }
 
-seL4_ARM_VMAttributes MappedPage::seL4Attributes() {
+seL4_ARM_VMAttributes MappedPage::seL4Attributes() const {
     int vmAttributes = seL4_ARM_Default_VMAttributes;
     if (!_attributes.execute)
         vmAttributes |= seL4_ARM_ExecuteNever;

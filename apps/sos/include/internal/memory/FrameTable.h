@@ -40,7 +40,7 @@ namespace FrameTable {
     void init(paddr_t start, paddr_t end);
 
     void disableReference(Frame&);
-    void enableReference(process::Process&, MappedPage&);
+    void enableReference(process::Process&, const MappedPage&);
 
     Page alloc();
     Page alloc(paddr_t address);
@@ -60,6 +60,7 @@ class Page {
         seL4_ARM_Page getCap() const noexcept {return _cap;}
 
         explicit operator bool() const noexcept {return _cap;}
+        mutable bool reference = true;
 
 private:
         Page(FrameTable::Frame& frame);
@@ -68,7 +69,6 @@ private:
         Page(const Page& other);
         Page& operator=(const Page&) = delete;
         bool paged = false;
-        mutable bool reference = true;
 
         seL4_ARM_Page _cap;
         FrameTable::Frame* _frame;
@@ -77,7 +77,7 @@ private:
         mutable Page* _next;
 
         friend void FrameTable::disableReference(FrameTable::Frame &);
-        friend void FrameTable::enableReference(process::Process &, MappedPage &);
+        friend void FrameTable::enableReference(process::Process &, const MappedPage &);
         friend void FrameTable::init(paddr_t start, paddr_t end);
         friend Page FrameTable::alloc();
         friend Page FrameTable::alloc(paddr_t address);

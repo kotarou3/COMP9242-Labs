@@ -97,8 +97,8 @@ class MappedPage {
         const Page& getPage() const noexcept {return _page;}
         vaddr_t getAddress() const noexcept {return _address;}
         Attributes getAttributes() const noexcept {return _attributes;}
-        seL4_CapRights seL4Rights();
-        seL4_ARM_VMAttributes seL4Attributes();
+        seL4_CapRights seL4Rights() const;
+        seL4_ARM_VMAttributes seL4Attributes() const;
     private:
         Page _page;
         vaddr_t _address;

@@ -89,7 +89,7 @@ void disableReference(Frame& frame) {
     }
 }
 
-void enableReference(process::Process& process, MappedPage& page) {
+void enableReference(process::Process& process, const MappedPage& page) {
     Frame& f = *page.getPage()._frame;
     f.reference = true;
     page.getPage().reference = true;
