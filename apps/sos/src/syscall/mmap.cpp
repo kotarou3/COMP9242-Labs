@@ -69,7 +69,7 @@ boost::future<int> munmap(process::Process& process, memory::vaddr_t addr, size_
 extern "C" int sys_brk(va_list ap) {
     // Use an static allocation to allow malloc() before the memory subsystem
     // is ready for mmap()s
-    constexpr const size_t SOS_PROCESS_INIT_SIZE = 0x100000;
+    constexpr const size_t SOS_PROCESS_INIT_SIZE = 0x800000;
     static uint8_t initArea[SOS_PROCESS_INIT_SIZE];
     static uint8_t* brk = initArea;
 

@@ -19,6 +19,7 @@ namespace FrameTable {
 namespace {
     Frame* _table;
     paddr_t _start, _end;
+    size_t _npages;
 
     inline Frame& _getFrame(paddr_t address) {
         assert(_start <= address && address < _end);
@@ -36,11 +37,11 @@ void init(paddr_t start, paddr_t end) {
 
     size_t frameCount = numPages(end - start);
     size_t frameTableSize = frameCount * sizeof(Frame);
-    size_t frameTablePages = numPages(frameTableSize);
+    _npages = numPages(frameTableSize);
 
     // Allocate a place in virtual memory to place the frame table
     auto tableMap = process::getSosProcess().maps.insert(
-        0, frameTablePages,
+        0, _npages,
         Attributes{.read = true, .write = true},
         Mapping::Flags{.shared = false}
     );
@@ -48,8 +49,8 @@ void init(paddr_t start, paddr_t end) {
 
     // Allocate the frame table
     std::vector<std::pair<paddr_t, vaddr_t>> frameTableAddresses;
-    frameTableAddresses.reserve(frameTablePages);
-    for (size_t p = 0; p < frameTablePages; ++p) {
+    frameTableAddresses.reserve(_npages);
+    for (size_t p = 0; p < _npages; ++p) {
         paddr_t phys = ut_alloc(seL4_PageBits);
         vaddr_t virt = tableMap.getAddress() + (p * PAGE_SIZE);
 
@@ -62,7 +63,7 @@ void init(paddr_t start, paddr_t end) {
     }
 
     // Construct the frames
-    for (size_t p = frameTablePages; p < frameCount; ++p)
+    for (size_t p = _npages; p < frameCount; ++p)
         new(&_table[p]) Frame;
 
     // Connect the frame table frames to the pages
@@ -104,8 +105,9 @@ Page alloc(bool pinned) {
     paddr_t address = ut_alloc(seL4_PageBits);
     if (!address) {
         static unsigned int clock = -1;
-        while (_table[++clock].reference || _table[clock].pinned)
-            if (!_table[clock].pinned)
+        // it really shouldn't be nullptr, but apparently ut_alloc doesn't allocate everything before returning null
+        while (_table[clock = (clock + 1) % _npages].reference || _table[clock].pinned || _table[clock].pages == nullptr)
+            if (!_table[clock].pinned && _table[clock].pages != nullptr)
                 disableReference(_table[clock]);
 
         Page* page = _table[clock].pages;
