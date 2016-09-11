@@ -6,6 +6,7 @@
 #include "internal/memory/FrameTable.h"
 #include "internal/memory/PageDirectory.h"
 #include "internal/process/Thread.h"
+#include "internal/memory/PageFile.h"
 
 extern "C" {
     #include <cspace/cspace.h>
@@ -99,21 +100,23 @@ void enableReference(process::Process& process, const MappedPage& page) {
     ) == seL4_NoError);
 }
 
-Page alloc(bool pinned = true) {
+Page alloc(bool pinned) {
     paddr_t address = ut_alloc(seL4_PageBits);
     if (!address) {
         static unsigned int clock = -1;
         while (_table[++clock].reference || _table[clock].pinned)
             if (!_table[clock].pinned)
                 disableReference(_table[clock]);
-        throw std::system_error(ENOSYS, std::system_category(), "Paging not implemented yet");
-//        unsigned int id = pagefile.page(.scopedmapin(...));
-//        for (auto &page : _table[clock].pages) {
-//            page.frame = id;
-//            page.paged = true;
-//        }
-//        _table[clock].pinned = pinned;
-//        return Page(_table[clock]);
+
+        Page* page = _table[clock].pages;
+        auto id = memory::PageFile::get().page(*page);
+        while (page != nullptr) {
+            page->_frame = reinterpret_cast<Frame*>(id);
+            page->_paged = true;
+            page = page->_next;
+        }
+        _table[clock].pinned = pinned;
+        return Page(_table[clock]);
     }
     _getFrame(address).pinned = pinned;
     return Page(_getFrame(address));

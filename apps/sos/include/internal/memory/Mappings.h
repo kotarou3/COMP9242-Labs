@@ -30,6 +30,7 @@ class Mappings {
         Mappings& operator=(const Mappings&) = delete;
 
         ScopedMapping insert(vaddr_t address, size_t pages, Attributes attributes, Mapping::Flags flags);
+        vaddr_t insertPermanent(size_t pages, Attributes attributes, Mapping::Flags flags);
         void erase(vaddr_t address, size_t pages);
 
         const Mapping& lookup(vaddr_t address) const;

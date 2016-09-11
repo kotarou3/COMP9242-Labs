@@ -42,7 +42,7 @@ namespace FrameTable {
     void disableReference(Frame&);
     void enableReference(process::Process&, const MappedPage&);
 
-    Page alloc(bool pinned);
+    Page alloc(bool pinned = true);
     Page alloc(paddr_t address);
 
     class Frame;
@@ -68,7 +68,7 @@ private:
 
         Page(const Page& other);
         Page& operator=(const Page&) = delete;
-        bool paged = false;
+        bool _paged = false;
 
         seL4_ARM_Page _cap;
         FrameTable::Frame* _frame;
