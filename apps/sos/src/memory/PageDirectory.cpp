@@ -33,8 +33,8 @@ PageDirectory::~PageDirectory() {
         _cap.release();
 }
 
-const MappedPage& PageDirectory::allocateAndMap(vaddr_t address, Attributes attributes) {
-    return map(FrameTable::alloc(), address, attributes);
+const MappedPage& PageDirectory::allocateAndMap(vaddr_t address, Attributes attributes, bool pinned) {
+    return map(FrameTable::alloc(pinned), address, attributes);
 }
 
 const MappedPage& PageDirectory::map(Page page, vaddr_t address, Attributes attributes) {

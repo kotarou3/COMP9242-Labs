@@ -37,7 +37,7 @@ class PageDirectory {
         PageDirectory& operator=(PageDirectory&&) = delete;
 
         // Warning: Returned reference is invalidated after another mapping
-        const MappedPage& allocateAndMap(vaddr_t address, Attributes attributes);
+        const MappedPage& allocateAndMap(vaddr_t address, Attributes attributes, bool pinned=true);
         const MappedPage& map(Page page, vaddr_t address, Attributes attributes);
         void unmap(vaddr_t address);
         const MappedPage* lookup(vaddr_t address, bool noThrow = false) const;

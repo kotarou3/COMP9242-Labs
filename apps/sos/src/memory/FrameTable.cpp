@@ -99,23 +99,23 @@ void enableReference(process::Process& process, const MappedPage& page) {
     ) == seL4_NoError);
 }
 
-Page alloc() {
+Page alloc(bool pinned = true) {
     paddr_t address = ut_alloc(seL4_PageBits);
     if (!address) {
         static unsigned int clock = -1;
-        while (_table[++clock].reference || _table[clock].pinned) {
+        while (_table[++clock].reference || _table[clock].pinned)
             if (!_table[clock].pinned)
                 disableReference(_table[clock]);
-            throw std::system_error(ENOSYS, std::system_category(), "Paging not implemented yet");
+        throw std::system_error(ENOSYS, std::system_category(), "Paging not implemented yet");
 //        unsigned int id = pagefile.page(.scopedmapin(...));
 //        for (auto &page : _table[clock].pages) {
 //            page.frame = id;
 //            page.paged = true;
 //        }
-//        return Page(clock);
-        }
+//        _table[clock].pinned = pinned;
+//        return Page(_table[clock]);
     }
-
+    _getFrame(address).pinned = pinned;
     return Page(_getFrame(address));
 }
 

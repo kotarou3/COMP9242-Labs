@@ -31,7 +31,7 @@ class MappedPage;
 namespace FrameTable {
     struct Frame {
         Page* pages;
-        bool pinned;
+        bool pinned = true;
         // true if any of the pages associated with it have the reference bit set
         bool reference = true;
 
@@ -42,7 +42,7 @@ namespace FrameTable {
     void disableReference(Frame&);
     void enableReference(process::Process&, const MappedPage&);
 
-    Page alloc();
+    Page alloc(bool pinned);
     Page alloc(paddr_t address);
 
     class Frame;
@@ -79,7 +79,7 @@ private:
         friend void FrameTable::disableReference(FrameTable::Frame &);
         friend void FrameTable::enableReference(process::Process &, const MappedPage &);
         friend void FrameTable::init(paddr_t start, paddr_t end);
-        friend Page FrameTable::alloc();
+        friend Page FrameTable::alloc(bool pinned);
         friend Page FrameTable::alloc(paddr_t address);
 };
 

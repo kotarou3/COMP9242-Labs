@@ -236,7 +236,7 @@ void Process::handlePageFault(memory::vaddr_t address, memory::Attributes cause)
 
     auto page = pageDirectory.lookup(address, true);
     if (!page)
-        pageDirectory.allocateAndMap(address, map.attributes);
+        pageDirectory.allocateAndMap(address, map.attributes, false);
     else
         if (!page->getPage().reference)
             memory::FrameTable::enableReference(*this, *page);
