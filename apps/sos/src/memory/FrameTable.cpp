@@ -19,7 +19,7 @@ namespace FrameTable {
 namespace {
     Frame* _table;
     paddr_t _start, _end;
-    size_t _npages;
+    size_t _npages, _frameCount;
 
     inline Frame& _getFrame(paddr_t address) {
         assert(_start <= address && address < _end);
@@ -35,8 +35,8 @@ void init(paddr_t start, paddr_t end) {
     _start = start;
     _end = end;
 
-    size_t frameCount = numPages(end - start);
-    size_t frameTableSize = frameCount * sizeof(Frame);
+    _frameCount = numPages(end - start);
+    size_t frameTableSize = _frameCount * sizeof(Frame);
     _npages = numPages(frameTableSize);
 
     // Allocate a place in virtual memory to place the frame table
@@ -63,7 +63,7 @@ void init(paddr_t start, paddr_t end) {
     }
 
     // Construct the frames
-    for (size_t p = _npages; p < frameCount; ++p)
+    for (size_t p = 0; p < _frameCount; ++p)
         new(&_table[p]) Frame;
 
     // Connect the frame table frames to the pages
@@ -75,7 +75,7 @@ void init(paddr_t start, paddr_t end) {
 
     // Check the allocations were correct
     assert(_table[0].getAddress() == start);
-    assert(_table[frameCount - 1].getAddress() == end - PAGE_SIZE);
+    assert(_table[_frameCount - 1].getAddress() == end - PAGE_SIZE);
 
     tableMap.release();
 }
@@ -105,9 +105,8 @@ Page alloc(bool pinned) {
     paddr_t address = ut_alloc(seL4_PageBits);
     if (!address) {
         static unsigned int clock = -1;
-        // it really shouldn't be nullptr, but apparently ut_alloc doesn't allocate everything before returning null
-        while (_table[clock = (clock + 1) % _npages].reference || _table[clock].pinned || _table[clock].pages == nullptr)
-            if (!_table[clock].pinned && _table[clock].pages != nullptr)
+        while (_table[clock = (clock + 1) % _frameCount].reference || _table[clock].pinned)
+            if (!_table[clock].pinned)
                 disableReference(_table[clock]);
 
         Page* page = _table[clock].pages;

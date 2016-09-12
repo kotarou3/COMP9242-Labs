@@ -40,12 +40,12 @@ ScopedMapping Mappings::insert(vaddr_t address, size_t pages, Attributes attribu
         const vaddr_t mmapEnd = flags.stack ? MMAP_STACK_END : MMAP_END;
 
         // Try to pick a random address first
-//        std::uniform_int_distribution<vaddr_t> addressDist(mmapStart / PAGE_SIZE, mmapEnd / PAGE_SIZE);
-//        for (size_t n = 0; n < MMAP_RAND_ATTEMPTS; ++n) {
-//            address = addressDist(RandomDevice::getSingleton()) * PAGE_SIZE;
-//            if (!_isOverlapping(address, pages))
-//                goto haveValidAddress;
-//        }
+        std::uniform_int_distribution<vaddr_t> addressDist(mmapStart / PAGE_SIZE, mmapEnd / PAGE_SIZE);
+        for (size_t n = 0; n < MMAP_RAND_ATTEMPTS; ++n) {
+            address = addressDist(RandomDevice::getSingleton()) * PAGE_SIZE;
+            if (!_isOverlapping(address, pages))
+                goto haveValidAddress;
+        }
 
         // Fall back to linear scan
         address = mmapStart;

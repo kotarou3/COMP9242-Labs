@@ -30,7 +30,7 @@ class MappedPage;
 
 namespace FrameTable {
     struct Frame {
-        Page* pages;
+        Page* pages = nullptr;
         bool pinned = true;
         // true if any of the pages associated with it have the reference bit set
         bool reference = true;

@@ -8,13 +8,17 @@ namespace memory {
 
 class PageFile {
     PageFile():
-        store{fs::rootFileSystem->open("pagefile",
-            fs::FileSystem::OpenFlags{.read=true, .write=true, .createOnMissing=true, .truncate=true, .mode=666}
-        ).get()},
         vaddr{process::getSosProcess().maps.insertPermanent(
                 1, Attributes{.read=true, .write=true}, Mapping::Flags{.shared = false}
         )},
-        buffer{UserMemory(process::getSosProcess(), vaddr)} {}
+        buffer{UserMemory(process::getSosProcess(), vaddr)}
+    {
+        fs::rootFileSystem->open("pagefile",
+            fs::FileSystem::OpenFlags{.read=true, .write=true, .createOnMissing=true, .truncate=true, .mode=0666}
+        ).then(fs::asyncExecutor, [this] (auto value) {
+            this->store = value.get();
+        });
+    }
 
     unsigned int allocate() {
         // always prefer things in available, because overwriting them doesn't use up an extra disk block in the pagefile

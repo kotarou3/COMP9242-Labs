@@ -43,6 +43,7 @@ extern "C" {
 #include "internal/fs/FlatFileSystem.h"
 #include "internal/fs/NFSFileSystem.h"
 #include "internal/memory/FrameTable.h"
+#include "internal/memory/PageFile.h"
 #include "internal/memory/PageDirectory.h"
 #include "internal/process/Thread.h"
 #include "internal/syscall/fs.h"
@@ -279,6 +280,8 @@ int main(void) {
     rootFileSystem->mount(std::move(deviceFileSystem));
     rootFileSystem->mount(std::make_unique<fs::NFSFileSystem>(CONFIG_SOS_GATEWAY, CONFIG_SOS_NFS_DIR));
     fs::rootFileSystem = std::move(rootFileSystem);
+
+    memory::PageFile::get();
 
     /* Start the user application */
     start_first_process(TTY_NAME, _sos_ipc_ep_cap);
