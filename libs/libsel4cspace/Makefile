@@ -19,6 +19,9 @@ HDRFILES := $(wildcard $(SOURCE_DIR)/include/*)
 
 include $(SEL4_COMMON)/common.mk
 
+CFLAGS += -flto
+AR := $(CC)-ar
+
 .PHONY: docs
 docs: docs/libsel4cspace.pdf
 

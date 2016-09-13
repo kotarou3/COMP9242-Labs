@@ -32,3 +32,6 @@ HDRFILES += $(wildcard ${SOURCE_DIR}/mach_include/$(MACH)/*)
 endif
 
 include $(SEL4_COMMON)/common.mk
+
+CFLAGS += -flto
+AR := $(CC)-ar

@@ -16,8 +16,8 @@ $(BUILD_DIR)/project-config.jam: | $(SOURCE_DIR)/boost/bootstrap.sh
 	cp -al "$(SOURCE_DIR)/boost/." "$(BUILD_DIR)"
 	cd "$(BUILD_DIR)" && \
 		./bootstrap.sh --with-libraries=thread,system && \
-		sed -i "s/using gcc ;/using gcc : arm : $(CXX) ;/" project-config.jam
+		sed -i "s/using gcc ;/using gcc : arm : $(CXX) : <archiver>$(strip $(CC))-ar <ranlib>$(strip $(CC))-ranlib ;/" project-config.jam
 
 libboost: $(BUILD_DIR)/project-config.jam
 	cd "$(BUILD_DIR)" && \
-		./bjam -j8 --prefix="$(STAGE_DIR)" link=static runtime-link=static toolset=gcc-arm cxxflags="$(CXXFLAGS) $(CPPFLAGS)" install
+		./bjam -j8 --prefix="$(STAGE_DIR)" link=static runtime-link=static toolset=gcc-arm cxxflags="$(CXXFLAGS) $(CPPFLAGS) -flto" install

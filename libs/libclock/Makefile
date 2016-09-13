@@ -19,3 +19,6 @@ HDRFILES := $(wildcard $(SOURCE_DIR)/include/*)
 include $(SEL4_COMMON)/common.mk
 
 CPPFLAGS += -I$(SEL4_APPS_PATH)/sos/include
+CFLAGS += -flto
+CXXFLAGS += -flto
+AR := $(CC)-ar

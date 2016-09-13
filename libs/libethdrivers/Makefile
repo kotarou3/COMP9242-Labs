@@ -31,3 +31,6 @@ HDRFILES := \
     $(wildcard ${SOURCE_DIR}/arch_include/${ARCH}/*)
 
 include $(SEL4_COMMON)/common.mk
+
+CFLAGS += -flto
+AR := $(CC)-ar

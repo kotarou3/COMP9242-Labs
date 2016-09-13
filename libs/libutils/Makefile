@@ -19,3 +19,6 @@ CFILES := \
   $(patsubst $(SOURCE_DIR)/%,%,$(wildcard $(SOURCE_DIR)/src/arch/$(ARCH)/*.c))
 
 include $(SEL4_COMMON)/common.mk
+
+CFLAGS += -flto
+AR := $(CC)-ar

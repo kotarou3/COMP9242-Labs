@@ -37,6 +37,10 @@ CPPFLAGS += -Werror -Wno-missing-field-initializers
 CXXFLAGS += -DBOOST_THREAD_VERSION=4 -DBOOST_SYSTEM_NO_DEPRECATED -DBOOST_THREAD_PROVIDES_EXECUTORS
 LDFLAGS += -Wl,--section-start=.sos_brk_area=0x200000
 
+CFLAGS += -flto
+CXXFLAGS += -flto
+LDFLAGS += -flto
+
 CRTOBJFILES :=
 
 ${COMPONENTS}:
