@@ -67,7 +67,7 @@ void init(paddr_t start, paddr_t end) {
     }
 
     // Construct the frames
-    for (size_t p = frameTablePages; p < frameCount; ++p)
+    for (size_t p = 0; p < frameCount; ++p)
         new(&_table[p]) Frame;
 
     // Connect the frame table frames to the pages
