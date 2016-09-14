@@ -94,6 +94,8 @@ class MappedPage {
         MappedPage(MappedPage&& other) = default;
         MappedPage& operator=(MappedPage&& other) = default;
 
+        void enableReference(seL4_ARM_PageDirectory) const;
+
         const Page& getPage() const noexcept {return _page;}
         vaddr_t getAddress() const noexcept {return _address;}
         Attributes getAttributes() const noexcept {return _attributes;}

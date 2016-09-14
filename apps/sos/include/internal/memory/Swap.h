@@ -6,8 +6,8 @@
 
 namespace memory {
 
-class PageFile {
-    PageFile():
+class Swap {
+    Swap():
         vaddr{process::getSosProcess().maps.insertPermanent(
                 1, Attributes{.read=true, .write=true}, Mapping::Flags{.shared = false}
         )},
@@ -41,14 +41,14 @@ class PageFile {
     unsigned int max_id = -1;
     std::shared_ptr<fs::File> store;
     vaddr_t vaddr;
-    memory::UserMemory buffer;
+    memory::UserMemory buffer; // needs to be usermemory because iovec has usermemory
 public:
-    static PageFile& get() {
-        static auto f = PageFile{};
+    static Swap& get() {
+        static auto f = Swap{};
         return f;
     }
 
-    unsigned int page(Page& page) {
+    unsigned int swapout(Page& page) {
         unsigned int id = allocate();
         assert(seL4_ARM_Page_Map(
                 page.getCap(), process::getSosProcess().pageDirectory.getCap(),

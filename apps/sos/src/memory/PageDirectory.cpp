@@ -137,6 +137,16 @@ void PageTable::_checkAddress(vaddr_t address) const {
 // MappedPage //
 ////////////////
 
+void MappedPage::enableReference(seL4_ARM_PageDirectory pdCap) const {
+    FrameTable::Frame& f = *getPage()._frame;
+    f.referenced = true;
+    getPage().referenced = true;
+    assert(seL4_ARM_Page_Map(
+            getPage().getCap(), pdCap,
+            getAddress(), seL4Rights(), seL4Attributes()
+    ) == seL4_NoError);
+}
+
 MappedPage::MappedPage(Page page, PageDirectory& directory, vaddr_t address, Attributes attributes):
     _page(std::move(page)),
     _address(address),

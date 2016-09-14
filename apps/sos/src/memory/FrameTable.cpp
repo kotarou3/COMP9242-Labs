@@ -6,7 +6,7 @@
 #include "internal/memory/FrameTable.h"
 #include "internal/memory/PageDirectory.h"
 #include "internal/process/Thread.h"
-#include "internal/memory/PageFile.h"
+#include "internal/memory/Swap.h"
 
 extern "C" {
     #include <cspace/cspace.h>
@@ -80,46 +80,36 @@ void init(paddr_t start, paddr_t end) {
     tableMap.release();
 }
 
-void disableReference(Frame& frame) {
-    frame.reference = false;
+void Frame::disableReference() {
+    referenced = false;
     // unmap all the pages associated with said frame
-    Page* current = frame.pages;
+    Page* current = pages;
     while (current != nullptr) {
         assert(seL4_ARM_Page_Unmap(current->getCap()) == seL4_NoError);
-        current->reference = false;
+        current->referenced = false;
         current = current->_next;
     }
 }
 
-void enableReference(process::Process& process, const MappedPage& page) {
-    Frame& f = *page.getPage()._frame;
-    f.reference = true;
-    page.getPage().reference = true;
-    assert(seL4_ARM_Page_Map(
-            page.getPage().getCap(), process.pageDirectory.getCap(),
-            page.getAddress(), page.seL4Rights(), page.seL4Attributes()
-    ) == seL4_NoError);
-}
-
-Page alloc(bool pinned) {
+Page alloc(bool locked) {
     paddr_t address = ut_alloc(seL4_PageBits);
     if (!address) {
         static unsigned int clock = -1;
-        while (_table[clock = (clock + 1) % _frameCount].reference || _table[clock].pinned)
-            if (!_table[clock].pinned)
-                disableReference(_table[clock]);
+        while (_table[clock = (clock + 1) % _frameCount].referenced || _table[clock].locked || _table[clock].pages == nullptr)
+            if (!_table[clock].locked && _table[clock].pages != nullptr)
+                _table[clock].disableReference();
 
         Page* page = _table[clock].pages;
-        auto id = memory::PageFile::get().page(*page);
+        auto id = memory::Swap::get().swapout(*page);
         while (page != nullptr) {
             page->_frame = reinterpret_cast<Frame*>(id);
             page->_paged = true;
             page = page->_next;
         }
-        _table[clock].pinned = pinned;
+        _table[clock].locked = locked;
         return Page(_table[clock]);
     }
-    _getFrame(address).pinned = pinned;
+    _getFrame(address).locked = locked;
     return Page(_getFrame(address));
 }
 

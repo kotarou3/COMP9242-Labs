@@ -16,6 +16,7 @@
 #include "internal/process/Thread.h"
 #include "internal/syscall/syscall.h"
 #include "internal/memory/FrameTable.h"
+#include "../../include/internal/process/Thread.h"
 
 extern "C" {
     #include <sos.h>
@@ -238,8 +239,8 @@ void Process::handlePageFault(memory::vaddr_t address, memory::Attributes cause)
     if (!page)
         pageDirectory.allocateAndMap(address, map.attributes, false);
     else
-        if (!page->getPage().reference)
-            memory::FrameTable::enableReference(*this, *page);
+        if (!page->getPage().referenced)
+            page->enableReference(pageDirectory.getCap());
 }
 
 Process& getSosProcess() noexcept {

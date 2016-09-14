@@ -6,7 +6,6 @@ extern "C" {
     #include <sel4/types.h>
 }
 
-namespace process {class Process;}
 class MappedPage;
 
 namespace memory {
@@ -31,19 +30,17 @@ class MappedPage;
 namespace FrameTable {
     struct Frame {
         Page* pages = nullptr;
-        bool pinned = true;
+        bool locked = true;
         // true if any of the pages associated with it have the reference bit set
-        bool reference = true;
+        bool referenced = true;
+        void disableReference();
 
         inline paddr_t getAddress() const;
     };
     void init(paddr_t start, paddr_t end);
 
-    void disableReference(Frame&);
-    void enableReference(process::Process&, const MappedPage&);
-
-    Page alloc(bool pinned = true);
-    Page alloc(paddr_t address);
+    Page alloc(bool locked = true);
+    Page alloc(paddr_t locked);
 
     class Frame;
 }
@@ -60,7 +57,7 @@ class Page {
         seL4_ARM_Page getCap() const noexcept {return _cap;}
 
         explicit operator bool() const noexcept {return _cap;}
-        mutable bool reference = true;
+        mutable bool referenced = true;
 
 private:
         Page(FrameTable::Frame& frame);
@@ -76,11 +73,11 @@ private:
         Page* _prev;
         mutable Page* _next;
 
-        friend void FrameTable::disableReference(FrameTable::Frame &);
-        friend void FrameTable::enableReference(process::Process &, const MappedPage &);
         friend void FrameTable::init(paddr_t start, paddr_t end);
-        friend Page FrameTable::alloc(bool pinned);
-        friend Page FrameTable::alloc(paddr_t address);
+        friend Page FrameTable::alloc(bool locked);
+        friend Page FrameTable::alloc(paddr_t locked);
+        friend void FrameTable::Frame::disableReference();
+        friend class MappedPage;
 };
 
 }
