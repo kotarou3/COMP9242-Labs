@@ -5,6 +5,7 @@
 
 #include "internal/memory/FrameTable.h"
 #include "internal/memory/PageDirectory.h"
+#include "internal/fs/File.h"
 
 extern "C" {
     #include <cspace/cspace.h>
@@ -33,8 +34,10 @@ PageDirectory::~PageDirectory() {
         _cap.release();
 }
 
-const MappedPage& PageDirectory::allocateAndMap(vaddr_t address, Attributes attributes, bool pinned) {
-    return map(FrameTable::alloc(pinned), address, attributes);
+boost::future<const MappedPage&> PageDirectory::allocateAndMap(vaddr_t address, Attributes attributes, bool pinned) {
+    return FrameTable::alloc(pinned).then(fs::asyncExecutor, [=] (auto page) -> const MappedPage& {
+        return this->map(page.get(), address, attributes);
+    });
 }
 
 const MappedPage& PageDirectory::map(Page page, vaddr_t address, Attributes attributes) {

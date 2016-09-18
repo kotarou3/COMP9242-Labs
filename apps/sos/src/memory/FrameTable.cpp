@@ -91,7 +91,7 @@ void Frame::disableReference() {
     }
 }
 
-Page alloc(bool locked) {
+boost::future<Page> alloc(bool locked) {
     paddr_t address = ut_alloc(seL4_PageBits);
     if (!address) {
         static unsigned int clock = -1;
@@ -100,17 +100,20 @@ Page alloc(bool locked) {
                 _table[clock].disableReference();
 
         Page* page = _table[clock].pages;
-        auto id = memory::Swap::get().swapout(*page);
-        while (page != nullptr) {
-            page->_frame = reinterpret_cast<Frame*>(id);
-            page->_paged = true;
-            page = page->_next;
-        }
-        _table[clock].locked = locked;
-        return Page(_table[clock]);
+        return memory::Swap::get().swapout(*page).then(fs::asyncExecutor, [&] (auto id) {
+            while (page != nullptr) {
+                page->_frame = reinterpret_cast<Frame*>(id.get());
+                page->_paged = true;
+                page = page->_next;
+            }
+            _table[clock].locked = locked;
+            return Page(_table[clock]);
+        });
     }
     _getFrame(address).locked = locked;
-    return Page(_getFrame(address));
+    boost::promise<Page> promise;
+    promise.set_value(Page(_getFrame(address)));
+    return promise.get_future();
 }
 
 Page alloc(paddr_t address) {

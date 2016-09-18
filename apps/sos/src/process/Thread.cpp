@@ -16,7 +16,6 @@
 #include "internal/process/Thread.h"
 #include "internal/syscall/syscall.h"
 #include "internal/memory/FrameTable.h"
-#include "../../include/internal/process/Thread.h"
 
 extern "C" {
     #include <sos.h>
@@ -48,10 +47,12 @@ Thread::Thread(std::shared_ptr<Process> process, seL4_CPtr faultEndpoint, seL4_W
         memory::Mapping::Flags{.shared = false}
     ))
 {
-    const memory::MappedPage& ipcBufferMappedPage = _process->pageDirectory.allocateAndMap(
+    auto page = _process->pageDirectory.allocateAndMap(
         _ipcBuffer.getAddress(),
         memory::Attributes{.read = true, .write = true}
     );
+    assert(page.is_ready()); // TODO: fix this when we implement multithreading
+    const memory::MappedPage& ipcBufferMappedPage = page.get();
 
     // Copy the fault endpoint to the user app to allow IPC
     _faultEndpoint = cspace_mint_cap(
@@ -121,10 +122,22 @@ void Thread::handleFault(const seL4_MessageInfo_t& message) noexcept {
             }
 
             try {
-                _process->handlePageFault(address, faultType);
-                seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 0);
-                seL4_Reply(reply);
+                auto future = _process->handlePageFault(address, faultType);
+                if (future.is_ready()) {
+                    seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 0);
+                    seL4_Reply(reply);
+                } else {
+                    seL4_CPtr replyCap = cspace_save_reply_cap(cur_cspace);
+                    assert(replyCap != CSPACE_NULL);
+
+                    future.then(_asyncSyscallExecutor, [replyCap](auto) {
+                        seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 0);
+                        seL4_Send(replyCap, reply);
+                        assert(cspace_free_slot(cur_cspace, replyCap) == CSPACE_NOERROR);
+                    });
+                }
             } catch (const std::exception& e) {
+                // TODO: kill thread rather than sos
                 kprintf(LOGLEVEL_DEBUG, "Caught %s\n", e.what());
 
                 kprintf(LOGLEVEL_NOTICE,
@@ -219,7 +232,7 @@ Process::Process(bool isSosProcess):
     maps.insert(0, memory::MMAP_START / PAGE_SIZE, memory::Attributes{}, flags).release();
 }
 
-void Process::handlePageFault(memory::vaddr_t address, memory::Attributes cause) {
+boost::future<void> Process::handlePageFault(memory::vaddr_t address, memory::Attributes cause) {
     address = memory::pageAlign(address);
     const memory::Mapping& map = maps.lookup(address);
 
@@ -237,10 +250,13 @@ void Process::handlePageFault(memory::vaddr_t address, memory::Attributes cause)
 
     auto page = pageDirectory.lookup(address, true);
     if (!page)
-        pageDirectory.allocateAndMap(address, map.attributes, false);
+        return pageDirectory.allocateAndMap(address, map.attributes, false).then(
+            _asyncSyscallExecutor, [](auto) {return;}
+        );
     else
         if (!page->getPage().referenced)
             page->enableReference(pageDirectory.getCap());
+    return boost::future<void>();
 }
 
 Process& getSosProcess() noexcept {

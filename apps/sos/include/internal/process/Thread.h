@@ -8,6 +8,10 @@
 #include "internal/memory/PageDirectory.h"
 #include "internal/Capability.h"
 
+#define syscall(...) _syscall(__VA_ARGS__)
+#include <boost/thread/future.hpp>
+#undef syscall
+
 extern "C" {
     #include <cspace/cspace.h>
     #include <sel4/types.h>
@@ -49,7 +53,7 @@ class Process {
         Process(const Process&) = delete;
         Process& operator=(const Process&) = delete;
 
-        void handlePageFault(memory::vaddr_t, memory::Attributes attributes);
+        boost::future<void> handlePageFault(memory::vaddr_t, memory::Attributes attributes);
 
         memory::PageDirectory pageDirectory;
         memory::Mappings maps;

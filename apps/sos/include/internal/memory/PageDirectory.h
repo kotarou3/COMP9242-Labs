@@ -6,6 +6,10 @@
 #include "internal/memory/FrameTable.h"
 #include "internal/Capability.h"
 
+#define syscall(...) _syscall(__VA_ARGS__)
+#include <boost/thread/future.hpp>
+#undef syscall
+
 extern "C" {
     #include <sel4/types.h>
 }
@@ -37,7 +41,7 @@ class PageDirectory {
         PageDirectory& operator=(PageDirectory&&) = delete;
 
         // Warning: Returned reference is invalidated after another mapping
-        const MappedPage& allocateAndMap(vaddr_t address, Attributes attributes, bool pinned=true);
+        boost::future<const MappedPage&> allocateAndMap(vaddr_t address, Attributes attributes, bool pinned=true);
         const MappedPage& map(Page page, vaddr_t address, Attributes attributes);
         void unmap(vaddr_t address);
         const MappedPage* lookup(vaddr_t address, bool noThrow = false) const;

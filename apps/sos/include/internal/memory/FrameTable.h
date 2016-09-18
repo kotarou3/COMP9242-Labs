@@ -2,6 +2,10 @@
 
 #include <limits.h>
 
+#define syscall(...) _syscall(__VA_ARGS__)
+#include <boost/thread/future.hpp>
+#undef syscall
+
 extern "C" {
     #include <sel4/types.h>
 }
@@ -39,7 +43,7 @@ namespace FrameTable {
     };
     void init(paddr_t start, paddr_t end);
 
-    Page alloc(bool locked = true);
+    boost::future<Page> alloc(bool locked = true);
     Page alloc(paddr_t locked);
 
     class Frame;
@@ -74,7 +78,7 @@ private:
         mutable Page* _next;
 
         friend void FrameTable::init(paddr_t start, paddr_t end);
-        friend Page FrameTable::alloc(bool locked);
+        friend boost::future<Page> FrameTable::alloc(bool locked);
         friend Page FrameTable::alloc(paddr_t locked);
         friend void FrameTable::Frame::disableReference();
         friend class MappedPage;
