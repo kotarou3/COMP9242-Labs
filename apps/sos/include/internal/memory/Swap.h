@@ -48,15 +48,17 @@ public:
         return f;
     }
 
-    unsigned int swapout(Page& page) {
+    boost::future<unsigned int> swapout(Page& page) {
         unsigned int id = allocate();
-        assert(seL4_ARM_Page_Map(
-                page.getCap(), process::getSosProcess().pageDirectory.getCap(),
-                buffer._address, static_cast<seL4_CapRights>(seL4_CanRead | seL4_CanWrite), seL4_ARM_ExecuteNever
-        ) == seL4_NoError);
-        store->write(std::vector<fs::IoVector>{fs::IoVector{buffer, PAGE_SIZE}}, id * PAGE_SIZE);
-        assert(seL4_ARM_Page_Unmap(page.getCap()) == seL4_NoError);
-        return id;
+        process::getSosProcess().pageDirectory.map(page.copy(), vaddr, Attributes{.read=true, .write=true});
+        return store->write(std::vector<fs::IoVector>{fs::IoVector{buffer, PAGE_SIZE}}, id * PAGE_SIZE).then(
+            fs::asyncExecutor, [id, this] (auto size) {
+                if (size.get() != PAGE_SIZE)
+                    throw std::system_error(ENOMEM, std::system_category(), "Failed to swap out page");
+                process::getSosProcess().pageDirectory.unmap(vaddr);
+                return boost::make_ready_future(id);
+            }
+        );
     }
 };
 
