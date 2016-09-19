@@ -7,6 +7,7 @@
 #include "internal/memory/PageDirectory.h"
 #include "internal/process/Thread.h"
 #include "internal/memory/Swap.h"
+#include "../../include/internal/memory/FrameTable.h"
 
 extern "C" {
     #include <cspace/cspace.h>
@@ -95,25 +96,37 @@ boost::future<Page> alloc(bool locked) {
     paddr_t address = ut_alloc(seL4_PageBits);
     if (!address) {
         static unsigned int clock = -1;
-        while (_table[clock = (clock + 1) % _frameCount].referenced || _table[clock].locked || _table[clock].pages == nullptr)
-            if (!_table[clock].locked && _table[clock].pages != nullptr)
-                _table[clock].disableReference();
+        std::vector<Page*> toSwap;
+        for (auto i = 0U; i < Swap::swap_pages; ++i) {
+            while (_table[clock = (clock + 1) % _frameCount].referenced || _table[clock].locked
+                || _table[clock].pages == nullptr)
+                if (!_table[clock].locked && _table[clock].pages != nullptr)
+                    _table[clock].disableReference();
+            toSwap.push_back(_table[clock].pages);
+        }
 
-        Page* page = _table[clock].pages;
-        return memory::Swap::get().swapout(*page).then(fs::asyncExecutor, [&] (auto id) {
-            while (page != nullptr) {
-                page->_frame = reinterpret_cast<Frame*>(id.get());
-                page->_paged = true;
-                page = page->_next;
+        return memory::Swap::get().swapout(toSwap).then(fs::asyncExecutor, [=] (auto id) {
+            auto result = id.get();
+            for (auto i = 0U; i < Swap::swap_pages; ++i) {
+                auto current = toSwap[i];
+                paddr_t address = current->_frame->getAddress();
+                while (current != nullptr) {
+                    current->swapOut(result * Swap::swap_pages + i);
+                    current = current->_next;
+                }
+                ut_free(address, seL4_PageBits);
             }
-            _table[clock].locked = locked;
-            return Page(_table[clock]);
+            paddr_t address = ut_alloc(seL4_PageBits);
+            assert(address);
+            Frame& frame = _getFrame(address);
+            frame.pages = nullptr;
+            frame.locked = locked;
+            frame.referenced = true;
+            return Page(frame);
         });
     }
     _getFrame(address).locked = locked;
-    boost::promise<Page> promise;
-    promise.set_value(Page(_getFrame(address)));
-    return promise.get_future();
+    return boost::make_ready_future(Page(_getFrame(address)));
 }
 
 Page alloc(paddr_t address) {
@@ -221,6 +234,13 @@ Page& Page::operator=(Page&& other) noexcept {
     }
 
     return *this;
+}
+
+void Page::swapOut(unsigned int id) {
+    _frame = reinterpret_cast<FrameTable::Frame*>(id);
+    _paged = true;
+    if (_cap)
+        assert(cspace_delete_cap(cur_cspace, _cap) == CSPACE_NOERROR);
 }
 
 }

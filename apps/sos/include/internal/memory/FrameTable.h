@@ -57,6 +57,7 @@ class Page {
         Page& operator=(Page&& other) noexcept;
 
         Page copy() const {return *this;};
+        void swapOut(unsigned int id);
 
         seL4_ARM_Page getCap() const noexcept {return _cap;}
 
