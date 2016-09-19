@@ -39,7 +39,11 @@ static seL4_Word _pool_base = 0;
 
 #define PRIMARY_POOL_SIZEBITS 14
 #define PRIMARY_POOL          _pool14
+#define MAX_SIZEBITS 14
+#define EMERGENCY_POOL_SIZE 20
 
+seL4_Word emergency_pool[MAX_SIZEBITS + 1][EMERGENCY_POOL_SIZE];
+size_t emergency_available[MAX_SIZEBITS];
 
 /*********************
  *** bitfield pool ***
@@ -365,9 +369,11 @@ void ut_allocator_init(seL4_Word low, seL4_Word high){
     _pool4 = NULL;
 
     _initialised = 1;
+
+    ut_emergency_replenish();
 }
 
-seL4_Word ut_alloc(int sizebits){
+seL4_Word ut_alloc_safe(int sizebits){
     seL4_Word addr;
 
     assert(_initialised);
@@ -394,6 +400,15 @@ seL4_Word ut_alloc(int sizebits){
     return addr;
 }
 
+seL4_Word ut_alloc(int sizebits){
+    seL4_Word addr = ut_alloc_safe(sizebits);
+    if (!addr) {
+        assert(emergency_available[sizebits]); // if you fail this, increase emergency pool size
+        return emergency_pool[sizebits][--emergency_available[sizebits]];
+    }
+    return addr;
+}
+
 void ut_free(seL4_Word addr, int sizebits){
     assert(addr != 0);
     assert((addr & ((1 << sizebits) - 1)) == 0 || !"Address not aligned");
@@ -412,4 +427,17 @@ void ut_free(seL4_Word addr, int sizebits){
     default:
         assert(!"ut_free received invalid size");
     }
+}
+
+int ut_emergency_replenish() {
+    unsigned int bit_options[] = {14, 12, 10, 9, 4};
+    for (unsigned int bits = 0; bits < sizeof(bit_options) / sizeof(*bit_options); bits++) {
+        while (emergency_available[bit_options[bits]] < EMERGENCY_POOL_SIZE) {
+            seL4_Word addr = ut_alloc_safe(bit_options[bits]);
+            if (!addr)
+                return 0;
+            emergency_pool[bits][emergency_available[bit_options[bits]]++] = addr;
+        }
+    }
+    return 1;
 }

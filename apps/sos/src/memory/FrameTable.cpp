@@ -92,7 +92,7 @@ void Frame::disableReference() {
 }
 
 boost::future<Page> alloc(bool locked) {
-    paddr_t address = ut_alloc(seL4_PageBits);
+    paddr_t address = ut_alloc_safe(seL4_PageBits);
     if (!address) {
         static unsigned int clock = -1;
         while (_table[clock = (clock + 1) % _frameCount].referenced || _table[clock].locked || _table[clock].pages == nullptr)
@@ -100,11 +100,12 @@ boost::future<Page> alloc(bool locked) {
                 _table[clock].disableReference();
 
         Page* page = _table[clock].pages;
-        return memory::Swap::get().swapout(*page).then(fs::asyncExecutor, [&] (auto id) {
-            while (page != nullptr) {
-                page->_frame = reinterpret_cast<Frame*>(id.get());
-                page->_paged = true;
-                page = page->_next;
+        return memory::Swap::get().swapout(*page).then(fs::asyncExecutor, [=] (auto id) {
+            Page* current = page;
+            while (current != nullptr) {
+                current->_frame = reinterpret_cast<Frame*>(id.get());
+                current->_paged = true;
+                current = current->_next;
             }
             _table[clock].locked = locked;
             return Page(_table[clock]);
