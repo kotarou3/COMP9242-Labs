@@ -11,6 +11,7 @@
 apps-$(CONFIG_APP_SOS) += sos
 
 sos-components-$(CONFIG_APP_SOSH) += sosh
+sos-components-$(CONFIG_APP_THRASHER) += thrasher
 sos-components-$(CONFIG_APP_TTY_TEST) += tty_test
 sos-components=$(addprefix $(STAGE_BASE)/bin/, $(sos-components-y))
 
