@@ -140,12 +140,12 @@ void PageTable::_checkAddress(vaddr_t address) const {
 // MappedPage //
 ////////////////
 
-void MappedPage::enableReference(seL4_ARM_PageDirectory pdCap) const {
+void MappedPage::enableReference(const PageDirectory& pd) const {
     FrameTable::Frame& f = *getPage()._frame;
     f.referenced = true;
     getPage().referenced = true;
     assert(seL4_ARM_Page_Map(
-            getPage().getCap(), pdCap,
+            getPage().getCap(), pd.getCap(),
             getAddress(), seL4Rights(), seL4Attributes()
     ) == seL4_NoError);
 }

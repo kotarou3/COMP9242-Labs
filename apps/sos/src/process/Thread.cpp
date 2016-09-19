@@ -128,9 +128,11 @@ void Thread::handleFault(const seL4_MessageInfo_t& message) noexcept {
                     seL4_Reply(reply);
                 } else {
                     seL4_CPtr replyCap = cspace_save_reply_cap(cur_cspace);
-                    assert(replyCap != CSPACE_NULL);
+                    if(replyCap == CSPACE_NULL)
+                        throw std::system_error(ENOMEM, std::system_category(), "Failed to save reply cap");
 
-                    future.then(_asyncSyscallExecutor, [replyCap](auto) {
+                    future.then(_asyncSyscallExecutor, [replyCap](auto val) {
+                        val.get();
                         seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 0);
                         seL4_Send(replyCap, reply);
                         assert(cspace_free_slot(cur_cspace, replyCap) == CSPACE_NOERROR);
@@ -255,7 +257,7 @@ boost::future<void> Process::handlePageFault(memory::vaddr_t address, memory::At
         );
     else
         if (!page->getPage().referenced)
-            page->enableReference(pageDirectory.getCap());
+            page->enableReference(pageDirectory);
     return boost::future<void>();
 }
 

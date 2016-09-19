@@ -7,7 +7,6 @@
 #include "internal/memory/PageDirectory.h"
 #include "internal/process/Thread.h"
 #include "internal/memory/Swap.h"
-#include "../../include/internal/memory/FrameTable.h"
 
 extern "C" {
     #include <cspace/cspace.h>
@@ -93,7 +92,7 @@ void Frame::disableReference() {
 }
 
 boost::future<Page> alloc(bool locked) {
-    paddr_t address = ut_alloc(seL4_PageBits);
+    paddr_t address = ut_alloc_safe(seL4_PageBits);
     if (!address) {
         static unsigned int clock = -1;
         std::vector<Page*> toSwap;
@@ -116,7 +115,7 @@ boost::future<Page> alloc(bool locked) {
                 }
                 ut_free(address, seL4_PageBits);
             }
-            paddr_t address = ut_alloc(seL4_PageBits);
+            paddr_t address = ut_alloc_safe(seL4_PageBits);
             assert(address);
             Frame& frame = _getFrame(address);
             frame.pages = nullptr;
