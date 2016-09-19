@@ -1,0 +1,7 @@
+config APP_THRASHER
+    bool "Thrasher"
+    depends on HAVE_LIBC && LIB_CXX && LIB_BOOST
+    default y
+    select HAVE_SEL4_APPS
+    help
+        A tester for memory swapping
