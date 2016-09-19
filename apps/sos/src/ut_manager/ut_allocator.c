@@ -430,7 +430,7 @@ void ut_free(seL4_Word addr, int sizebits){
 }
 
 int ut_emergency_replenish() {
-    unsigned int bit_options[] = {14, 12, 10, 9, 4};
+    unsigned int bit_options[] = {4, 9, 10, 12, 14};
     for (unsigned int bits = 0; bits < sizeof(bit_options) / sizeof(*bit_options); bits++) {
         while (emergency_available[bit_options[bits]] < EMERGENCY_POOL_SIZE) {
             seL4_Word addr = ut_alloc_safe(bit_options[bits]);

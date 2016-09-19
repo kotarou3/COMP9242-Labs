@@ -121,6 +121,7 @@ boost::future<Page> alloc(bool locked) {
             frame.pages = nullptr;
             frame.locked = locked;
             frame.referenced = true;
+            ut_emergency_replenish();
             return Page(frame);
         });
     }
