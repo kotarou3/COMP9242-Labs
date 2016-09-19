@@ -92,7 +92,7 @@ low_level_init(struct eth_driver *driver, uint8_t *mac, int *mtu)
 {
     struct imx6_eth_data *dev = (struct imx6_eth_data*)driver->eth_data;
     enet_get_mac(dev->enet, mac);
-    *mtu = MAX_PKT_SIZE;
+    *mtu = ETH_MTU;
 }
 
 static void fill_rx_bufs(struct eth_driver *driver) {

@@ -10,13 +10,19 @@ extern "C" {
     #include <sel4/types.h>
 }
 
-class MappedPage;
-
 namespace memory {
 
 using paddr_t = size_t;
 
+constexpr size_t PAGE_TABLE_SIZE = ((1 << (seL4_PageTableBits + seL4_PageBits)) / sizeof(seL4_Word));
 static_assert(PAGE_SIZE == (1 << seL4_PageBits), "Incorrect value of PAGE_SIZE");
+
+constexpr size_t pageTableAlign(size_t value) {
+    return value & -PAGE_TABLE_SIZE;
+}
+constexpr size_t pageTableOffset(size_t value) {
+    return value & ~-PAGE_TABLE_SIZE;
+}
 
 constexpr size_t pageAlign(size_t value) {
     return value & -PAGE_SIZE;
@@ -29,60 +35,30 @@ constexpr size_t numPages(size_t bytes) {
 }
 
 class Page;
-class MappedPage;
 
 namespace FrameTable {
     struct Frame {
-        Page* pages = nullptr;
-        bool locked = true;
-        // true if any of the pages associated with it have the reference bit set
-        bool referenced = true;
-        void disableReference();
+        Frame():
+            pages(nullptr),
+            isLocked(false),
+            isReferenced(false)
+        {}
 
-        inline paddr_t getAddress() const;
+        Page* pages;
+
+        bool isLocked:1;
+        bool isReferenced:1;
+
+        void disableReference() noexcept;
+
+        paddr_t getAddress() const;
     };
     void init(paddr_t start, paddr_t end);
 
-    boost::future<Page> alloc(bool locked = true);
-    Page alloc(paddr_t locked);
+    boost::future<Page> alloc(bool isLocked = false);
+    Page alloc(paddr_t address);
 
     class Frame;
 }
-
-class Page {
-    public:
-        ~Page();
-
-        Page(Page&& other) noexcept;
-        Page& operator=(Page&& other) noexcept;
-
-        Page copy() const {return *this;};
-        void swapOut(unsigned int id);
-
-        seL4_ARM_Page getCap() const noexcept {return _cap;}
-
-        explicit operator bool() const noexcept {return _cap;}
-        mutable bool referenced = true;
-
-private:
-        Page(FrameTable::Frame& frame);
-        Page(paddr_t address);
-
-        Page(const Page& other);
-        Page& operator=(const Page&) = delete;
-        bool _paged = false;
-
-        seL4_ARM_Page _cap;
-        FrameTable::Frame* _frame;
-
-        Page* _prev;
-        mutable Page* _next;
-
-        friend void FrameTable::init(paddr_t start, paddr_t end);
-        friend boost::future<Page> FrameTable::alloc(bool locked);
-        friend Page FrameTable::alloc(paddr_t locked);
-        friend void FrameTable::Frame::disableReference();
-        friend class MappedPage;
-};
 
 }

@@ -31,9 +31,14 @@ void pb_alignl(int* pos)
     *pos = ROUNDUP(*pos, sizeof(uint32_t));
 }
 
+void pb_alignul(unsigned int* pos)
+{
+    *pos = ROUNDUP(*pos, sizeof(uint32_t));
+}
+
 
 /* LWIP should really provide this for us... */
-static u16_t 
+static u16_t
 pbuf_take_partial(struct pbuf *p, const void *dataptr, u16_t len, u16_t offset)
 {
     int written = 0;
@@ -98,8 +103,8 @@ pb_write_str(struct pbuf* pbuf, const char* str, uint32_t len, int* pos)
 }
 
 
-/* 
- * NOTE: we allow 0 count reads to transparently handle the case where we are 
+/*
+ * NOTE: we allow 0 count reads to transparently handle the case where we are
  *       reading in data of size 0
  */
 void
@@ -143,4 +148,3 @@ pb_read_str(struct pbuf* pbuf, char* str, int maxlen, int* pos)
     str[strlen] = '\0';
     pb_alignl(pos);
 }
-

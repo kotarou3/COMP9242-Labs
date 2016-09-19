@@ -34,8 +34,24 @@ PageDirectory::~PageDirectory() {
         _cap.release();
 }
 
-boost::future<const MappedPage&> PageDirectory::allocateAndMap(vaddr_t address, Attributes attributes, bool pinned) {
-    return FrameTable::alloc(pinned).then(fs::asyncExecutor, [=] (auto page) -> const MappedPage& {
+void PageDirectory::reservePages(vaddr_t from, vaddr_t to) {
+    from = pageTableAlign(from);
+    for (vaddr_t address = from; from < to; from += PAGE_TABLE_SIZE) {
+        auto table = _tables.find(_toIndex(address));
+        if (table == _tables.end()) {
+            table = _tables.emplace(
+                std::piecewise_construct,
+                std::forward_as_tuple(_toIndex(address)),
+                std::forward_as_tuple(*this, _toIndex(address))
+            ).first;
+        }
+
+        table->second.reservePages();
+    }
+}
+
+boost::future<const MappedPage&> PageDirectory::allocateAndMap(vaddr_t address, Attributes attributes, bool isLocked) {
+    return FrameTable::alloc(isLocked).then(fs::asyncExecutor, [=] (auto page) -> const MappedPage& {
         return this->map(page.get(), address, attributes);
     });
 }
@@ -90,6 +106,10 @@ PageTable::~PageTable() {
         assert(seL4_ARM_PageTable_Unmap(_cap.get()) == seL4_NoError);
 }
 
+void PageTable::reservePages() {
+    _pages.reserve(PAGE_TABLE_SIZE / PAGE_SIZE);
+}
+
 const MappedPage& PageTable::map(Page page, vaddr_t address, Attributes attributes) {
     _checkAddress(address);
 
@@ -140,28 +160,27 @@ void PageTable::_checkAddress(vaddr_t address) const {
 // MappedPage //
 ////////////////
 
-void MappedPage::enableReference(const PageDirectory& pd) const {
-    FrameTable::Frame& f = *getPage()._frame;
-    f.referenced = true;
-    getPage().referenced = true;
-    assert(seL4_ARM_Page_Map(
-            getPage().getCap(), pd.getCap(),
-            getAddress(), seL4Rights(), seL4Attributes()
-    ) == seL4_NoError);
-}
-
 MappedPage::MappedPage(Page page, PageDirectory& directory, vaddr_t address, Attributes attributes):
     _page(std::move(page)),
     _address(address),
     _attributes(attributes)
 {
+    enableReference(directory);
+}
+
+void MappedPage::enableReference(PageDirectory& directory) {
+    assert(_page._status == Page::Status::UNREFERENCED);
 
     int err = seL4_ARM_Page_Map(
-        _page.getCap(), directory.getCap(), address,
+        _page.getCap(), directory.getCap(), _address,
         seL4Rights(), seL4Attributes()
     );
     if (err != seL4_NoError)
         throw std::system_error(ENOMEM, std::system_category(), "Failed to map in page: " + std::to_string(err));
+
+    _page._status = Page::Status::REFERENCED;
+    if (_page._resident.frame)
+        _page._resident.frame->isReferenced = true;
 }
 
 seL4_CapRights MappedPage::seL4Rights() const {
@@ -172,6 +191,7 @@ seL4_CapRights MappedPage::seL4Rights() const {
         rights |= seL4_CanRead | seL4_CanWrite; // ARM requires read permissions to write
     if (_attributes.execute)
         rights |= seL4_CanRead; // XXX: No execute right on our version of seL4
+
     return static_cast<seL4_CapRights>(rights);
 }
 
@@ -181,13 +201,19 @@ seL4_ARM_VMAttributes MappedPage::seL4Attributes() const {
         vmAttributes |= seL4_ARM_ExecuteNever;
     if (_attributes.notCacheable)
         vmAttributes &= ~seL4_ARM_PageCacheable;
+
     return static_cast<seL4_ARM_VMAttributes>(vmAttributes);
 }
 
 MappedPage::~MappedPage() {
     // If we haven't been moved away, unmap the page
-    if (_page)
-        assert(seL4_ARM_Page_Unmap(_page.getCap()) == seL4_NoError);
+    if (_page) {
+        if (_page._status == Page::Status::REFERENCED)
+            assert(seL4_ARM_Page_Unmap(_page.getCap()) == seL4_NoError);
+        else
+            assert(_page._status == Page::Status::UNREFERENCED);
+        // TODO: Deal with swapped out pages
+    }
 }
 
 }

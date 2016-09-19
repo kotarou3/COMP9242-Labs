@@ -1,71 +1,58 @@
 #pragma once
-#include <set>
-#include <limits>
-#include <stdexcept>
-#include "internal/fs/NFSFile.h"
+
+#include <vector>
+
+#define syscall(...) _syscall(__VA_ARGS__)
+// Includes missing from inline_executor.hpp
+#include <boost/thread/thread.hpp>
+#include <boost/thread/concurrent_queues/sync_queue.hpp>
+
+#include <boost/thread/executors/inline_executor.hpp>
+#include <boost/thread/future.hpp>
+#undef syscall
+
+#include "internal/memory/Mappings.h"
+
+namespace fs {
+    class File;
+    struct IoVector;
+}
 
 namespace memory {
 
+constexpr const size_t PARALLEL_SWAPS = 16;
+
+namespace FrameTable {
+    struct Frame;
+}
+
+using SwapId = size_t;
 class Swap {
-        Swap():
-            vaddr{process::getSosProcess().maps.insertPermanent(
-                swap_pages, Attributes{.read=true, .write=true}, Mapping::Flags{.shared = false}
-            )},
-            buffer{UserMemory(process::getSosProcess(), vaddr)}
-        {
-            fs::rootFileSystem->open("pagefile",
-                                     fs::FileSystem::OpenFlags{.read=true, .write=true, .createOnMissing=true, .truncate=true, .mode=0666}
-            ).then(fs::asyncExecutor, [this] (auto value) {
-                this->store = value.get();
-            });
-        }
-
-        unsigned int allocate() {
-            // always prefer things in available, because overwriting them doesn't use up an extra disk block in the pagefile
-            if (available.empty()) {
-                if (++max_id >= std::numeric_limits<unsigned int>::max() / swap_size)
-                throw std::system_error(ENOMEM, std::system_category(),
-                                        "Page file can't be more than 4GB (due to NFSv2 limitations)");
-                return max_id;
-            }
-            int id = *available.cbegin();
-            available.erase(available.cbegin());
-            return id;
-        }
-
-        void deallocate(unsigned int id) {
-            available.insert(id);
-        }
-
-        std::set<unsigned int> available;
-        unsigned int max_id = -1;
-        std::shared_ptr<fs::File> store;
-        vaddr_t vaddr;
-        memory::UserMemory buffer; // needs to be usermemory because iovec has usermemory
     public:
-        constexpr static auto swap_pages = 10U;
-        constexpr static auto swap_size = swap_pages * PAGE_SIZE;
+        void addBackingStore(std::shared_ptr<fs::File> store, size_t size);
 
-        static Swap& get() {
-            static auto f = Swap{};
-            return f;
+        boost::future<void> swapOut(FrameTable::Frame** frames, size_t frameCount);
+
+        static Swap& get() noexcept {
+            static Swap swap;
+            return swap;
         }
 
-        boost::future<unsigned int> swapout(std::vector<Page*> pages) {
-            unsigned int id = allocate();
-            for (auto i = 0U; i < swap_pages; ++i)
-                process::getSosProcess().pageDirectory.map(pages[i]->copy(), vaddr + PAGE_SIZE * i, Attributes{.read=true, .write=true});
+        static boost::inline_executor asyncExecutor;
 
-            return store->write(std::vector<fs::IoVector>{fs::IoVector{buffer, swap_size}}, id * swap_size).then(
-                fs::asyncExecutor, [id, this] (auto size) {
-                    if (size.get() != swap_size)
-                        throw std::system_error(ENOMEM, std::system_category(), "Failed to swap out page");
-                    for (auto i = 0U; i < swap_pages; ++i)
-                        process::getSosProcess().pageDirectory.unmap(vaddr + PAGE_SIZE * i);
-                    return boost::make_ready_future(id);
-                }
-            );
-        }
+    private:
+        Swap();
+
+        SwapId _allocate();
+        void _free(SwapId id) noexcept;
+
+        std::shared_ptr<fs::File> _store;
+
+        std::vector<bool> _usedBitset;
+        size_t _lastUsed;
+
+        ScopedMapping _bufferMapping;
+        std::vector<fs::IoVector> _bufferIoVectors;
 };
 
 }

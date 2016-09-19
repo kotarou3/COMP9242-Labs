@@ -37,11 +37,11 @@ extern "C" {
     #include <sel4/sel4.h>
 
     #include "internal/dma.h"
+    #include "internal/network.h"
 
     #include "internal/sys/debug.h"
     #include "internal/sys/panic.h"
 }
-#include "internal/network.h"
 
 #define ARP_PRIME_TIMEOUT_MS     1000
 #define ARP_PRIME_RETRY_DELAY_MS   10

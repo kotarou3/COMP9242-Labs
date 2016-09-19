@@ -97,16 +97,18 @@ boost::future<int> open(process::Process& process, memory::vaddr_t pathname, int
     }
 
     // XXX: Ignore these flags for now
-    flags &= ~(O_LARGEFILE | O_CLOEXEC);
+    flags &= ~(O_TRUNC | O_LARGEFILE | O_CLOEXEC);
 
-    openFlags.createOnMissing = flags & O_CREAT;
-    openFlags.truncate = flags & O_TRUNC;
-    openFlags.mode = mode;
+    if (flags & O_CREAT) {
+        if (mode & ~07777)
+            throw std::invalid_argument("Invalid mode");
 
-    if (flags & ~(O_ACCMODE | O_CREAT | O_DIRECTORY | O_TRUNC))
+        openFlags.createOnMissing = true;
+        openFlags.mode = mode;
+    }
+
+    if (flags & ~(O_ACCMODE | O_CREAT | O_DIRECTORY))
         throw std::invalid_argument("Invalid flags");
-    if (mode & ~07777)
-        throw std::invalid_argument("Invalid mode");
 
     return fs::rootFileSystem->open(memory::UserMemory(process, pathname).readString(), openFlags)
         .then(fs::asyncExecutor, [flags, openFlags, &process](auto file) {

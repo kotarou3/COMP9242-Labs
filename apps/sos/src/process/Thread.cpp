@@ -15,7 +15,7 @@
 #include "internal/memory/layout.h"
 #include "internal/process/Thread.h"
 #include "internal/syscall/syscall.h"
-#include "internal/memory/FrameTable.h"
+#include "internal/memory/Swap.h"
 
 extern "C" {
     #include <sos.h>
@@ -51,7 +51,7 @@ Thread::Thread(std::shared_ptr<Process> process, seL4_CPtr faultEndpoint, seL4_W
         _ipcBuffer.getAddress(),
         memory::Attributes{.read = true, .write = true}
     );
-    assert(page.is_ready()); // TODO: fix this when we implement multithreading
+    assert(page.is_ready()); // TODO: Fix this when coroutines are implemented
     const memory::MappedPage& ipcBufferMappedPage = page.get();
 
     // Copy the fault endpoint to the user app to allow IPC
@@ -122,24 +122,40 @@ void Thread::handleFault(const seL4_MessageInfo_t& message) noexcept {
             }
 
             try {
-                auto future = _process->handlePageFault(address, faultType);
-                if (future.is_ready()) {
+                auto result = _process->handlePageFault(address, faultType);
+                if (result.is_ready()) {
                     seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 0);
                     seL4_Reply(reply);
                 } else {
                     seL4_CPtr replyCap = cspace_save_reply_cap(cur_cspace);
-                    if(replyCap == CSPACE_NULL)
+                    if (replyCap == CSPACE_NULL)
                         throw std::system_error(ENOMEM, std::system_category(), "Failed to save reply cap");
 
-                    future.then(_asyncSyscallExecutor, [replyCap](auto val) {
-                        val.get();
-                        seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 0);
-                        seL4_Send(replyCap, reply);
-                        assert(cspace_free_slot(cur_cspace, replyCap) == CSPACE_NOERROR);
+                    result.then(memory::Swap::asyncExecutor, [=](auto result) {
+                        try {
+                            result.get();
+
+                            seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 0);
+                            seL4_Send(replyCap, reply);
+                            assert(cspace_free_slot(cur_cspace, replyCap) == CSPACE_NOERROR);
+                        } catch (const std::exception& e) {
+                            kprintf(LOGLEVEL_DEBUG, "Caught %s\n", e.what());
+
+                            kprintf(LOGLEVEL_NOTICE,
+                                "Segmentation fault at 0x%08x, pc = 0x%08x, %c%c%c\n",
+                                address, pc,
+                                faultType.read ? 'r' : '-',
+                                faultType.write ? 'w' : '-',
+                                faultType.execute ? 'x' : '-'
+                            );
+
+                            kprintf(LOGLEVEL_WARNING, "Would raise SIGSEGV, but not implemented yet - halting thread\n");
+
+                            assert(cspace_free_slot(cur_cspace, replyCap) == CSPACE_NOERROR);
+                        }
                     });
                 }
             } catch (const std::exception& e) {
-                // TODO: kill thread rather than sos
                 kprintf(LOGLEVEL_DEBUG, "Caught %s\n", e.what());
 
                 kprintf(LOGLEVEL_NOTICE,
@@ -232,6 +248,9 @@ Process::Process(bool isSosProcess):
     flags.fixed = true;
     flags.reserved = true;
     maps.insert(0, memory::MMAP_START / PAGE_SIZE, memory::Attributes{}, flags).release();
+
+    // Make sure all of SOS's page tables are allocated
+    pageDirectory.reservePages(memory::MMAP_START, memory::MMAP_END);
 }
 
 boost::future<void> Process::handlePageFault(memory::vaddr_t address, memory::Attributes cause) {
@@ -251,14 +270,28 @@ boost::future<void> Process::handlePageFault(memory::vaddr_t address, memory::At
         throw std::system_error(EFAULT, std::system_category(), "Attempted to write to a non-writeable region");
 
     auto page = pageDirectory.lookup(address, true);
-    if (!page)
-        return pageDirectory.allocateAndMap(address, map.attributes, false).then(
-            _asyncSyscallExecutor, [](auto) {return;}
+    if (!page) {
+        return pageDirectory.allocateAndMap(address, map.attributes).then(
+            memory::Swap::asyncExectutor, [](auto result) {result.get();}
         );
-    else
-        if (!page->getPage().referenced)
+    }
+
+    switch (page->getPage().getStatus()) {
+        case memory::Page::Status::INVALID:
+            assert(false);
+
+        case memory::Page::Status::REFERENCED:
+            break;
+
+        case memory::Page::Status::UNREFERENCED:
             page->enableReference(pageDirectory);
-    return boost::future<void>();
+            break;
+
+        case memory::Page::Status::SWAPPED:
+            throw std::system_error(ENOSYS, std::system_category(), "Swapping in not implemented");
+    }
+
+    return boost::make_ready_future<void>();
 }
 
 Process& getSosProcess() noexcept {

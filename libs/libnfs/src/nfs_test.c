@@ -106,7 +106,7 @@ check_sfattr(sattr_t *sattr, fattr_t *fattr){
     }
 #if 0 /* No point in checking access time: set by server */
     if(sattr->atime.seconds != fattr->atime.seconds){
-        printf("access us mismatch (%d|%d)\n", sattr->atime.seconds, 
+        printf("access us mismatch (%d|%d)\n", sattr->atime.seconds,
                                         fattr->atime.seconds);
         err++;
     }
@@ -150,7 +150,7 @@ print_files(int nfiles, char **files){
     }
 }
 
-static void 
+static void
 my_readdir_cb(uintptr_t token, enum nfs_stat status, int nfiles,
               char* file_names[], nfscookie_t nfscookie){
     struct my_readdir_arg * arg = (struct my_readdir_arg*)token;
@@ -184,7 +184,7 @@ my_readdir_cb(uintptr_t token, enum nfs_stat status, int nfiles,
 
 
 
-static int 
+static int
 my_readdir(fhandle_t *pfh, int *nfiles, char ***files){
     struct my_readdir_arg arg;
     *nfiles = 0;
@@ -201,7 +201,7 @@ my_readdir(fhandle_t *pfh, int *nfiles, char ***files){
     return arg.stat;
 }
 
-static void 
+static void
 my_readdir_clean(int nfiles, char** files){
     int i;
     for(i = 0; i < nfiles; i++){
@@ -221,8 +221,8 @@ struct my_lookup_arg {
     enum nfs_stat stat;
 };
 
-static void 
-my_lookup_cb(uintptr_t token, enum nfs_stat status, fhandle_t* fh, 
+static void
+my_lookup_cb(uintptr_t token, enum nfs_stat status, fhandle_t* fh,
              fattr_t* fattr){
     struct my_lookup_arg *arg = (struct my_lookup_arg*)token;
     if(arg->fattr != NULL){
@@ -451,7 +451,7 @@ my_write(fhandle_t *fh, int offset, int length, char* data, int *err){
 /* Guarantee to fill multiple packets */
 #define TEST_DATA_SIZE 3000
 
-static int 
+static int
 test_file_access(struct fhandle *mnt)
 {
     sattr_t sattr;
@@ -531,7 +531,7 @@ _create_files(struct fhandle *mnt, char* fname_data, sattr_t *sattr){
         for(j = 0, k = i; j < PARALLEL && k < MAXNAMLEN; j++, k++){
             char *fname = &fname_data[MAXNAMLEN - k];
             arg[j] = argdef;
-            assert(!nfs_create(mnt, fname, sattr, 
+            assert(!nfs_create(mnt, fname, sattr,
                                &my_create_cb, (uintptr_t)&arg[j]));
         }
         for(j = 0, k = i; j < PARALLEL && k < MAXNAMLEN; j++, k++){
@@ -595,7 +595,7 @@ _remove_files(struct fhandle *mnt, char* fname_data){
         for(j = 0, k = i; j < PARALLEL && k < MAXNAMLEN; j++, k++){
             char *fname = &fname_data[MAXNAMLEN - k];
             arg[j].v = 0;
-            assert(nfs_remove(mnt, fname, &my_remove_cb, 
+            assert(nfs_remove(mnt, fname, &my_remove_cb,
                               (uintptr_t)&arg[j]) == RPC_OK);
         }
         for(j = 0, k = i; j < PARALLEL && k < MAXNAMLEN; j++, k++){
@@ -629,7 +629,7 @@ test_file_names(struct fhandle *mnt)
     int heap_err;
     int err = 0;
     int i,j;
-    heap_test_start(); 
+    heap_test_start();
 
     /* Set default file attributes */
     sattr.mode = ACC_MODE;
@@ -670,7 +670,7 @@ test_file_names(struct fhandle *mnt)
 /***********************************************/
 
 
-static int 
+static int
 test_file_creation(struct fhandle *mnt)
 {
     int heap_err;
@@ -739,7 +739,7 @@ test_file_creation(struct fhandle *mnt)
         printf("lookup could not file the new file\n");
         err++;
     }
-#if 0 
+#if 0
  /* This will return NFS_OK. I presume that this test is only valid if we do
   * not have permission to write to the existing file.
   */
@@ -787,7 +787,7 @@ test_file_creation(struct fhandle *mnt)
 }
 
 
-static int 
+static int
 test_empty(struct fhandle *mnt)
 {
     char** files;
@@ -831,7 +831,7 @@ test_mnt(char* mnt)
         }
     }
     export_heap_err = heap_test_end();
- 
+
     /* run the mount test */
     heap_test_start();
     for(i = 0; i < REPS; i++){
@@ -905,7 +905,7 @@ test_retransmit(struct fhandle* pfh)
     return err;
 }
 
-int 
+int
 nfs_test(char *mnt)
 {
     struct fhandle mnt_handle;
@@ -939,4 +939,3 @@ nfs_test(char *mnt)
     printf("NFS tests found %d errors: \t\t\t %s\n", err, ERR_STR(err));
     return err;
 }
-

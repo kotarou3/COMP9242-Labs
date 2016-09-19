@@ -26,6 +26,7 @@ extern "C" {
     #include <sel4/sel4.h>
 
     #include "internal/dma.h"
+    #include "internal/network.h"
 
     #include "internal/ut_manager/ut.h"
 
@@ -35,7 +36,6 @@ extern "C" {
     #include "internal/sys/panic.h"
 }
 
-#include "internal/network.h"
 #include "internal/elf.h"
 #include "internal/fs/ConsoleDevice.h"
 #include "internal/fs/DebugDevice.h"

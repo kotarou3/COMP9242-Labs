@@ -16,6 +16,7 @@
 
 /* Align pos to the start of a network long */
 void pb_alignl(int* pos);
+void pb_alignul(unsigned int* pos);
 
 /* write raw data to the pbuf, update pos and return 0 on success  */
 void pb_write(struct pbuf* pbuf, const void* data, int len, int* pos);

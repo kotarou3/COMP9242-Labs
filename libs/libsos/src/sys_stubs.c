@@ -60,11 +60,11 @@ long sys_unlink()
     assert(!"sys_unlink not implemented");
     __builtin_unreachable();
 }
-/* long sys_execve()
+long sys_execve()
 {
     assert(!"sys_execve not implemented");
     __builtin_unreachable();
-} */
+}
 long sys_chdir()
 {
     assert(!"sys_chdir not implemented");
@@ -185,11 +185,11 @@ long sys_sync()
     assert(!"sys_sync not implemented");
     __builtin_unreachable();
 }
-/*long sys_kill()
+long sys_kill()
 {
     assert(!"sys_kill not implemented");
     __builtin_unreachable();
-}*/
+}
 long sys_rename()
 {
     assert(!"sys_rename not implemented");
@@ -1395,11 +1395,11 @@ long sys_kexec_load()
     assert(!"sys_kexec_load not implemented");
     __builtin_unreachable();
 }
-/*long sys_waitid()
+long sys_waitid()
 {
     assert(!"sys_waitid not implemented");
     __builtin_unreachable();
-}*/
+}
 long sys_add_key()
 {
     assert(!"sys_add_key not implemented");
@@ -1749,11 +1749,11 @@ long sys_unlink()
     assert(!"sys_unlink not implemented");
     __builtin_unreachable();
 }
-/*long sys_execve()
+long sys_execve()
 {
     assert(!"sys_execve not implemented");
     __builtin_unreachable();
-}*/
+}
 long sys_chdir()
 {
     assert(!"sys_chdir not implemented");
@@ -1819,11 +1819,11 @@ long sys_sync()
     assert(!"sys_sync not implemented");
     __builtin_unreachable();
 }
-/*long sys_kill()
+long sys_kill()
 {
     assert(!"sys_kill not implemented");
     __builtin_unreachable();
-}*/
+}
 long sys_rename()
 {
     assert(!"sys_rename not implemented");
@@ -2207,11 +2207,11 @@ long sys_setfsgid()
     assert(!"sys_setfsgid not implemented");
     __builtin_unreachable();
 }
-/* long sys_getdents()
+long sys_getdents()
 {
     assert(!"sys_getdents not implemented");
     __builtin_unreachable();
-} */
+}
 long sys__newselect()
 {
     assert(!"sys__newselect not implemented");
@@ -2555,11 +2555,11 @@ long sys_setfsgid32()
     assert(!"sys_setfsgid32 not implemented");
     __builtin_unreachable();
 }
-/* long sys_getdents64()
+/*long sys_getdents64()
 {
     assert(!"sys_getdents64 not implemented");
     __builtin_unreachable();
-} */
+}*/
 long sys_pivot_root()
 {
     assert(!"sys_pivot_root not implemented");
@@ -2850,11 +2850,11 @@ long sys_mq_getsetattr()
     assert(!"sys_mq_getsetattr not implemented");
     __builtin_unreachable();
 }
-/*long sys_waitid()
+long sys_waitid()
 {
     assert(!"sys_waitid not implemented");
     __builtin_unreachable();
-}*/
+}
 long sys_socket()
 {
     assert(!"sys_socket not implemented");

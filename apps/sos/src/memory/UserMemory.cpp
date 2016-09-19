@@ -18,17 +18,17 @@ std::string UserMemory::readString(bool bypassAttributes) {
     while (true) {
         // Map in one page
         auto map = UserMemory(_process, currentAddress).mapIn<char>(1, Attributes{.read = true}, bypassAttributes);
-        vaddr_t pageEnd = map.second.getEnd();
 
         // Read until end of string or page
-        for (char* c = map.first; c < reinterpret_cast<char*>(pageEnd); ++c)
+        char* pageEnd = reinterpret_cast<char*>(map.second.getEnd());
+        for (char* c = map.first; c < pageEnd; ++c)
             if (*c)
                 result.push_back(*c);
             else
                 goto finished;
 
         // Continue reading from next page
-        currentAddress = pageEnd;
+        currentAddress += pageEnd - map.first;
     }
 
 finished:

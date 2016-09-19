@@ -77,13 +77,6 @@ haveValidAddress:
     return ScopedMapping(*this, map.start, pages);
 }
 
-vaddr_t Mappings::insertPermanent(size_t pages, Attributes attributes, Mapping::Flags flags) {
-    auto scopedmapping = insert(0, pages, attributes, flags);
-    vaddr_t result = scopedmapping.getAddress();
-    scopedmapping.release();
-    return result;
-}
-
 void Mappings::erase(vaddr_t address, size_t pages) {
     _checkAddress(address, pages);
 

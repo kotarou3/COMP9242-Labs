@@ -1,0 +1,2 @@
+components-$(CONFIG_APP_THRASHER) += thrasher
+thrasher: $(libc) libsos libsel4 libc++ libboost

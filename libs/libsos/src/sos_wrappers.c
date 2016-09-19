@@ -12,8 +12,6 @@
 
 #include "sos.h"
 
-#define UMASK 0002
-
 static int _unimplemented(void) {
     fprintf(stderr, "system call not implemented\n");
     errno = ENOSYS;
@@ -27,13 +25,19 @@ static long posix_to_sos_time(struct timespec time) {
 }
 
 static fmode_t posix_to_sos_fmode(mode_t mode) {
-    return (mode & S_IRUSR ? FM_READ : 0) |
-           (mode & S_IWUSR ? FM_WRITE : 0) |
-           (mode & S_IXUSR ? FM_EXEC : 0);
+    // No idea what user we end up using on the nfs, so assume all files
+    // are owned by us
+    fmode_t result = 0;
+    if (mode & S_IXUSR)
+        result |= FM_EXEC;
+    if (mode & S_IWUSR)
+        result |= FM_WRITE;
+    if (mode & S_IRUSR)
+        result |= FM_READ;
+    return result;
 }
 
 int sos_sys_open(const char* path, int flags) {
-    // ensure we truncate files that weren't opened in read only mode
     return open(path, flags | O_CREAT, 0666);
 }
 

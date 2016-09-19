@@ -55,7 +55,8 @@ class FileSystem {
     public:
         struct OpenFlags {
             bool read:1, write:1;
-            bool createOnMissing:1, truncate:1;
+
+            bool createOnMissing:1;
             mode_t mode;
         };
 

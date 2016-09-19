@@ -62,16 +62,6 @@ boost::future<std::shared_ptr<File>> NFSFileSystem::open(const std::string& path
             try {
                 if (result.has_exception())
                     result.get();
-                else if (flags.truncate) {
-                    return nfs::create(this->_handle, pathname, nfs::sattr_t{
-                            .mode = flags.mode,
-                            .uid = -1U,
-                            .gid = -1U,
-                            .size = 0,
-                            .atime = {.seconds = -1U, .useconds = -1U},
-                            .mtime = {.seconds = -1U, .useconds = -1U}
-                    });
-                }
                 return result;
             } catch (const std::system_error& e) {
                 if (e.code() != std::error_code(ENOENT, std::system_category()))
@@ -91,8 +81,11 @@ boost::future<std::shared_ptr<File>> NFSFileSystem::open(const std::string& path
         }).unwrap().then(asyncExecutor, [](auto result) {
             auto _result = result.get();
 
-            // TODO: Check permissions here (already done by NFS during
-            //           read/write, but better to have an early failure)
+            // XXX: Would check permissions here, but we have no idea what user
+            // we end up using on the nfs (so files that look like they're
+            // read/writable might not be, and vice versa). So we allow the user
+            // to open the file regardless, and let the NFS do the actual
+            // permission checking on the actual read/write.
 
             if (S_ISDIR(_result.second->mode))
                 return std::shared_ptr<File>(new NFSDirectory(*_result.first));

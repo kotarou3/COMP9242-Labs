@@ -82,14 +82,7 @@ int ut_translate(seL4_Word addr, seL4_Untyped* ret_cptr, seL4_Word* ret_offset);
 void ut_allocator_init(seL4_Word low, seL4_Word high);
 
 /**
- * Reserve memory using the allocator. Will not use the emergency pool
- * @param sizebits the amount of contiguous and aligned memory to reserve (2^sizebits)
- * @return the physical address of the reserved memory which can be passed to ut_translate
- */
-seL4_Word ut_alloc_safe(int sizebits);
-
-/**
- * Reserve memory using the allocator.
+ * Reserve memory using the allocator
  * @param sizebits the amount of contiguous and aligned memory to reserve (2^sizebits)
  * @return the physical address of the reserved memory which can be passed to ut_translate
  */
@@ -101,10 +94,5 @@ seL4_Word ut_alloc(int sizebits);
  * @param sizebits the size that was used for the allocation
  */
 void ut_free(seL4_Word addr, int sizebits);
-
-/**
- * Replenish the emergency untyped memory
- */
-int ut_emergency_replenish(void);
 
 #endif /* _UT_H_ */

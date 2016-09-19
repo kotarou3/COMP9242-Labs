@@ -12,6 +12,3 @@
 /build
 /stage
 /images
-
-/.gdbinit
-/monitorreset

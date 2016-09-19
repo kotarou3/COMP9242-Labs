@@ -68,20 +68,31 @@
 //statfsres   NFSPROC_STATFS(fhandle)
 #define       NFSPROC_STATFS                17
 
-/* 
- * This is the maximum amount (in bytes) of requested data that the server 
+/*
+ * This is the maximum amount (in bytes) of requested data that the server
  * will return. The data returned includes cookies, file ids, file name length,
  * the file name itself and a signal for the end of the list.
- * It must be small enough to fit in a response packet but large enough to 
+ * It must be small enough to fit in a response packet but large enough to
  * retrieve at least one entry to ensure progress.
  *
  * READDIR_BUF_SIZE > 4 longs + max name length = 4*4 + 256 = 272
  */
 #define READDIR_BUF_SIZE   1024
 
+/*
+ * Block sizes to use (max: 8192 for NFSv2).
+ *
+ * Read block size is set to a lower value than max because libethdrivers
+ * can't read packets fast enough and starts dropping them, which consequently
+ * kills performance. 7292 was empirically found to be the highest before
+ * packets start getting dropped, with exactly 5 full IPv4 fragments at 1500 MTU.
+ */
+#define READ_BLOCK_SIZE  7292
+#define WRITE_BLOCK_SIZE 8192
+
 static struct udp_pcb *_nfs_pcb = NULL;
 
-void 
+void
 nfs_timeout(void)
 {
     rpc_timeout(100);
@@ -102,7 +113,7 @@ nfs_print_exports(void)
 }
 
 /******************************************
- *** NFS Initialisation 
+ *** NFS Initialisation
  ******************************************/
 
 /* this should be called once at beginning to setup everything */
@@ -143,7 +154,7 @@ _nfs_getattr_cb(void * callback, uintptr_t token, struct pbuf *pbuf)
 {
     uint32_t status = NFSERR_COMM;
     fattr_t pattrs;
-    struct rpc_reply_hdr hdr; 
+    struct rpc_reply_hdr hdr;
     int pos;
     nfs_getattr_cb_t cb = callback;
 
@@ -171,7 +182,7 @@ nfs_getattr(const fhandle_t *fh,
     int pos;
 
     /* now the user data struct is setup, do some call stuff! */
-    pbuf = rpcpbuf_init(NFS_NUMBER, NFS_VERSION, NFSPROC_GETATTR, &pos);
+    pbuf = rpcpbuf_init(NFS_NUMBER, NFS_VERSION, NFSPROC_GETATTR, sizeof(*fh), &pos);
     if(pbuf == NULL){
         return RPCERR_NOBUF;
     }
@@ -189,7 +200,7 @@ _nfs_lookup_cb(void * callback, uintptr_t token, struct pbuf *pbuf)
     uint32_t status = NFSERR_COMM;
     fhandle_t new_fh;
     fattr_t pattrs;
-    struct rpc_reply_hdr hdr; 
+    struct rpc_reply_hdr hdr;
     int pos;
     nfs_lookup_cb_t cb = callback;
 
@@ -217,7 +228,9 @@ nfs_lookup(const fhandle_t *cwd, const char *name,
     int pos;
 
     /* now the user data struct is setup, do some call stuff! */
-    pbuf = rpcpbuf_init(NFS_NUMBER, NFS_VERSION, NFSPROC_LOOKUP, &pos);
+    size_t pbuf_size = sizeof(*cwd) + sizeof(uint32_t) + strlen(name);
+    pb_alignul(&pbuf_size);
+    pbuf = rpcpbuf_init(NFS_NUMBER, NFS_VERSION, NFSPROC_LOOKUP, pbuf_size, &pos);
     if(pbuf == NULL){
         return RPCERR_NOBUF;
     }
@@ -236,7 +249,7 @@ _nfs_read_cb(void * callback, uintptr_t token, struct pbuf *pbuf)
     uint32_t status = NFSERR_COMM;
     fattr_t pattrs;
     uint32_t size = 0;
-    struct rpc_reply_hdr hdr; 
+    struct rpc_reply_hdr hdr;
     int pos;
     nfs_read_cb_t cb = callback;
 
@@ -258,14 +271,20 @@ _nfs_read_cb(void * callback, uintptr_t token, struct pbuf *pbuf)
 }
 
 enum rpc_stat
-nfs_read(const fhandle_t *fh, int offset, int count, 
+nfs_read(const fhandle_t *fh, int offset, int count,
          nfs_read_cb_t func, uintptr_t token)
 {
     struct pbuf *pbuf;
     int pos;
 
+    /* limit the read size to the block size */
+    if (count > READ_BLOCK_SIZE) {
+        count = READ_BLOCK_SIZE;
+    }
+
     /* now the user data struct is setup, do some call stuff! */
-    pbuf = rpcpbuf_init(NFS_NUMBER, NFS_VERSION, NFSPROC_READ, &pos);
+    size_t pbuf_size = sizeof(*fh) + 3 * sizeof(uint32_t);
+    pbuf = rpcpbuf_init(NFS_NUMBER, NFS_VERSION, NFSPROC_READ, pbuf_size, &pos);
     if(pbuf == NULL){
         return RPCERR_NOBUF;
     }
@@ -317,7 +336,6 @@ nfs_write(const fhandle_t *fh, int offset, int count, const void *data,
 {
     struct pbuf *pbuf;
     struct write_token_wrapper *t;
-    int limit;
     int pos;
     int err;
 
@@ -326,8 +344,15 @@ nfs_write(const fhandle_t *fh, int offset, int count, const void *data,
         return RPCERR_NOMEM;
     }
 
+    /* limit the write size to the block size */
+    if (count > WRITE_BLOCK_SIZE) {
+        count = WRITE_BLOCK_SIZE;
+    }
+
     /* now the user data struct is setup, do some call stuff! */
-    pbuf = rpcpbuf_init(NFS_NUMBER, NFS_VERSION, NFSPROC_WRITE, &pos);
+    size_t pbuf_size = sizeof(*fh) + 4 * sizeof(uint32_t) + count;
+    pb_alignul(&pbuf_size);
+    pbuf = rpcpbuf_init(NFS_NUMBER, NFS_VERSION, NFSPROC_WRITE, pbuf_size, &pos);
     if(pbuf == NULL){
         free(t);
         return RPCERR_NOBUF;
@@ -335,15 +360,9 @@ nfs_write(const fhandle_t *fh, int offset, int count, const void *data,
 
     /* Create our call arg */
     pb_write(pbuf, fh, sizeof(*fh), &pos);
-    pb_writel(pbuf, 0 /* Unused: see RFC */, &pos); 
+    pb_writel(pbuf, 0 /* Unused: see RFC */, &pos);
     pb_writel(pbuf, offset, &pos);
     pb_writel(pbuf, 0 /* Unused: see RFC */, &pos);
-    /* Limit the number of bytes to send to fit the packet */
-    limit = pbuf->tot_len - pos - sizeof(count);
-    if(count > limit){
-        count = limit;
-    }
-    /* put the data in */
     pb_writel(pbuf, count, &pos);
     pb_write(pbuf, data, count, &pos);
     pb_alignl(&pos);
@@ -364,7 +383,7 @@ _nfs_create_cb(void * callback, uintptr_t token, struct pbuf *pbuf)
     uint32_t status = NFSERR_COMM;
     fhandle_t new_fh;
     fattr_t pattrs;
-    struct rpc_reply_hdr hdr; 
+    struct rpc_reply_hdr hdr;
     int pos;
     nfs_create_cb_t cb = callback;
 
@@ -393,7 +412,9 @@ nfs_create(const fhandle_t *fh, const char *name, const sattr_t *sat,
     int pos;
 
     /* now the user data struct is setup, do some call stuff! */
-    pbuf = rpcpbuf_init(NFS_NUMBER, NFS_VERSION, NFSPROC_CREATE, &pos);
+    size_t pbuf_size = sizeof(*fh) + sizeof(uint32_t) + strlen(name) + sizeof(*sat);
+    pb_alignul(&pbuf_size);
+    pbuf = rpcpbuf_init(NFS_NUMBER, NFS_VERSION, NFSPROC_CREATE, pbuf_size, &pos);
     if(pbuf == NULL){
         return RPCERR_NOBUF;
     }
@@ -412,7 +433,7 @@ void
 _nfs_remove_cb(void * callback, uintptr_t token, struct pbuf *pbuf)
 {
     uint32_t status = NFSERR_COMM;
-    struct rpc_reply_hdr hdr; 
+    struct rpc_reply_hdr hdr;
     int pos;
     nfs_remove_cb_t cb = callback;
 
@@ -428,14 +449,16 @@ _nfs_remove_cb(void * callback, uintptr_t token, struct pbuf *pbuf)
 }
 
 enum rpc_stat
-nfs_remove(const fhandle_t *fh, const char *name, 
+nfs_remove(const fhandle_t *fh, const char *name,
            nfs_remove_cb_t func, uintptr_t token)
 {
     struct pbuf *pbuf;
     int pos;
 
     /* now the user data struct is setup, do some call stuff! */
-    pbuf = rpcpbuf_init(NFS_NUMBER, NFS_VERSION, NFSPROC_REMOVE, &pos);
+    size_t pbuf_size = sizeof(*fh) + sizeof(uint32_t) + strlen(name);
+    pb_alignul(&pbuf_size);
+    pbuf = rpcpbuf_init(NFS_NUMBER, NFS_VERSION, NFSPROC_REMOVE, pbuf_size, &pos);
     if(pbuf == NULL){
         return RPCERR_NOBUF;
     }
@@ -457,7 +480,7 @@ _nfs_readdir_cb(void * callback, uintptr_t token, struct pbuf *pbuf)
     char **entries = NULL;
     uint32_t next_cookie = 0;
     uint32_t status = NFSERR_COMM;
-    struct rpc_reply_hdr hdr; 
+    struct rpc_reply_hdr hdr;
     int pos;
 
     debug("NFS READDIR CALLBACK\n");
@@ -534,16 +557,15 @@ nfs_readdir(const fhandle_t *pfh, nfscookie_t cookie,
     struct pbuf *pbuf;
     int pos;
     /* Initialise the request packet */
-    pbuf = rpcpbuf_init(NFS_NUMBER, NFS_VERSION, NFSPROC_READDIR, &pos);
+    size_t pbuf_size = sizeof(*pfh) + 2 * sizeof(uint32_t);
+    pbuf = rpcpbuf_init(NFS_NUMBER, NFS_VERSION, NFSPROC_READDIR, pbuf_size, &pos);
     if(pbuf == NULL){
         return RPCERR_NOBUF;
     }
     /* Create the call */
     pb_write(pbuf, pfh, sizeof(*pfh), &pos);
     pb_writel(pbuf, cookie, &pos);
-    pb_writel(pbuf, READDIR_BUF_SIZE, &pos); 
+    pb_writel(pbuf, READDIR_BUF_SIZE, &pos);
     /* make the call! */
     return rpc_send(pbuf, pos, _nfs_pcb, &_nfs_readdir_cb, func, token);
 }
-
-

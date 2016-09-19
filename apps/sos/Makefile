@@ -34,7 +34,7 @@ LIBS := sel4 elf c c++ c++abi cpio lwip ethdrivers \
 
 include $(SEL4_COMMON)/common.mk
 
-CPPFLAGS += -Werror -Wno-missing-field-initializers -Og
+CPPFLAGS += -Werror -Wno-missing-field-initializers
 CXXFLAGS += -DBOOST_THREAD_VERSION=4 -DBOOST_SYSTEM_NO_DEPRECATED -DBOOST_THREAD_PROVIDES_EXECUTORS
 
 CRTOBJFILES :=

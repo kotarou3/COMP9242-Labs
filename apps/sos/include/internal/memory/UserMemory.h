@@ -65,7 +65,6 @@ class UserMemory {
 
         process::Process& _process;
         vaddr_t _address;
-        friend class Swap;
 };
 
 }
