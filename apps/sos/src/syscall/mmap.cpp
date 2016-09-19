@@ -90,5 +90,32 @@ extern "C" int sys_madvise() {
     return -ENOSYS;
 }
 
-FORWARD_SYSCALL(mmap2, 6);
+extern "C" int sys_mmap2(va_list ap) {
+    // It's possible for us to be called recursively, so make sure it doesn't
+    // get out of control
+    static size_t _recursionDepth;
+    static bool _isInOverflowMode;
+    if (_isInOverflowMode || _recursionDepth > 2) {
+        _isInOverflowMode = _recursionDepth > 0;
+        return -ENOMEM;
+    }
+    ++_recursionDepth;
+
+    constexpr const size_t argc = 6;
+    seL4_Word argv[argc];
+    for (size_t a = 0; a < argc; ++a)
+        argv[a] = va_arg(ap, seL4_Word);
+
+    try {
+        auto result = syscall::handle(process::getSosProcess(), SYS_mmap2, argc, argv);
+        assert(result.is_ready());
+
+        --_recursionDepth;
+        return result.get();
+    } catch (...) {
+        --_recursionDepth;
+        return -syscall::exceptionToErrno(std::current_exception());
+    }
+}
+
 FORWARD_SYSCALL(munmap, 2);

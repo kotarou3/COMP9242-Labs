@@ -36,6 +36,8 @@ class PageDirectory {
         PageDirectory(PageDirectory&&) = delete;
         PageDirectory& operator=(PageDirectory&&) = delete;
 
+        void reservePages(vaddr_t from, vaddr_t to);
+
         // Warning: Returned reference is invalidated after another mapping
         const MappedPage& allocateAndMap(vaddr_t address, Attributes attributes);
         const MappedPage& map(Page page, vaddr_t address, Attributes attributes);
@@ -46,7 +48,7 @@ class PageDirectory {
 
     private:
         constexpr static vaddr_t _toIndex(vaddr_t address) noexcept {
-            return address & -((1 << (seL4_PageTableBits + seL4_PageBits)) / sizeof(seL4_Word));
+            return pageTableAlign(address);
         }
 
         Capability<seL4_ARM_PageDirectoryObject, seL4_PageDirBits> _cap;
@@ -64,6 +66,8 @@ class PageTable {
         PageTable(PageTable&& other) = default;
         PageTable& operator=(PageTable&& other) = default;
 
+        void reservePages();
+
         const MappedPage& map(Page page, vaddr_t address, Attributes attributes);
         void unmap(vaddr_t address);
         const MappedPage* lookup(vaddr_t address, bool noThrow = false) const;
@@ -73,7 +77,7 @@ class PageTable {
     private:
         void _checkAddress(vaddr_t address) const;
         constexpr static vaddr_t _toIndex(vaddr_t address) noexcept {
-            return pageAlign(address) & ~-((1 << (seL4_PageTableBits + seL4_PageBits)) / sizeof(seL4_Word));
+            return pageAlign(pageTableOffset(address));
         }
 
         PageDirectory& _parent;

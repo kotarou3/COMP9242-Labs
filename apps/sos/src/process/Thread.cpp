@@ -215,6 +215,9 @@ Process::Process(bool isSosProcess):
     flags.fixed = true;
     flags.reserved = true;
     maps.insert(0, memory::MMAP_START / PAGE_SIZE, memory::Attributes{}, flags).release();
+
+    // Make sure all of SOS's page tables are allocated
+    pageDirectory.reservePages(memory::MMAP_START, memory::MMAP_END);
 }
 
 void Process::handlePageFault(memory::vaddr_t address, memory::Attributes cause) {
