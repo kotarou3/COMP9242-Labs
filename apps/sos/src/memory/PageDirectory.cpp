@@ -33,6 +33,22 @@ PageDirectory::~PageDirectory() {
         _cap.release();
 }
 
+void PageDirectory::reservePages(vaddr_t from, vaddr_t to) {
+    from = pageTableAlign(from);
+    for (vaddr_t address = from; from < to; from += PAGE_TABLE_SIZE) {
+        auto table = _tables.find(_toIndex(address));
+        if (table == _tables.end()) {
+            table = _tables.emplace(
+                std::piecewise_construct,
+                std::forward_as_tuple(_toIndex(address)),
+                std::forward_as_tuple(*this, _toIndex(address))
+            ).first;
+        }
+
+        table->second.reservePages();
+    }
+}
+
 const MappedPage& PageDirectory::allocateAndMap(vaddr_t address, Attributes attributes) {
     return map(FrameTable::alloc(), address, attributes);
 }
@@ -85,6 +101,10 @@ PageTable::~PageTable() {
     // If we haven't been moved away, unmap the page table
     if (_cap)
         assert(seL4_ARM_PageTable_Unmap(_cap.get()) == seL4_NoError);
+}
+
+void PageTable::reservePages() {
+    _pages.reserve(PAGE_TABLE_SIZE / PAGE_SIZE);
 }
 
 const MappedPage& PageTable::map(Page page, vaddr_t address, Attributes attributes) {
