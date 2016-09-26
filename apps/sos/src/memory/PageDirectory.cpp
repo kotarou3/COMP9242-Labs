@@ -36,7 +36,7 @@ PageDirectory::~PageDirectory() {
 
 void PageDirectory::reservePages(vaddr_t from, vaddr_t to) {
     from = pageTableAlign(from);
-    for (vaddr_t address = from; from < to; from += PAGE_TABLE_SIZE) {
+    for (vaddr_t address = from; address < to; address += PAGE_TABLE_SIZE) {
         auto table = _tables.find(_toIndex(address));
         if (table == _tables.end()) {
             table = _tables.emplace(

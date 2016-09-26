@@ -53,6 +53,10 @@ async::future<int> mmap2(process::Process& process, memory::vaddr_t addr, size_t
         }
     ));
 
+    // XXX: We shouldn't reserve pages, but currently our page table layout
+    // requires this
+    process.pageDirectory.reservePages(map->getStart(), map->getEnd());
+
     async::future<void> future;
     if (flags & MAP_LOCKED) {
         future = process.pageFaultMultiple(map->getStart(), map->getPages(), memory::Attributes{}, map);
