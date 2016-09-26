@@ -60,7 +60,13 @@ _dma_fill(seL4_Word pstart, seL4_Word pend, int cached){
         if (!page) {
             process::getSosProcess().pageDirectory.map(
                 memory::FrameTable::alloc(pstart), VIRT(pstart),
-                memory::Attributes{.read = true, .write = true, .execute = false, .notCacheable = !cached}
+                memory::Attributes{
+                    .read = true,
+                    .write = true,
+                    .execute = false,
+                    .locked = true,
+                    .notCacheable = !cached
+                }
             );
         }
     }
@@ -77,7 +83,13 @@ dma_init(seL4_Word dma_paddr_start, int sizebits){
 
     auto map = process::getSosProcess().maps.insert(
         0, 1 << (sizebits - seL4_PageBits),
-        memory::Attributes{.read = true, .write = true, .execute = false, .notCacheable = true},
+        memory::Attributes{
+            .read = true,
+            .write = true,
+            .execute = false,
+            .locked = true,
+            .notCacheable = true
+        },
         memory::Mapping::Flags{.shared = false}
     );
     _dma_vstart = map.getStart();

@@ -1,16 +1,16 @@
-#include <string>
-#include <system_error>
+#include <stdexcept>
 #include <vector>
 #include <assert.h>
 
-#include "internal/memory/FrameTable.h"
-#include "internal/memory/PageDirectory.h"
-#include "internal/process/Thread.h"
-
 extern "C" {
-    #include <cspace/cspace.h>
     #include "internal/ut_manager/ut.h"
 }
+
+#include "internal/memory/FrameTable.h"
+#include "internal/memory/Page.h"
+#include "internal/memory/PageDirectory.h"
+#include "internal/memory/Swap.h"
+#include "internal/process/Thread.h"
 
 namespace memory {
 
@@ -20,15 +20,10 @@ namespace {
 
 namespace FrameTable {
 
-struct Frame {
-    Page* pages;
-
-    inline paddr_t getAddress() const;
-};
-
 namespace {
     Frame* _table;
     paddr_t _start, _end;
+    size_t _frameTablePages, _frameCount;
 
     inline Frame& _getFrame(paddr_t address) {
         assert(_start <= address && address < _end);
@@ -36,7 +31,87 @@ namespace {
     }
 }
 
-inline paddr_t Frame::getAddress() const {
+void Frame::insert(Page& page) noexcept {
+    assert(page._status == Page::Status::UNREFERENCED);
+    assert(!page._resident.frame);
+    assert(!page._prev && !page._next);
+
+    page._resident.frame = this;
+
+    if (!_pages) {
+        _pages = &page;
+    } else {
+        assert(!_pages->_prev);
+        switch (_pages->_status) {
+            case Page::Status::INVALID:
+            case Page::Status::SWAPPED:
+                assert(false);
+
+            default:
+                assert(_pages->_resident.frame == this);
+        }
+
+        page._next = _pages;
+        _pages->_prev = &page;
+        _pages = &page;
+    }
+}
+
+void Frame::erase(Page& page) noexcept {
+    assert(page._status == Page::Status::UNREFERENCED);
+    assert(_pages && page._resident.frame == this);
+
+    if (_pages == &page) {
+        assert(!page._prev);
+        _pages = page._next;
+    } else {
+        assert(page._prev);
+    }
+
+    if (!_pages)
+        // We were the last copy, so free the frame
+        ut_free(getAddress(), seL4_PageBits);
+
+    if (page._prev)
+        page._prev->_next = page._next;
+    if (page._next)
+        page._next->_prev = page._prev;
+}
+
+void Frame::disableReference() noexcept {
+    assert(_isReferenced == true);
+
+    // Unmap all the pages associated with said frame
+    for (Page* page = _pages; page != nullptr; page = page->_next) {
+        assert(page->_status == Page::Status::REFERENCED);
+        assert(page->_resident.frame == this);
+
+        assert(seL4_ARM_Page_Unmap(page->getCap()) == seL4_NoError);
+        page->_status = Page::Status::UNREFERENCED;
+    }
+
+    _isReferenced = false;
+}
+
+void Frame::updateStatus() noexcept {
+    _isLocked = false;
+    _isReferenced = false;
+    for (Page* page = _pages; page != nullptr; page = page->_next) {
+        switch (_pages->_status) {
+            case Page::Status::INVALID:
+            case Page::Status::SWAPPED:
+                assert(false);
+
+            default:
+                assert(page->_resident.frame == this);
+        }
+
+        _isLocked |= page->_status == Page::Status::LOCKED;
+        _isReferenced |= _isLocked || page->_status == Page::Status::REFERENCED;
+    }
+}
+
+paddr_t Frame::getAddress() const {
     return _start + ((this - _table) * PAGE_SIZE);
 }
 
@@ -44,47 +119,55 @@ void init(paddr_t start, paddr_t end) {
     _start = start;
     _end = end;
 
-    size_t frameCount = numPages(end - start);
-    size_t frameTableSize = frameCount * sizeof(Frame);
-    size_t frameTablePages = numPages(frameTableSize);
+    _frameCount = numPages(end - start);
+    size_t frameTableSize = _frameCount * sizeof(Frame);
+    _frameTablePages = numPages(frameTableSize);
 
     // Allocate a place in virtual memory to place the frame table
+    Attributes attributes = {
+        .read = true,
+        .write = true,
+        .execute = false,
+        .locked = true
+    };
     auto tableMap = process::getSosProcess().maps.insert(
-        0, frameTablePages,
-        Attributes{.read = true, .write = true},
+        0, _frameTablePages,
+        attributes,
         Mapping::Flags{.shared = false}
     );
     _table = reinterpret_cast<Frame*>(tableMap.getAddress());
 
     // Allocate the frame table
     std::vector<std::pair<paddr_t, vaddr_t>> frameTableAddresses;
-    frameTableAddresses.reserve(frameTablePages);
-    for (size_t p = 0; p < frameTablePages; ++p) {
+    frameTableAddresses.reserve(_frameTablePages);
+    for (size_t p = 0; p < _frameTablePages; ++p) {
         paddr_t phys = ut_alloc(seL4_PageBits);
         vaddr_t virt = tableMap.getAddress() + (p * PAGE_SIZE);
 
-        process::getSosProcess().pageDirectory.map(
-            Page(phys), virt,
-            Attributes{.read = true, .write = true}
-        );
+        process::getSosProcess().pageDirectory.map(Page(phys), virt, attributes);
 
         frameTableAddresses.push_back(std::make_pair(phys, virt));
     }
 
     // Construct the frames
-    for (size_t p = 0; p < frameCount; ++p)
+    for (size_t p = 0; p < _frameCount; ++p)
         new(&_table[p]) Frame;
 
     // Connect the frame table frames to the pages
     for (const auto& pair : frameTableAddresses) {
+        Page& page = const_cast<Page&>(process::getSosProcess().pageDirectory.lookup(pair.second)->_page);
         Frame& frame = _getFrame(pair.first);
-        frame.pages = const_cast<Page*>(&process::getSosProcess().pageDirectory.lookup(pair.second)->_page);
-        frame.pages->_frame = &frame;
+
+        assert(page._status == Page::Status::LOCKED);
+        page._status = Page::Status::UNREFERENCED;
+        frame.insert(page);
+        page._status = Page::Status::LOCKED;
+        frame.updateStatus();
     }
 
     // Check the allocations were correct
     assert(_table[0].getAddress() == start);
-    assert(_table[frameCount - 1].getAddress() == end - PAGE_SIZE);
+    assert(_table[_frameCount - 1].getAddress() == end - PAGE_SIZE);
 
     tableMap.release();
 
@@ -93,8 +176,35 @@ void init(paddr_t start, paddr_t end) {
 
 async::future<Page> alloc() {
     paddr_t address = ut_alloc(seL4_PageBits);
-    if (!address)
-        throw std::system_error(ENOMEM, std::system_category(), "Out of physical frames");
+    if (!address) {
+        static size_t clock;
+
+        Frame* toSwap = nullptr;
+
+        size_t n = 1;
+        for (; n < _frameCount * 2; ++n) {
+            size_t f = (clock + n) % _frameCount;
+            if (!_table[f]._pages || _table[f]._isLocked)
+                continue;
+
+            if (_table[f]._isReferenced) {
+                _table[f].disableReference();
+            } else {
+                toSwap = &_table[f];
+                break;
+            }
+        }
+        clock = (clock + n) % _frameCount;
+
+        if (!toSwap)
+            throw std::bad_alloc();
+
+        return memory::Swap::get().swapOut(*toSwap)
+            .then([](async::future<void> result) {
+                result.get();
+                return alloc();
+            });
+    }
 
     return async::make_ready_future(Page(_getFrame(address)));
 }
@@ -103,107 +213,6 @@ Page alloc(paddr_t address) {
     return Page(address);
 }
 
-}
-
-Page::Page(FrameTable::Frame& frame):
-    Page(frame.getAddress())
-{
-    _frame = &frame;
-
-    assert(_frame->pages == nullptr);
-    _frame->pages = this;
-}
-
-Page::Page(paddr_t address):
-    _frame(nullptr),
-    _prev(nullptr),
-    _next(nullptr)
-{
-    int err = cspace_ut_retype_addr(
-        address,
-        seL4_ARM_SmallPageObject, seL4_PageBits,
-        cur_cspace, &_cap
-    );
-    if (err != seL4_NoError)
-        throw std::system_error(ENOMEM, std::system_category(), "Failed to retype to a seL4 page: " + std::to_string(err));
-
-    // The CSpace library should never return a 0 cap
-    assert(_cap != 0);
-}
-
-Page::~Page() {
-    if (_cap) {
-        assert(cspace_delete_cap(cur_cspace, _cap) == CSPACE_NOERROR);
-
-        if (_frame) {
-            if (_frame->pages == this) {
-                assert(!_prev);
-                _frame->pages = _next;
-            } else {
-                assert(_prev);
-            }
-
-            if (!_frame->pages)
-                // We were the last copy, so free the frame
-                ut_free(_frame->getAddress(), seL4_PageBits);
-        }
-
-        if (_prev)
-            _prev->_next = _next;
-        if (_next)
-            _next->_prev = _prev;
-    }
-}
-
-Page::Page(const Page& other):
-    _frame(other._frame),
-    _prev(const_cast<Page*>(&other)),
-    _next(other._next)
-{
-    _cap = cspace_copy_cap(cur_cspace, cur_cspace, other._cap, seL4_AllRights);
-    if (_cap == CSPACE_NULL)
-        throw std::system_error(ENOMEM, std::system_category(), "Failed to copy page cap");
-    assert(_cap != 0);
-
-    _prev->_next = this;
-    if (_next)
-        _next->_prev = this;
-}
-
-Page::Page(Page&& other) noexcept {
-    *this = std::move(other);
-}
-
-Page& Page::operator=(Page&& other) noexcept {
-    _cap = std::move(other._cap);
-    _frame = std::move(other._frame);
-    _prev = std::move(other._prev);
-    _next = std::move(other._next);
-
-    other._cap = 0;
-    other._frame = nullptr;
-    other._prev = nullptr;
-    other._next = nullptr;
-
-    if (_frame) {
-        if (_frame->pages == &other) {
-            assert(!_prev);
-            _frame->pages = this;
-        } else {
-            assert(_prev);
-        }
-    }
-
-    if (_prev) {
-        assert(_prev->_next == &other);
-        _prev->_next = this;
-    }
-    if (_next) {
-        assert(_next->_prev == &other);
-        _next->_prev = this;
-    }
-
-    return *this;
 }
 
 bool isReady() noexcept {

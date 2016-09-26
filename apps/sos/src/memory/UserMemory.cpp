@@ -49,6 +49,7 @@ async::future<std::pair<uint8_t*, ScopedMapping>> UserMemory::_mapIn(size_t byte
         return async::make_ready_future(std::make_pair(reinterpret_cast<uint8_t*>(_address), ScopedMapping()));
     } else {
         // Allocate some space in SOS' virtual memory for the target pages
+        attributes.locked = true;
         auto map = std::make_shared<ScopedMapping>(process::getSosProcess().maps.insert(
             0, pages,
             attributes,

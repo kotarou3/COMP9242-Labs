@@ -1,15 +1,17 @@
 #pragma once
 
 #include <unordered_map>
+#include <utility>
 #include <vector>
-
-#include "internal/async.h"
-#include "internal/memory/FrameTable.h"
-#include "internal/Capability.h"
 
 extern "C" {
     #include <sel4/types.h>
 }
+
+#include "internal/async.h"
+#include "internal/memory/FrameTable.h"
+#include "internal/memory/Page.h"
+#include "internal/Capability.h"
 
 namespace memory {
 
@@ -19,8 +21,16 @@ struct Attributes {
     bool read:1;
     bool write:1;
     bool execute:1;
+    bool locked:1;
     bool notCacheable:1;
 };
+
+constexpr bool operator==(const Attributes& a, const Attributes& b) {
+    return std::tie(a.read, a.write, a.execute, a.notCacheable) == std::tie(b.read, b.write, b.execute, b.notCacheable);
+}
+constexpr bool operator!=(const Attributes& a, const Attributes& b) {
+    return !(a == b);
+}
 
 class PageTable;
 class MappedPage;
@@ -40,9 +50,13 @@ class PageDirectory {
         void reservePages(vaddr_t from, vaddr_t to);
 
         // Warning: Returned MappedPage reference is invalidated after another mapping
+
+        async::future<const MappedPage&> makeResident(vaddr_t address, Attributes attributes);
         async::future<const MappedPage&> allocateAndMap(vaddr_t address, Attributes attributes);
+
         const MappedPage& map(Page page, vaddr_t address, Attributes attributes);
         void unmap(vaddr_t address) noexcept;
+
         const MappedPage* lookup(vaddr_t address, bool noThrow = false) const;
 
         seL4_ARM_PageDirectory getCap() const noexcept {return _cap.get();}
@@ -71,6 +85,8 @@ class PageTable {
 
         const MappedPage& map(Page page, vaddr_t address, Attributes attributes);
         void unmap(vaddr_t address) noexcept;
+
+        MappedPage* lookup(vaddr_t address, bool noThrow = false);
         const MappedPage* lookup(vaddr_t address, bool noThrow = false) const;
 
         seL4_ARM_PageTable getCap() const noexcept {return _cap.get();};
@@ -99,9 +115,14 @@ class MappedPage {
         MappedPage(MappedPage&& other) = default;
         MappedPage& operator=(MappedPage&& other) = default;
 
+        void enableReference(PageDirectory& directory);
+
         const Page& getPage() const noexcept {return _page;}
         vaddr_t getAddress() const noexcept {return _address;}
         Attributes getAttributes() const noexcept {return _attributes;}
+
+        seL4_CapRights seL4Rights() const;
+        seL4_ARM_VMAttributes seL4Attributes() const;
 
     private:
         Page _page;

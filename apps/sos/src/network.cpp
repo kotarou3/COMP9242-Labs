@@ -64,16 +64,23 @@ lwip_iface_t *lwip_iface;
 static void *
 sos_map_device(void* /*cookie*/, uintptr_t addr, size_t size, int cached, ps_mem_flags_t /*flags*/){
     try {
+        memory::Attributes attributes = {
+            .read = true,
+            .write = true,
+            .execute = false,
+            .locked = true,
+            .notCacheable = !cached
+        };
         auto map = process::getSosProcess().maps.insert(
             0, memory::numPages(size),
-            memory::Attributes{.read = true, .write = true, .execute = false, .notCacheable = !cached},
+            attributes,
             memory::Mapping::Flags{.shared = false}
         );
 
         for (size_t offset = 0; offset < size; offset += PAGE_SIZE) {
             process::getSosProcess().pageDirectory.map(
                 memory::FrameTable::alloc(addr + offset), map.getAddress() + offset,
-                memory::Attributes{.read = true, .write = true, .execute = false, .notCacheable = !cached}
+                attributes
             );
         }
 

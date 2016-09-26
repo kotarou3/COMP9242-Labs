@@ -23,7 +23,7 @@ async::future<int> mmap2(process::Process& process, memory::vaddr_t addr, size_t
     if (prot & ~(PROT_READ | PROT_WRITE | PROT_EXEC))
         throw std::invalid_argument("Invalid page protection");
 
-    if (flags & ~(MAP_SHARED | MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED))
+    if (flags & ~(MAP_SHARED | MAP_PRIVATE | MAP_ANONYMOUS | MAP_LOCKED | MAP_FIXED))
         throw std::invalid_argument("Invalid flags");
     if ((flags & MAP_SHARED) && (flags & MAP_PRIVATE))
         throw std::invalid_argument("Page cannot be both shared and private");
@@ -33,12 +33,19 @@ async::future<int> mmap2(process::Process& process, memory::vaddr_t addr, size_t
     if (!(flags & MAP_ANONYMOUS))
         throw std::system_error(ENOSYS, std::system_category(), "Non-anonymous pages are not implemented");
 
+    if (process.isSosProcess) {
+        // We need to lock all SOS allocations, since we can't handle page faults
+        // on ourself
+        flags |= MAP_LOCKED;
+    }
+
     auto map = std::make_shared<memory::ScopedMapping>(process.maps.insert(
         addr, memory::numPages(length),
         memory::Attributes{
             .read = prot & PROT_READ,
             .write = prot & PROT_WRITE,
-            .execute = prot & PROT_EXEC
+            .execute = prot & PROT_EXEC,
+            .locked = flags & MAP_LOCKED
         },
         memory::Mapping::Flags{
             .shared = flags & MAP_SHARED,
@@ -47,9 +54,7 @@ async::future<int> mmap2(process::Process& process, memory::vaddr_t addr, size_t
     ));
 
     async::future<void> future;
-    if (process.isSosProcess) {
-        // We need to fault in all the pages if the allocation came from
-        // ourselves, since we can't handle page faults on ourself
+    if (flags & MAP_LOCKED) {
         future = process.pageFaultMultiple(map->getStart(), map->getPages(), memory::Attributes{}, map);
     } else {
         async::promise<void> promise;

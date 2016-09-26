@@ -3,15 +3,16 @@
 #include <system_error>
 #include <assert.h>
 
-#include "internal/memory/FrameTable.h"
-#include "internal/memory/PageDirectory.h"
-
 extern "C" {
     #include <cspace/cspace.h>
     #include <sel4/sel4.h>
 
     #include "internal/ut_manager/ut.h"
 }
+
+#include "internal/memory/FrameTable.h"
+#include "internal/memory/PageDirectory.h"
+#include "internal/memory/Swap.h"
 
 namespace memory {
 
@@ -47,6 +48,37 @@ void PageDirectory::reservePages(vaddr_t from, vaddr_t to) {
 
         table->second.reservePages();
     }
+}
+
+async::future<const MappedPage&> PageDirectory::makeResident(vaddr_t address, Attributes attributes) {
+    auto table = _tables.find(_toIndex(address));
+    if (table == _tables.end())
+        return allocateAndMap(address, attributes);
+
+    MappedPage* page = table->second.lookup(address, true);
+    if (!page)
+        return allocateAndMap(address, attributes);
+
+    if (page->getAttributes() != attributes)
+        throw std::system_error(ENOSYS, std::system_category(), "Changing page attributes not implemented");
+
+    switch (page->getPage().getStatus()) {
+        case memory::Page::Status::INVALID:
+            assert(false);
+
+        case memory::Page::Status::LOCKED:
+        case memory::Page::Status::REFERENCED:
+            break;
+
+        case memory::Page::Status::UNREFERENCED:
+            page->enableReference(*this);
+            break;
+
+        case memory::Page::Status::SWAPPED:
+            throw std::system_error(ENOSYS, std::system_category(), "Swapping in not implemented");
+    }
+
+    return async::make_ready_future<const MappedPage&>(static_cast<const MappedPage&>(*page));
 }
 
 async::future<const MappedPage&> PageDirectory::allocateAndMap(vaddr_t address, Attributes attributes) {
@@ -140,6 +172,10 @@ void PageTable::unmap(vaddr_t address) noexcept {
     _pages.erase(_toIndex(address));
 }
 
+MappedPage* PageTable::lookup(vaddr_t address, bool noThrow) {
+    return const_cast<MappedPage*>(static_cast<const PageTable*>(this)->lookup(address, noThrow));
+}
+
 const MappedPage* PageTable::lookup(vaddr_t address, bool noThrow) const {
     _checkAddress(address);
 
@@ -169,33 +205,67 @@ MappedPage::MappedPage(Page page, PageDirectory& directory, vaddr_t address, Att
     _address(address),
     _attributes(attributes)
 {
-    int rights = 0;
-    if (attributes.read)
-        rights |= seL4_CanRead;
-    if (attributes.write)
-        rights |= seL4_CanRead | seL4_CanWrite; // ARM requires read permissions to write
-    if (attributes.execute)
-        rights |= seL4_CanRead; // XXX: No execute right on our version of seL4
+    enableReference(directory);
+}
 
-    int vmAttributes = seL4_ARM_Default_VMAttributes;
-    if (!attributes.execute)
-        vmAttributes |= seL4_ARM_ExecuteNever;
-    if (attributes.notCacheable)
-        vmAttributes &= ~seL4_ARM_PageCacheable;
+void MappedPage::enableReference(PageDirectory& directory) {
+    assert(_page._status == Page::Status::UNREFERENCED);
 
     int err = seL4_ARM_Page_Map(
-        _page.getCap(), directory.getCap(), address,
-        static_cast<seL4_CapRights>(rights),
-        static_cast<seL4_ARM_VMAttributes>(vmAttributes)
+        _page.getCap(), directory.getCap(), _address,
+        seL4Rights(), seL4Attributes()
     );
     if (err != seL4_NoError)
         throw std::system_error(ENOMEM, std::system_category(), "Failed to map in page: " + std::to_string(err));
+
+    _page._status = _attributes.locked ? Page::Status::LOCKED : Page::Status::REFERENCED;
+    if (_page._resident.frame)
+        _page._resident.frame->updateStatus();
+}
+
+seL4_CapRights MappedPage::seL4Rights() const {
+    int rights = 0;
+    if (_attributes.read)
+        rights |= seL4_CanRead;
+    if (_attributes.write)
+        rights |= seL4_CanRead | seL4_CanWrite; // ARM requires read permissions to write
+    if (_attributes.execute)
+        rights |= seL4_CanRead; // XXX: No execute right on our version of seL4
+
+    return static_cast<seL4_CapRights>(rights);
+}
+
+seL4_ARM_VMAttributes MappedPage::seL4Attributes() const {
+    int vmAttributes = seL4_ARM_Default_VMAttributes;
+    if (!_attributes.execute)
+        vmAttributes |= seL4_ARM_ExecuteNever;
+    if (_attributes.notCacheable)
+        vmAttributes &= ~seL4_ARM_PageCacheable;
+
+    return static_cast<seL4_ARM_VMAttributes>(vmAttributes);
 }
 
 MappedPage::~MappedPage() {
     // If we haven't been moved away, unmap the page
-    if (_page)
-        assert(seL4_ARM_Page_Unmap(_page.getCap()) == seL4_NoError);
+    if (_page) {
+        switch (_page._status) {
+            case Page::Status::LOCKED:
+            case Page::Status::REFERENCED:
+                assert(seL4_ARM_Page_Unmap(_page.getCap()) == seL4_NoError);
+                _page._status = Page::Status::UNREFERENCED;
+                break;
+
+            case Page::Status::UNREFERENCED:
+                break;
+
+            default:
+                assert(false);
+                // TODO: Deal with swapped out pages
+        }
+
+        if (_page._resident.frame)
+            _page._resident.frame->updateStatus();
+    }
 }
 
 }

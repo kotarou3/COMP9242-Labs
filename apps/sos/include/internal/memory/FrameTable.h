@@ -33,46 +33,47 @@ constexpr size_t numPages(size_t bytes) {
 }
 
 class Page;
+class Swap;
 
 namespace FrameTable {
+    class Frame {
+        public:
+            Frame(const Frame&) = delete;
+            Frame(Frame&&) = delete;
+            Frame& operator=(const Frame&) = delete;
+            Frame& operator=(Frame&&) = delete;
+
+            void insert(Page& page) noexcept;
+            void erase(Page& page) noexcept;
+
+            void disableReference() noexcept;
+            void updateStatus() noexcept;
+
+            paddr_t getAddress() const;
+
+        private:
+            Frame():
+                _pages(nullptr),
+                _isLocked(false),
+                _isReferenced(false)
+            {}
+
+            Page* _pages;
+
+            bool _isLocked:1;
+            bool _isReferenced:1;
+
+            friend class ::memory::Page;
+            friend class ::memory::Swap;
+            friend void init(paddr_t start, paddr_t end);
+            friend async::future<Page> alloc();
+    };
+
     void init(paddr_t start, paddr_t end);
 
     async::future<Page> alloc();
     Page alloc(paddr_t address);
-
-    class Frame;
 }
-
-class Page {
-    public:
-        ~Page();
-
-        Page(Page&& other) noexcept;
-        Page& operator=(Page&& other) noexcept;
-
-        Page copy() const {return *this;};
-
-        seL4_ARM_Page getCap() const noexcept {return _cap;}
-
-        explicit operator bool() const noexcept {return _cap;}
-
-    private:
-        Page(FrameTable::Frame& frame);
-        Page(paddr_t address);
-
-        Page(const Page& other);
-        Page& operator=(const Page&) = delete;
-
-        seL4_ARM_Page _cap;
-        FrameTable::Frame* _frame;
-
-        Page* _prev;
-        mutable Page* _next;
-
-        friend void FrameTable::init(paddr_t start, paddr_t end);
-        friend async::future<Page> FrameTable::alloc();
-        friend Page FrameTable::alloc(paddr_t address);
-};
 
 bool isReady() noexcept;
 

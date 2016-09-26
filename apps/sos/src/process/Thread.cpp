@@ -273,17 +273,9 @@ async::future<void> Process::handlePageFault(memory::vaddr_t address, memory::At
     if (cause.write && !map.attributes.write)
         throw std::system_error(EFAULT, std::system_category(), "Attempted to write to a non-writeable region");
 
-    auto page = pageDirectory.lookup(address, true);
-    if (!page) {
-        return pageDirectory.allocateAndMap(address, map.attributes)
-            .then([](auto page) {
-                (void)page.get();
-            });
-    } else {
-        async::promise<void> promise;
-        promise.set_value();
-        return promise.get_future();
-    }
+    return pageDirectory.makeResident(address, map.attributes).then([](auto page) {
+        (void)page.get();
+    });
 }
 
 async::future<void> Process::pageFaultMultiple(memory::vaddr_t start, size_t pages, memory::Attributes attributes, std::shared_ptr<memory::ScopedMapping> map) {

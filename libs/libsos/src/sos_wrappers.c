@@ -7,9 +7,6 @@
 #include <time.h>
 #include <unistd.h>
 
-#undef st_ctime
-#undef st_atime
-
 #include "sos.h"
 
 static int _unimplemented(void) {

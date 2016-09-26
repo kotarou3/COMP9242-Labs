@@ -9,6 +9,7 @@
  */
 
 #include <exception>
+#include <limits>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -43,6 +44,7 @@ extern "C" {
 #include "internal/fs/FlatFileSystem.h"
 #include "internal/fs/NFSFileSystem.h"
 #include "internal/memory/FrameTable.h"
+#include "internal/memory/Swap.h"
 #include "internal/memory/PageDirectory.h"
 #include "internal/process/Thread.h"
 #include "internal/syscall/fs.h"
@@ -60,6 +62,8 @@ extern "C" {
 
 #define TTY_NAME             CONFIG_SOS_STARTUP_APP
 #define TTY_EP_BADGE         (101)
+
+constexpr size_t SWAP_SIZE = memory::pageAlign(static_cast<size_t>(std::numeric_limits<off_t>::max()));
 
 /* The linker will link this symbol to the start address  *
  * of an archive of attached applications.                */
@@ -280,6 +284,18 @@ int main(void) {
     rootFileSystem->mount(std::move(deviceFileSystem));
     rootFileSystem->mount(std::make_unique<fs::NFSFileSystem>(CONFIG_SOS_GATEWAY, CONFIG_SOS_NFS_DIR));
     fs::rootFileSystem = std::move(rootFileSystem);
+
+    fs::rootFileSystem->open(
+        "pagefile",
+        fs::FileSystem::OpenFlags{
+            .read = true,
+            .write = true,
+            .createOnMissing = true,
+            .mode = S_IRUSR | S_IWUSR
+        }
+    ).then([](auto file) noexcept {
+        memory::Swap::get().addBackingStore(file.get(), SWAP_SIZE);
+    });
 
     /* Start the user application */
     start_first_process(TTY_NAME, _sos_ipc_ep_cap);

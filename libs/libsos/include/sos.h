@@ -39,6 +39,12 @@ typedef int fmode_t;
 #define ST_SPECIAL 2    /* special (console) file */
 typedef int st_type_t;
 
+#ifdef st_ctime
+    #undef st_ctime
+#endif
+#ifdef st_atime
+    #undef st_atime
+#endif
 
 typedef struct {
   st_type_t st_type;    /* file type */
