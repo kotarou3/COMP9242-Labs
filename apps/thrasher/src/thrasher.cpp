@@ -17,7 +17,7 @@ std::mt19937 rng;
 boost::crc_32_type crc;
 
 constexpr const size_t ALLOCATION_PAGES = 256;
-constexpr const size_t MAX_ALLOCATIONS = 1024 * 1024 * 1024 / ALLOCATION_PAGES / PAGE_SIZE;
+constexpr const size_t MAX_ALLOCATIONS = 100 * 1024 * 1024 / ALLOCATION_PAGES / PAGE_SIZE;
 constexpr const size_t THRASHES_PER_LOOP = 100000;
 
 constexpr size_t pageId(size_t allocationN, size_t pageN) {

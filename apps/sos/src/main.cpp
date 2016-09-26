@@ -220,6 +220,7 @@ static void _sos_init(seL4_CPtr* ipc_ep, seL4_CPtr* async_ep) try {
 
     /* find available memory */
     ut_find_memory(&low, &high);
+    high = low + 55 * 1024 * 1024;
 
     /* Initialise the untyped memory allocator */
     ut_allocator_init(low, high);
