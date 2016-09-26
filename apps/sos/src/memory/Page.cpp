@@ -8,6 +8,7 @@ extern "C" {
 
 #include "internal/memory/FrameTable.h"
 #include "internal/memory/Page.h"
+#include "internal/memory/Swap.h"
 
 namespace memory {
 
@@ -60,7 +61,8 @@ Page::~Page() {
             break;
 
         case Status::SWAPPED:
-            assert(false); // Should never happen... yet
+            Swap::get().erase(*this);
+            break;
     }
 }
 
@@ -88,8 +90,8 @@ Page::Page(const Page& other):
             break;
 
         case Status::SWAPPED:
-            // Swapped pages cannot be copied
-            assert(false);
+            Swap::get().copy(other, *this);
+            break;
     }
 }
 

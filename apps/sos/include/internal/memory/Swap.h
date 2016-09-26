@@ -18,6 +18,10 @@ class Swap {
         void addBackingStore(std::shared_ptr<fs::File> store, size_t size);
 
         async::future<void> swapOut(FrameTable::Frame& frame);
+        async::future<void> swapIn(Page& page);
+
+        void copy(const Page& from, Page& to) noexcept;
+        void erase(Page& page) noexcept;
 
         static Swap& get() noexcept {
             static Swap swap;

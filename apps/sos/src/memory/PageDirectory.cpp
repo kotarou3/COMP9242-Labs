@@ -75,7 +75,11 @@ async::future<const MappedPage&> PageDirectory::makeResident(vaddr_t address, At
             break;
 
         case memory::Page::Status::SWAPPED:
-            throw std::system_error(ENOSYS, std::system_category(), "Swapping in not implemented");
+            return page->swapIn().then([=](async::future<void> result) -> const MappedPage& {
+                result.get();
+                page->enableReference(*this);
+                return *page;
+            });
     }
 
     return async::make_ready_future<const MappedPage&>(static_cast<const MappedPage&>(*page));
@@ -223,6 +227,11 @@ void MappedPage::enableReference(PageDirectory& directory) {
         _page._resident.frame->updateStatus();
 }
 
+async::future<void> MappedPage::swapIn() {
+    assert(_page._status == Page::Status::SWAPPED);
+    return Swap::get().swapIn(_page);
+}
+
 seL4_CapRights MappedPage::seL4Rights() const {
     int rights = 0;
     if (_attributes.read)
@@ -253,18 +262,21 @@ MappedPage::~MappedPage() {
             case Page::Status::REFERENCED:
                 assert(seL4_ARM_Page_Unmap(_page.getCap()) == seL4_NoError);
                 _page._status = Page::Status::UNREFERENCED;
+
+                if (_page._resident.frame)
+                    _page._resident.frame->updateStatus();
                 break;
 
             case Page::Status::UNREFERENCED:
                 break;
 
+            case Page::Status::SWAPPED:
+                Swap::get().erase(_page);
+                break;
+
             default:
                 assert(false);
-                // TODO: Deal with swapped out pages
         }
-
-        if (_page._resident.frame)
-            _page._resident.frame->updateStatus();
     }
 }
 

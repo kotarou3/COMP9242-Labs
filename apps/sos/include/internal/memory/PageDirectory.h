@@ -116,6 +116,7 @@ class MappedPage {
         MappedPage& operator=(MappedPage&& other) = default;
 
         void enableReference(PageDirectory& directory);
+        async::future<void> swapIn();
 
         const Page& getPage() const noexcept {return _page;}
         vaddr_t getAddress() const noexcept {return _address;}
