@@ -68,8 +68,12 @@ const MappedPage& PageDirectory::map(Page page, vaddr_t address, Attributes attr
     return table->second.map(std::move(page), address, attributes);
 }
 
-void PageDirectory::unmap(vaddr_t address) {
-    _tables.at(_toIndex(address)).unmap(address);
+void PageDirectory::unmap(vaddr_t address) noexcept {
+    auto table = _tables.find(_toIndex(address));
+    if (table == _tables.end())
+        return;
+
+    table->second.unmap(address);
 }
 
 const MappedPage* PageDirectory::lookup(vaddr_t address, bool noThrow) const {
@@ -130,7 +134,8 @@ const MappedPage& PageTable::map(Page page, vaddr_t address, Attributes attribut
     }
 }
 
-void PageTable::unmap(vaddr_t address) {
+void PageTable::unmap(vaddr_t address) noexcept {
+    address = memory::pageAlign(address);
     _checkAddress(address);
     _pages.erase(_toIndex(address));
 }
