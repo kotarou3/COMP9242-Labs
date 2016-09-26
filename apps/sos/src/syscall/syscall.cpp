@@ -19,25 +19,25 @@ namespace syscall {
 namespace {
     using ThreadSyscall = async::future<int> (*)(
         process::Thread&,
-	    seL4_Word, seL4_Word, seL4_Word, seL4_Word,
-	    seL4_Word, seL4_Word, seL4_Word, seL4_Word
+        seL4_Word, seL4_Word, seL4_Word, seL4_Word,
+        seL4_Word, seL4_Word, seL4_Word, seL4_Word
     );
     using ProcessSyscall = async::future<int> (*)(
         process::Process&,
-	    seL4_Word, seL4_Word, seL4_Word, seL4_Word,
-	    seL4_Word, seL4_Word, seL4_Word, seL4_Word
+        seL4_Word, seL4_Word, seL4_Word, seL4_Word,
+        seL4_Word, seL4_Word, seL4_Word, seL4_Word
     );
 
     constexpr ThreadSyscall _getThreadSyscall(long /*number*/) {
         #define ADD_SYSCALL(name) if (number == SYS_##name) return reinterpret_cast<ThreadSyscall>(syscall::name)
         #undef ADD_SYSCALL
-	    return nullptr;
+        return nullptr;
     }
 
     constexpr ProcessSyscall _getProcessSyscall(long number) {
         #define ADD_SYSCALL(name) if (number == SYS_##name) return reinterpret_cast<ProcessSyscall>(syscall::name)
 
-	    // fs
+        // fs
         ADD_SYSCALL(stat64);
         ADD_SYSCALL(open);
         ADD_SYSCALL(close);
@@ -57,17 +57,17 @@ namespace {
         ADD_SYSCALL(fcntl64);
         ADD_SYSCALL(ioctl);
 
-	    // mmap
-	    ADD_SYSCALL(brk);
-	    ADD_SYSCALL(mmap2);
-	    ADD_SYSCALL(munmap);
+        // mmap
+        ADD_SYSCALL(brk);
+        ADD_SYSCALL(mmap2);
+        ADD_SYSCALL(munmap);
 
-	    // time
-	    ADD_SYSCALL(clock_gettime);
-	    ADD_SYSCALL(nanosleep);
+        // time
+        ADD_SYSCALL(clock_gettime);
+        ADD_SYSCALL(nanosleep);
 
-	    #undef ADD_SYSCALL
-	    return nullptr;
+        #undef ADD_SYSCALL
+        return nullptr;
     }
 }
 

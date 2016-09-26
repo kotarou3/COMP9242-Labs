@@ -22,8 +22,8 @@ long sys_restart_syscall()
     __builtin_unreachable();
 }
 /*long sys_exit() {
-	assert(!"sys_exit not implemented");
-	__builtin_unreachable();
+    assert(!"sys_exit not implemented");
+    __builtin_unreachable();
 }*/
 long sys_fork()
 {
@@ -226,8 +226,8 @@ long sys_prof()
     __builtin_unreachable();
 }
 /*long sys_brk() {
-	assert(!"sys_brk not implemented");
-	__builtin_unreachable();
+    assert(!"sys_brk not implemented");
+    __builtin_unreachable();
 }*/
 long sys_setgid()
 {
@@ -270,8 +270,8 @@ long sys_lock()
     __builtin_unreachable();
 }
 /*long sys_ioctl() {
-	assert(!"sys_ioctl not implemented");
-	__builtin_unreachable();
+    assert(!"sys_ioctl not implemented");
+    __builtin_unreachable();
 }*/
 long sys_fcntl()
 {
@@ -724,12 +724,12 @@ long sys_msync()
     __builtin_unreachable();
 }
 /*long sys_readv() {
-	assert(!"sys_readv not implemented");
-	__builtin_unreachable();
+    assert(!"sys_readv not implemented");
+    __builtin_unreachable();
 }*/
 /*long sys_writev() {
-	assert(!"sys_writev not implemented");
-	__builtin_unreachable();
+    assert(!"sys_writev not implemented");
+    __builtin_unreachable();
 }*/
 long sys_getsid()
 {
@@ -947,8 +947,8 @@ long sys_ugetrlimit()
     __builtin_unreachable();
 }
 /*long sys_mmap2() {
-	assert(!"sys_mmap2 not implemented");
-	__builtin_unreachable();
+    assert(!"sys_mmap2 not implemented");
+    __builtin_unreachable();
 }*/
 long sys_truncate64()
 {

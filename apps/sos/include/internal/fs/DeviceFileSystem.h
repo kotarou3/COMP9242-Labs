@@ -22,9 +22,9 @@ class DeviceFileSystem : public FileSystem {
         struct Device {
             DeviceFileSystem::OpenCallback openCallback;
 
-	        timespec accessTime;
-	        timespec modifyTime;
-	        timespec changeTime;
+            timespec accessTime;
+            timespec modifyTime;
+            timespec changeTime;
         };
         std::map<std::string, Device> _devices;
 
