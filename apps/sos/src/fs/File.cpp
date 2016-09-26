@@ -9,23 +9,77 @@
 
 namespace fs {
 
-boost::future<ssize_t> File::read(const std::vector<IoVector>& /*iov*/, off64_t /*offset*/) {
-    throw std::invalid_argument("File not readable");
+async::future<ssize_t> File::read(const std::vector<IoVector>& iov, off64_t offset) {
+    auto future = async::make_ready_future<ssize_t>(0);
+
+    ssize_t expectedBytesRead = 0;
+    for (const auto& vector : iov) {
+        future = future.then([this, vector, offset, expectedBytesRead](auto read) {
+            ssize_t _read = read.get();
+            if (_read != expectedBytesRead)
+                return async::make_ready_future(_read);
+
+            return this->_readOne(vector, offset == CURRENT_OFFSET ? CURRENT_OFFSET : offset + _read);
+        }).unwrap().then([expectedBytesRead](auto read) {
+            try {
+                return expectedBytesRead + read.get();
+            } catch (...) {
+                if (expectedBytesRead != 0)
+                    throw;
+                return expectedBytesRead;
+            }
+        });
+
+        expectedBytesRead += vector.length;
+    }
+
+    return future;
 }
 
-boost::future<ssize_t> File::write(const std::vector<IoVector>& /*iov*/, off64_t /*offset*/) {
-    throw std::invalid_argument("File not writeable");
+async::future<ssize_t> File::write(const std::vector<IoVector>& iov, off64_t offset) {
+    auto future = async::make_ready_future<ssize_t>(0);
+
+    ssize_t expectedBytesWritten = 0;
+    for (const auto& vector : iov) {
+        future = future.then([this, vector, offset, expectedBytesWritten](auto written) {
+            ssize_t _written = written.get();
+            if (_written != expectedBytesWritten)
+                return async::make_ready_future(_written);
+
+            return this->_writeOne(vector, offset == CURRENT_OFFSET ? CURRENT_OFFSET : offset + _written);
+        }).unwrap().then([expectedBytesWritten](auto written) {
+            try {
+                return expectedBytesWritten + written.get();
+            } catch (...) {
+                if (expectedBytesWritten != 0)
+                    throw;
+                return expectedBytesWritten;
+            }
+        });
+
+        expectedBytesWritten += vector.length;
+    }
+
+    return future;
 }
 
-boost::future<int> File::ioctl(size_t /*request*/, memory::UserMemory /*argp*/) {
+async::future<int> File::ioctl(size_t /*request*/, memory::UserMemory /*argp*/) {
     throw std::invalid_argument("File not ioctl'able");
 }
 
-boost::future<ssize_t> Directory::read(const std::vector<IoVector>& /*iov*/, off64_t /*offset*/) {
+async::future<ssize_t> File::_readOne(const IoVector& /*iov*/, off64_t /*offset*/) {
+    throw std::invalid_argument("File not readable");
+}
+
+async::future<ssize_t> File::_writeOne(const IoVector& /*iov*/, off64_t /*offset*/) {
+    throw std::invalid_argument("File not writeable");
+}
+
+async::future<ssize_t> Directory::read(const std::vector<IoVector>& /*iov*/, off64_t /*offset*/) {
     throw std::system_error(EISDIR, std::system_category(), "Directory not directly readable");
 }
 
-boost::future<ssize_t> Directory::write(const std::vector<IoVector>& /*iov*/, off64_t /*offset*/) {
+async::future<ssize_t> Directory::write(const std::vector<IoVector>& /*iov*/, off64_t /*offset*/) {
     throw std::system_error(EISDIR, std::system_category(), "Directory not directly writable");
 }
 
@@ -45,6 +99,5 @@ dirent* Directory::_alignNextDirent(dirent* curDirent, size_t nameLength) {
 }
 
 std::unique_ptr<FileSystem> rootFileSystem;
-boost::inline_executor asyncExecutor;
 
 }

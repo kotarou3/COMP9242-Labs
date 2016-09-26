@@ -6,6 +6,7 @@
 #include <utility>
 #include <vector>
 
+#include "internal/async.h"
 #include "internal/memory/PageDirectory.h"
 #include "internal/process/Thread.h"
 
@@ -15,53 +16,68 @@ class UserMemory {
     public:
         UserMemory(process::Process& process, vaddr_t address);
 
-        std::string readString(bool bypassAttributes = false);
+        async::future<std::string> readString(bool bypassAttributes = false);
 
         template <typename It, typename = std::enable_if_t<std::is_pod<typename std::iterator_traits<It>::value_type>::value>>
-        void read(It begin, It end, bool bypassAttributes = false) {
+        async::future<void> read(It begin, It end, bool bypassAttributes = false) {
             size_t length = end - begin;
-            auto map = mapIn<typename std::iterator_traits<It>::value_type>(
+
+            return mapIn<typename std::iterator_traits<It>::value_type>(
                 length, Attributes{.read = true}, bypassAttributes
-            );
-            std::copy(map.first, map.first + length, begin);
+            ).then([begin, length](auto map) {
+                auto map_ = std::move(map.get());
+                std::copy(map_.first, map_.first + length, begin);
+            });
         }
 
         template <typename It, typename = std::enable_if_t<std::is_pod<typename std::iterator_traits<It>::value_type>::value>>
-        void write(It begin, It end, bool bypassAttributes = false) {
+        async::future<void> write(It begin, It end, bool bypassAttributes = false) {
             size_t length = end - begin;
-            auto map = mapIn<typename std::iterator_traits<It>::value_type>(
+
+            return mapIn<typename std::iterator_traits<It>::value_type>(
                 length, Attributes{.read = false, .write = true}, bypassAttributes
-            );
-            std::copy(begin, end, map.first);
+            ).then([begin, end](auto map) {
+                auto map_ = std::move(map.get());
+                std::copy(begin, end, map_.first);
+            });
         }
 
         template <typename T>
-        T get(bool bypassAttributes = false) {
-            T result;
-            read(&result, &result + 1, bypassAttributes);
-            return result;
+        async::future<T> get(bool bypassAttributes = false) {
+            auto out = std::make_shared<T>();
+            return read(out.get(), out.get() + 1, bypassAttributes)
+                .then([out](async::future<void> result) {
+                    result.get();
+                    return std::move(*out);
+                });
         }
 
         template <typename T>
-        std::vector<T> get(size_t length, bool bypassAttributes = false) {
-            std::vector<T> result(length);
-            read(result.begin(), result.end(), bypassAttributes);
-            return result;
+        async::future<std::vector<T>> get(size_t length, bool bypassAttributes = false) {
+            auto out = std::make_shared<std::vector<T>>(length);
+            return read(out->begin(), out->end(), bypassAttributes)
+                .then([out](async::future<void> result) {
+                    result.get();
+                    return std::move(*out);
+                });
         }
 
         template <typename T>
-        void set(const T& value, bool bypassAttributes = false) {
-            write(&value, &value + 1, bypassAttributes);
+        async::future<void> set(const T& value, bool bypassAttributes = false) {
+            return write(&value, &value + 1, bypassAttributes);
         }
 
         template <typename T>
-        std::pair<T*, ScopedMapping> mapIn(size_t length, Attributes attributes, bool bypassAttributes = false) {
-            auto map = _mapIn(length * sizeof(T), attributes, bypassAttributes);
-            return std::make_pair(reinterpret_cast<T*>(map.first), std::move(map.second));
+        async::future<std::pair<T*, ScopedMapping>> mapIn(size_t length, Attributes attributes, bool bypassAttributes = false) {
+            return _mapIn(length * sizeof(T), attributes, bypassAttributes)
+                .then([](auto map) {
+                    auto map_ = std::move(map.get());
+                    return std::make_pair(reinterpret_cast<T*>(map_.first), std::move(map_.second));
+                });
         }
 
     private:
-        std::pair<uint8_t*, ScopedMapping> _mapIn(size_t bytes, Attributes attributes, bool bypassAttributes);
+        async::future<std::pair<uint8_t*, ScopedMapping>> _mapIn(size_t bytes, Attributes attributes, bool bypassAttributes);
 
         process::Process& _process;
         vaddr_t _address;

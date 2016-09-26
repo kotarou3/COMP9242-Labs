@@ -6,6 +6,8 @@ extern "C" {
     #include <sel4/types.h>
 }
 
+#include "internal/async.h"
+
 namespace memory {
 
 using paddr_t = size_t;
@@ -35,7 +37,7 @@ class Page;
 namespace FrameTable {
     void init(paddr_t start, paddr_t end);
 
-    Page alloc();
+    async::future<Page> alloc();
     Page alloc(paddr_t address);
 
     class Frame;
@@ -68,7 +70,7 @@ class Page {
         mutable Page* _next;
 
         friend void FrameTable::init(paddr_t start, paddr_t end);
-        friend Page FrameTable::alloc();
+        friend async::future<Page> FrameTable::alloc();
         friend Page FrameTable::alloc(paddr_t address);
 };
 

@@ -13,7 +13,7 @@ namespace fs {
 // DeviceFileSystem //
 //////////////////////
 
-boost::future<struct stat> DeviceFileSystem::stat(const std::string& pathname) {
+async::future<struct stat> DeviceFileSystem::stat(const std::string& pathname) {
     try {
         auto device = _devices.at(pathname);
 
@@ -25,15 +25,15 @@ boost::future<struct stat> DeviceFileSystem::stat(const std::string& pathname) {
         result.st_mtim = device.modifyTime;
         result.st_ctim = device.changeTime;
 
-        return boost::make_ready_future(result);
+        return async::make_ready_future(result);
     } catch (const std::out_of_range&) {
         std::throw_with_nested(std::system_error(ENOENT, std::system_category(), "No such device"));
     }
 }
 
-boost::future<std::shared_ptr<File>> DeviceFileSystem::open(const std::string& pathname, OpenFlags flags) {
+async::future<std::shared_ptr<File>> DeviceFileSystem::open(const std::string& pathname, OpenFlags flags) {
     if (pathname == ".")
-        return boost::make_ready_future(std::shared_ptr<File>(new DeviceDirectory(*this)));
+        return async::make_ready_future(std::shared_ptr<File>(new DeviceDirectory(*this)));
 
     try {
         return _devices.at(pathname).openCallback(flags);
@@ -66,37 +66,40 @@ DeviceDirectory::DeviceDirectory(const DeviceFileSystem& fs):
     _currentPosition(fs._devices.cbegin())
 {}
 
-boost::future<ssize_t> DeviceDirectory::getdents(memory::UserMemory dirp, size_t length) {
+async::future<ssize_t> DeviceDirectory::getdents(memory::UserMemory dirp, size_t length) {
     length = std::min(length, static_cast<size_t>(std::numeric_limits<ssize_t>::max()));
-    auto map = dirp.mapIn<uint8_t>(length, memory::Attributes{.read = false, .write = true});
+    return dirp.mapIn<uint8_t>(length, memory::Attributes{.read = false, .write = true})
+        .then([this, length](auto map) {
+            auto _map = std::move(map.get());
 
-    dirent* curDirent = reinterpret_cast<dirent*>(map.first);
-    size_t writtenBytes = 0;
-    size_t entryCount = 0;
-    for (; _currentPosition != _fs._devices.cend(); ++_currentPosition) {
-        auto& name = _currentPosition->first;
+            dirent* curDirent = reinterpret_cast<dirent*>(_map.first);
+            size_t writtenBytes = 0;
+            size_t entryCount = 0;
+            for (; _currentPosition != _fs._devices.cend(); ++_currentPosition) {
+                auto& name = _currentPosition->first;
 
-        dirent* nextDirent = _alignNextDirent(curDirent, name.size());
-        size_t size = reinterpret_cast<size_t>(nextDirent) - reinterpret_cast<size_t>(curDirent);
-        size_t nameLength = size - 1 - offsetof(dirent, d_name);
+                dirent* nextDirent = _alignNextDirent(curDirent, name.size());
+                size_t size = reinterpret_cast<size_t>(nextDirent) - reinterpret_cast<size_t>(curDirent);
+                size_t nameLength = size - 1 - offsetof(dirent, d_name);
 
-        if (size > length - writtenBytes)
-            break;
+                if (size > length - writtenBytes)
+                    break;
 
-        curDirent->d_ino = 0;
-        curDirent->d_off = entryCount++;
-        curDirent->d_reclen = size;
-        curDirent->d_type = DT_CHR;
-        curDirent->d_name[name.copy(curDirent->d_name, nameLength)] = 0;
+                curDirent->d_ino = 0;
+                curDirent->d_off = entryCount++;
+                curDirent->d_reclen = size;
+                curDirent->d_type = DT_CHR;
+                curDirent->d_name[name.copy(curDirent->d_name, nameLength)] = 0;
 
-        curDirent = nextDirent;
-        writtenBytes += size;
-    }
+                curDirent = nextDirent;
+                writtenBytes += size;
+            }
 
-    if (writtenBytes == 0 && _currentPosition != _fs._devices.cend())
-        throw std::invalid_argument("Result buffer is too small");
+            if (writtenBytes == 0 && _currentPosition != _fs._devices.cend())
+                throw std::invalid_argument("Result buffer is too small");
 
-    return boost::make_ready_future(static_cast<ssize_t>(writtenBytes));
+            return static_cast<ssize_t>(writtenBytes);
+        });
 }
 
 }

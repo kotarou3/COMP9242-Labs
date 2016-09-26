@@ -14,10 +14,11 @@ class ConsoleDevice : public File {
     public:
         static void mountOn(DeviceFileSystem& fs, const std::string& name);
 
-        virtual boost::future<ssize_t> read(const std::vector<IoVector>& iov, off64_t offset) override;
-        virtual boost::future<ssize_t> write(const std::vector<IoVector>& iov, off64_t offset) override;
+        virtual async::future<int> ioctl(size_t request, memory::UserMemory argp) override;
 
-        virtual boost::future<int> ioctl(size_t request, memory::UserMemory argp) override;
+    protected:
+        virtual async::future<ssize_t> _readOne(const IoVector& iov, off64_t offset) override;
+        virtual async::future<ssize_t> _writeOne(const IoVector& iov, off64_t offset) override;
 
     private:
         ConsoleDevice() = default;

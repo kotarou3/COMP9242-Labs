@@ -84,12 +84,12 @@ void init(paddr_t start, paddr_t end) {
     tableMap.release();
 }
 
-Page alloc() {
+async::future<Page> alloc() {
     paddr_t address = ut_alloc(seL4_PageBits);
     if (!address)
         throw std::system_error(ENOMEM, std::system_category(), "Out of physical frames");
 
-    return Page(_getFrame(address));
+    return async::make_ready_future(Page(_getFrame(address)));
 }
 
 Page alloc(paddr_t address) {

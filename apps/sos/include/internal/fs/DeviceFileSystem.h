@@ -12,10 +12,10 @@ class DeviceFileSystem : public FileSystem {
     public:
         virtual ~DeviceFileSystem() override = default;
 
-        virtual boost::future<struct stat> stat(const std::string& pathname) override;
-        virtual boost::future<std::shared_ptr<File>> open(const std::string& pathname, OpenFlags flags) override;
+        virtual async::future<struct stat> stat(const std::string& pathname) override;
+        virtual async::future<std::shared_ptr<File>> open(const std::string& pathname, OpenFlags flags) override;
 
-        using OpenCallback = std::function<boost::future<std::shared_ptr<File>> (OpenFlags flags)>;
+        using OpenCallback = std::function<async::future<std::shared_ptr<File>> (OpenFlags flags)>;
         void create(const std::string& name, const OpenCallback& openCallback);
 
     private:
@@ -36,7 +36,7 @@ class DeviceDirectory : public Directory {
         DeviceDirectory(const DeviceFileSystem& fs);
         virtual ~DeviceDirectory() override = default;
 
-        virtual boost::future<ssize_t> getdents(memory::UserMemory dirp, size_t length) override;
+        virtual async::future<ssize_t> getdents(memory::UserMemory dirp, size_t length) override;
 
     private:
         const DeviceFileSystem& _fs;

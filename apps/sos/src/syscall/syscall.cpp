@@ -17,12 +17,12 @@ extern "C" {
 namespace syscall {
 
 namespace {
-    using ThreadSyscall = boost::future<int> (*)(
+    using ThreadSyscall = async::future<int> (*)(
         process::Thread&,
 	    seL4_Word, seL4_Word, seL4_Word, seL4_Word,
 	    seL4_Word, seL4_Word, seL4_Word, seL4_Word
     );
-    using ProcessSyscall = boost::future<int> (*)(
+    using ProcessSyscall = async::future<int> (*)(
         process::Process&,
 	    seL4_Word, seL4_Word, seL4_Word, seL4_Word,
 	    seL4_Word, seL4_Word, seL4_Word, seL4_Word
@@ -71,7 +71,7 @@ namespace {
     }
 }
 
-boost::future<int> handle(process::Thread& thread, long number, size_t argc, seL4_Word* argv) {
+async::future<int> handle(process::Thread& thread, long number, size_t argc, seL4_Word* argv) {
     if (_getThreadSyscall(number)) {
         seL4_Word args[8] = {0};
         std::copy(argv, argv + std::min(argc, 8U), args);
@@ -86,7 +86,7 @@ boost::future<int> handle(process::Thread& thread, long number, size_t argc, seL
     }
 }
 
-boost::future<int> handle(process::Process& process, long number, size_t argc, seL4_Word* argv) {
+async::future<int> handle(process::Process& process, long number, size_t argc, seL4_Word* argv) {
     if (_getProcessSyscall(number)) {
         seL4_Word args[8] = {0};
         std::copy(argv, argv + std::min(argc, 8U), args);

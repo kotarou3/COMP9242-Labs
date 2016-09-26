@@ -13,11 +13,12 @@ extern "C" {
 
 namespace elf {
 
-void load(process::Process& process, uint8_t* file) {
+async::future<memory::vaddr_t> load(process::Process& process, uint8_t* file) {
     if (elf_checkFile(file))
         throw std::invalid_argument("Invalid ELF file");
 
-    std::vector<memory::ScopedMapping> maps;
+    std::vector<std::shared_ptr<memory::ScopedMapping>> maps;
+    std::vector<async::future<void>> writes;
 
     size_t headers = elf_getNumProgramHeaders(file);
     for (size_t h = 0; h < headers; ++h) {
@@ -37,7 +38,7 @@ void load(process::Process& process, uint8_t* file) {
         memory::vaddr_t start = to - startPadding;
         size_t pages = memory::numPages(memorySize + startPadding);
 
-        auto map = process.maps.insert(
+        auto map = std::make_shared<memory::ScopedMapping>(process.maps.insert(
             start, pages,
             memory::Attributes{
                 .read = flags & PF_R,
@@ -45,25 +46,37 @@ void load(process::Process& process, uint8_t* file) {
                 .execute = flags & PF_X
             },
             memory::Mapping::Flags{.shared = false, .fixed = true}
-        );
+        ));
 
         if (fileSize > 0) {
-            memory::UserMemory(process, to).write(from, from + fileSize, true);
+            writes.push_back(
+                memory::UserMemory(process, to).write(from, from + fileSize, true)
+                    .then([&process, map, startPadding, fileSize](async::future<void> result) {
+                        result.get();
 
-            // Unify the data and instruction cache's view of the pages
-            for (size_t b = 0; b < fileSize + startPadding; b += (1 << seL4_PageBits)) {
-                seL4_ARM_Page_Unify_Instruction(
-                    process.pageDirectory.lookup(start + b)->getPage().getCap(),
-                    0, PAGE_SIZE
-                );
-            }
+                        // Unify the data and instruction cache's view of the pages
+                        for (size_t b = 0; b < fileSize + startPadding; b += PAGE_SIZE) {
+                            assert(seL4_ARM_Page_Unify_Instruction(
+                                process.pageDirectory.lookup(map->getStart() + b)->getPage().getCap(),
+                                0, PAGE_SIZE
+                            ) == seL4_NoError);
+                        }
+                    })
+            );
         }
 
         maps.push_back(std::move(map));
     }
 
-    for (auto& map : maps)
-        map.release();
+    return async::when_all(writes.begin(), writes.end()).then([maps, file](auto results) {
+        for (auto& result : results.get())
+            result.get();
+
+        for (auto& map : maps)
+            map->release();
+
+        return static_cast<memory::vaddr_t>(elf_getEntryPoint(file));
+    });
 }
 
 }

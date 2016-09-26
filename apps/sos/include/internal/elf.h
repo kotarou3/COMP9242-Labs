@@ -1,9 +1,10 @@
 #pragma once
 
+#include "internal/async.h"
 #include "internal/process/Thread.h"
 
 namespace elf {
 
-void load(process::Process& process, uint8_t* file);
+async::future<memory::vaddr_t> load(process::Process& process, uint8_t* file);
 
 }

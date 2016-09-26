@@ -4,18 +4,6 @@
 #include <assert.h>
 #include <errno.h>
 
-#define syscall(...) _syscall(__VA_ARGS__)
-// Includes missing from inline_executor.hpp
-#include <boost/thread/thread.hpp>
-#include <boost/thread/concurrent_queues/sync_queue.hpp>
-
-#include <boost/thread/executors/inline_executor.hpp>
-#undef syscall
-
-#include "internal/memory/layout.h"
-#include "internal/process/Thread.h"
-#include "internal/syscall/syscall.h"
-
 extern "C" {
     #include <sos.h>
     #include <sel4/sel4.h>
@@ -23,11 +11,12 @@ extern "C" {
     #include "internal/sys/debug.h"
 }
 
-namespace process {
+#include "internal/async.h"
+#include "internal/memory/layout.h"
+#include "internal/process/Thread.h"
+#include "internal/syscall/syscall.h"
 
-namespace {
-    boost::inline_executor _asyncSyscallExecutor;
-}
+namespace process {
 
 ////////////
 // Thread //
@@ -42,14 +31,26 @@ Thread::Thread(std::shared_ptr<Process> process, seL4_CPtr faultEndpoint, seL4_W
     )),
     _ipcBuffer(_process->maps.insert(
         0, 1,
-        memory::Attributes{.read = true, .write = true},
+        memory::Attributes{
+            .read = true,
+            .write = true,
+            .execute = false,
+            .locked = true
+        },
         memory::Mapping::Flags{.shared = false}
     ))
 {
-    const memory::MappedPage& ipcBufferMappedPage = _process->pageDirectory.allocateAndMap(
+    auto page = _process->pageDirectory.allocateAndMap(
         _ipcBuffer.getAddress(),
-        memory::Attributes{.read = true, .write = true}
+        memory::Attributes{
+            .read = true,
+            .write = true,
+            .execute = false,
+            .locked = true
+        }
     );
+    assert(page.is_ready()); // TODO: Fix this
+    const memory::MappedPage& ipcBufferMappedPage = page.get();
 
     // Copy the fault endpoint to the user app to allow IPC
     _faultEndpoint = cspace_mint_cap(
@@ -119,9 +120,40 @@ void Thread::handleFault(const seL4_MessageInfo_t& message) noexcept {
             }
 
             try {
-                _process->handlePageFault(address, faultType);
-                seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 0);
-                seL4_Reply(reply);
+                auto result = _process->handlePageFault(address, faultType);
+                if (result.is_ready()) {
+                    result.get();
+                    seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 0);
+                    seL4_Reply(reply);
+                } else {
+                    seL4_CPtr replyCap = cspace_save_reply_cap(cur_cspace);
+                    if (replyCap == CSPACE_NULL)
+                        throw std::system_error(ENOMEM, std::system_category(), "Failed to save reply cap");
+
+                    result.then([=](async::future<void> result) {
+                        try {
+                            result.get();
+
+                            seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 0);
+                            seL4_Send(replyCap, reply);
+                            assert(cspace_free_slot(cur_cspace, replyCap) == CSPACE_NOERROR);
+                        } catch (const std::exception& e) {
+                            kprintf(LOGLEVEL_DEBUG, "Caught %s\n", e.what());
+
+                            kprintf(LOGLEVEL_NOTICE,
+                                "Segmentation fault at 0x%08x, pc = 0x%08x, %c%c%c\n",
+                                address, pc,
+                                faultType.read ? 'r' : '-',
+                                faultType.write ? 'w' : '-',
+                                faultType.execute ? 'x' : '-'
+                            );
+
+                            kprintf(LOGLEVEL_WARNING, "Would raise SIGSEGV, but not implemented yet - halting thread\n");
+
+                            assert(cspace_free_slot(cur_cspace, replyCap) == CSPACE_NOERROR);
+                        }
+                    });
+                }
             } catch (const std::exception& e) {
                 kprintf(LOGLEVEL_DEBUG, "Caught %s\n", e.what());
 
@@ -160,7 +192,7 @@ void Thread::handleFault(const seL4_MessageInfo_t& message) noexcept {
                         break;
                     }
 
-                    result.then(_asyncSyscallExecutor, [replyCap](boost::future<int> result) {
+                    result.then([replyCap](async::future<int> result) {
                         seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
                         try {
                             seL4_SetMR(0, result.get());
@@ -220,7 +252,7 @@ Process::Process(bool isSosProcess):
     pageDirectory.reservePages(memory::MMAP_START, memory::MMAP_END);
 }
 
-void Process::handlePageFault(memory::vaddr_t address, memory::Attributes cause) {
+async::future<void> Process::handlePageFault(memory::vaddr_t address, memory::Attributes cause) {
     address = memory::pageAlign(address);
     const memory::Mapping& map = maps.lookup(address);
 
@@ -237,8 +269,40 @@ void Process::handlePageFault(memory::vaddr_t address, memory::Attributes cause)
         throw std::system_error(EFAULT, std::system_category(), "Attempted to write to a non-writeable region");
 
     auto page = pageDirectory.lookup(address, true);
-    if (!page)
-        pageDirectory.allocateAndMap(address, map.attributes);
+    if (!page) {
+        return pageDirectory.allocateAndMap(address, map.attributes)
+            .then([](auto page) {
+                (void)page.get();
+            });
+    } else {
+        async::promise<void> promise;
+        promise.set_value();
+        return promise.get_future();
+    }
+}
+
+async::future<void> Process::pageFaultMultiple(memory::vaddr_t start, size_t pages, memory::Attributes attributes, std::shared_ptr<memory::ScopedMapping> map) {
+    if (map)
+        assert(map->getStart() <= start && start + pages * PAGE_SIZE <= map->getEnd());
+
+    async::promise<void> promise;
+    promise.set_value();
+    auto future = promise.get_future();
+
+    for (size_t p = 0; p < pages; ++p) {
+        memory::vaddr_t addr = start + p * PAGE_SIZE;
+        future = future.then([this, addr, attributes, map](async::future<void> result) {
+            result.get();
+            return this->handlePageFault(addr, attributes);
+        });
+    }
+
+    if (isSosProcess && !future.is_ready()) {
+        // Can't block SOS
+        throw std::bad_alloc();
+    }
+
+    return future;
 }
 
 Process& getSosProcess() noexcept {

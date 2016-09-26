@@ -131,10 +131,11 @@ static void print_bootinfo(const seL4_BootInfo* info) {
 }
 
 void start_first_process(const char* app_name, seL4_CPtr fault_ep) try {
+    auto process = std::make_shared<process::Process>();
+
     /* open the console device */
     fs::rootFileSystem->open("console", fs::FileSystem::OpenFlags{.read = true, .write = true})
-        .then(fs::asyncExecutor, [=](auto file) {
-            auto process = std::make_shared<process::Process>();
+        .then([=](auto file) {
             auto openFile = std::make_shared<fs::OpenFile>(
                 file.get(),
                 fs::OpenFile::Flags{
@@ -154,10 +155,10 @@ void start_first_process(const char* app_name, seL4_CPtr fault_ep) try {
             uint8_t* elf_base = (uint8_t*)cpio_get_file(_cpio_archive, app_name, &elf_size);
             conditional_panic(!elf_base, "Unable to locate cpio header");
 
-            elf::load(*process, elf_base);
-
+            return elf::load(*process, elf_base);
+        }).unwrap().then([=](auto ep) {
             _tty_start_thread = std::make_unique<process::Thread>(
-                process, fault_ep, TTY_EP_BADGE, elf_getEntryPoint(elf_base)
+                process, fault_ep, TTY_EP_BADGE, ep.get()
             );
         });
 } catch (const std::exception& e) {

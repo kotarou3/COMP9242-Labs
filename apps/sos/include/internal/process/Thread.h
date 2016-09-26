@@ -3,15 +3,16 @@
 #include <memory>
 #include <unordered_map>
 
-#include "internal/fs/FileDescriptor.h"
-#include "internal/memory/Mappings.h"
-#include "internal/memory/PageDirectory.h"
-#include "internal/Capability.h"
-
 extern "C" {
     #include <cspace/cspace.h>
     #include <sel4/types.h>
 }
+
+#include "internal/async.h"
+#include "internal/fs/FileDescriptor.h"
+#include "internal/memory/Mappings.h"
+#include "internal/memory/PageDirectory.h"
+#include "internal/Capability.h"
 
 namespace process {
 
@@ -49,7 +50,8 @@ class Process {
         Process(const Process&) = delete;
         Process& operator=(const Process&) = delete;
 
-        void handlePageFault(memory::vaddr_t, memory::Attributes attributes);
+        async::future<void> handlePageFault(memory::vaddr_t, memory::Attributes attributes);
+        async::future<void> pageFaultMultiple(memory::vaddr_t start, size_t pages, memory::Attributes attributes, std::shared_ptr<memory::ScopedMapping> map);
 
         memory::PageDirectory pageDirectory;
         memory::Mappings maps;

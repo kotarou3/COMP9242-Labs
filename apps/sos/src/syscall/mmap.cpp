@@ -10,12 +10,12 @@
 
 namespace syscall {
 
-boost::future<int> brk(process::Process& /*process*/, memory::vaddr_t /*addr*/) {
+async::future<int> brk(process::Process& /*process*/, memory::vaddr_t /*addr*/) {
     // We don't actually implement this - we let malloc() use mmap2() instead
     throw std::system_error(ENOSYS, std::system_category(), "brk() not implemented");
 }
 
-boost::future<int> mmap2(process::Process& process, memory::vaddr_t addr, size_t length, int prot, int flags, int /*fd*/, off_t /*offset*/) {
+async::future<int> mmap2(process::Process& process, memory::vaddr_t addr, size_t length, int prot, int flags, int /*fd*/, off_t /*offset*/) {
     if (memory::pageAlign(addr) != addr || memory::pageAlign(length) != length)
         throw std::invalid_argument("Invalid page or length alignment");
 
@@ -32,8 +32,8 @@ boost::future<int> mmap2(process::Process& process, memory::vaddr_t addr, size_t
     if (!(flags & MAP_ANONYMOUS))
         throw std::system_error(ENOSYS, std::system_category(), "Non-anonymous pages are not implemented");
 
-    auto map = process.maps.insert(
-        addr, length / PAGE_SIZE,
+    auto map = std::make_shared<memory::ScopedMapping>(process.maps.insert(
+        addr, memory::numPages(length),
         memory::Attributes{
             .read = prot & PROT_READ,
             .write = prot & PROT_WRITE,
@@ -42,26 +42,34 @@ boost::future<int> mmap2(process::Process& process, memory::vaddr_t addr, size_t
         memory::Mapping::Flags{
             .shared = flags & MAP_SHARED
         }
-    );
+    ));
 
+    async::future<void> future;
     if (process.isSosProcess) {
         // We need to fault in all the pages if the allocation came from
         // ourselves, since we can't handle page faults on ourself
-        for (addr = map.getStart(); addr < map.getEnd(); addr += PAGE_SIZE)
-            process.handlePageFault(addr, memory::Attributes{});
+        future = process.pageFaultMultiple(map->getStart(), map->getPages(), memory::Attributes{}, map);
+    } else {
+        async::promise<void> promise;
+        promise.set_value();
+        future = promise.get_future();
     }
 
-    int result = static_cast<int>(map.getStart());
-    map.release();
-    return boost::make_ready_future(result);
+    return future.then([map](async::future<void> result) {
+        result.get();
+
+        int _result = static_cast<int>(map->getStart());
+        map->release();
+        return _result;
+    });
 }
 
-boost::future<int> munmap(process::Process& process, memory::vaddr_t addr, size_t length) {
+async::future<int> munmap(process::Process& process, memory::vaddr_t addr, size_t length) {
     if (memory::pageAlign(addr) != addr || memory::pageAlign(length) != length)
         throw std::invalid_argument("Invalid page or length alignment");
 
     process.maps.erase(addr, length / PAGE_SIZE);
-    return boost::make_ready_future(0);
+    return async::make_ready_future(0);
 }
 
 }

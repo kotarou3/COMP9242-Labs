@@ -22,62 +22,78 @@ namespace {
     serial* _serial;
 
     std::deque<char> _readBuffer;
-    std::queue<std::pair<std::vector<IoVector>, boost::promise<ssize_t>>> _readRequests;
+    std::queue<std::pair<IoVector, async::promise<ssize_t>>> _readRequests;
 
-    void _tryRead(std::deque<char>::const_iterator newlinePos) {
-        static ssize_t _totalBytesRead = 0;
-        static size_t _currentIovIndex = 0;
+    void _tryRead(std::deque<char>::const_iterator newlinePos) noexcept {
+        // TODO: Better mutual exclusion
+        static bool _isExecuting;
+        if (_readRequests.empty() || _isExecuting)
+            return;
+        _isExecuting = true;
 
-        while (_readRequests.size() > 0) {
-            auto& request = _readRequests.front();
-            try {
-                for (; _currentIovIndex < request.first.size(); ++_currentIovIndex) {
-                    auto& iov = request.first[_currentIovIndex];
+        auto& request = _readRequests.front();
+        IoVector& iov = request.first;
 
-                    size_t newlineIndex = -1U;
-                    if (newlinePos != _readBuffer.cend())
-                        newlineIndex = newlinePos - _readBuffer.cbegin();
+        size_t newlineIndex = -1U;
+        if (newlinePos != _readBuffer.cend())
+            newlineIndex = newlinePos - _readBuffer.cbegin();
 
-                    size_t bytesToRead;
-                    if (_readBuffer.size() >= iov.length)
-                        bytesToRead = iov.length;
-                    else if (newlineIndex != -1U)
-                        bytesToRead = std::min(newlineIndex + 1, iov.length);
-                    else
-                        return;
+        size_t bytesToRead;
+        if (_readBuffer.size() >= iov.length) {
+            bytesToRead = iov.length;
+        } else if (newlineIndex != -1U) {
+            bytesToRead = std::min(newlineIndex + 1, iov.length);
+        } else {
+            _isExecuting = false;
+            return;
+        }
 
-                    iov.buffer.write(_readBuffer.cbegin(), _readBuffer.cbegin() + bytesToRead);
-                    _readBuffer.erase(_readBuffer.cbegin(), _readBuffer.cbegin() + bytesToRead);
-                    _totalBytesRead += bytesToRead;
+        try {
+            iov.buffer.write(_readBuffer.cbegin(), _readBuffer.cbegin() + bytesToRead)
+                .then([&request, newlineIndex, newlinePos, bytesToRead](async::future<void> result) {
+                    _isExecuting = false;
 
-                    if (newlineIndex != -1U && newlineIndex < bytesToRead)
-                        newlinePos = std::find(_readBuffer.cbegin(), _readBuffer.cend(), '\n');
-                }
-            } catch (...) {
-                if (_totalBytesRead == 0) {
-                    request.second.set_exception(std::current_exception());
-                    _readRequests.pop();
+                    try {
+                        result.get();
 
-                    _currentIovIndex = 0;
-                    continue;
-                }
-            }
+                        _readBuffer.erase(_readBuffer.cbegin(), _readBuffer.cbegin() + bytesToRead);
 
-            request.second.set_value(_totalBytesRead);
+                        request.second.set_value(bytesToRead);
+                        _readRequests.pop();
+
+                        if (newlineIndex != -1U && newlineIndex < bytesToRead)
+                            _tryRead(std::find(_readBuffer.cbegin(), _readBuffer.cend(), '\n'));
+                        else
+                            _tryRead(newlinePos);
+                    } catch (...) {
+                        request.second.set_exception(std::current_exception());
+                        _readRequests.pop();
+
+                        _tryRead(newlinePos);
+                    }
+                });
+        } catch (...) {
+            _isExecuting = false;
+
+            request.second.set_exception(std::current_exception());
             _readRequests.pop();
 
-            _totalBytesRead = 0;
-            _currentIovIndex = 0;
+            _tryRead(newlinePos);
         }
     }
 
-    void _serialHandler(serial* /*serial*/, char c) {
-        _readBuffer.push_back(c);
-        if (_readBuffer.size() > MAX_BUFFER_SIZE)
-            _readBuffer.pop_front();
+    void _serialHandler(serial* /*serial*/, char c) noexcept {
+        try {
+            _readBuffer.push_back(c);
+            if (_readBuffer.size() > MAX_BUFFER_SIZE)
+                _readBuffer.pop_front();
 
-        if (!_readRequests.empty())
-            _tryRead(_readBuffer.cend() - (c == '\n' ? 1 : 0));
+            if (!_readRequests.empty())
+                _tryRead(_readBuffer.cend() - (c == '\n' ? 1 : 0));
+        } catch (const std::bad_alloc&) {
+            _readBuffer.pop_front();
+            _serialHandler(nullptr, c);
+        }
     }
 }
 
@@ -88,15 +104,15 @@ void ConsoleDevice::mountOn(DeviceFileSystem& fs, const std::string& name) {
             serial_register_handler(_serial, _serialHandler);
         }
 
-        return boost::make_ready_future(std::shared_ptr<File>(new ConsoleDevice));
+        return async::make_ready_future(std::shared_ptr<File>(new ConsoleDevice));
     });
 }
 
-boost::future<ssize_t> ConsoleDevice::read(const std::vector<IoVector>& iov, off64_t offset) {
+async::future<ssize_t> ConsoleDevice::_readOne(const IoVector& iov, off64_t offset) {
     if (offset != CURRENT_OFFSET)
         throw std::system_error(ESPIPE, std::system_category(), "Cannot seek the console device");
 
-    boost::promise<ssize_t> promise;
+    async::promise<ssize_t> promise;
     auto future = promise.get_future();
     _readRequests.push(std::make_pair(iov, std::move(promise)));
 
@@ -105,41 +121,31 @@ boost::future<ssize_t> ConsoleDevice::read(const std::vector<IoVector>& iov, off
     return future;
 }
 
-boost::future<ssize_t> ConsoleDevice::write(const std::vector<IoVector>& iov, off64_t offset) {
+async::future<ssize_t> ConsoleDevice::_writeOne(const IoVector& iov, off64_t offset) {
     if (offset != CURRENT_OFFSET)
         throw std::system_error(ESPIPE, std::system_category(), "Cannot seek the console device");
 
-    ssize_t totalBytesWritten = 0;
-    try {
-        for (const auto& vector : iov) {
-            auto map = memory::UserMemory(vector.buffer).mapIn<char>(vector.length, memory::Attributes{.read = true});
-            ssize_t bytesWritten = serial_send(_serial, map.first, vector.length);
-            totalBytesWritten += bytesWritten;
-
-            if (static_cast<size_t>(bytesWritten) != vector.length)
-                break;
-        }
-    } catch (...) {
-        if (totalBytesWritten == 0)
-            throw;
-    }
-
-    return boost::make_ready_future(totalBytesWritten);
+    return memory::UserMemory(iov.buffer).mapIn<char>(iov.length, memory::Attributes{.read = true})
+        .then([iov](auto map) {
+            auto _map = std::move(map.get());
+            return serial_send(_serial, _map.first, iov.length);
+        });
 }
 
-boost::future<int> ConsoleDevice::ioctl(size_t request, memory::UserMemory argp) {
+async::future<int> ConsoleDevice::ioctl(size_t request, memory::UserMemory argp) {
     if (request != TIOCGWINSZ)
         throw std::invalid_argument("Unknown ioctl on console device");
 
     // Can't query serial device for window size, so return a placeholder
-    argp.set(winsize{
+    return argp.set(winsize{
         .ws_row = 24,
         .ws_col = 80,
         .ws_xpixel = 640,
         .ws_ypixel = 480
+    }).then([](async::future<void> result) {
+        result.get();
+        return 0;
     });
-
-    return boost::make_ready_future(0);
 }
 
 }

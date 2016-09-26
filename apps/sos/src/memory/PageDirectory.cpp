@@ -49,8 +49,10 @@ void PageDirectory::reservePages(vaddr_t from, vaddr_t to) {
     }
 }
 
-const MappedPage& PageDirectory::allocateAndMap(vaddr_t address, Attributes attributes) {
-    return map(FrameTable::alloc(), address, attributes);
+async::future<const MappedPage&> PageDirectory::allocateAndMap(vaddr_t address, Attributes attributes) {
+    return FrameTable::alloc().then([=] (auto page) -> const MappedPage& {
+        return this->map(page.get(), address, attributes);
+    });
 }
 
 const MappedPage& PageDirectory::map(Page page, vaddr_t address, Attributes attributes) {

@@ -3,6 +3,7 @@
 #include <unordered_map>
 #include <vector>
 
+#include "internal/async.h"
 #include "internal/memory/FrameTable.h"
 #include "internal/Capability.h"
 
@@ -38,8 +39,8 @@ class PageDirectory {
 
         void reservePages(vaddr_t from, vaddr_t to);
 
-        // Warning: Returned reference is invalidated after another mapping
-        const MappedPage& allocateAndMap(vaddr_t address, Attributes attributes);
+        // Warning: Returned MappedPage reference is invalidated after another mapping
+        async::future<const MappedPage&> allocateAndMap(vaddr_t address, Attributes attributes);
         const MappedPage& map(Page page, vaddr_t address, Attributes attributes);
         void unmap(vaddr_t address);
         const MappedPage* lookup(vaddr_t address, bool noThrow = false) const;

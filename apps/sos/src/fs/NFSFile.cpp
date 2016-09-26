@@ -17,58 +17,54 @@ NFSFile::NFSFile(const nfs::fhandle_t& handle):
     _currentOffset(0)
 {}
 
-boost::future<ssize_t> NFSFile::read(const std::vector<IoVector>& iov, off64_t offset) {
-    // XXX: Only reads one IO vector
-    IoVector currentIov = iov[0];
-
+async::future<ssize_t> NFSFile::_readOne(const IoVector& iov, off64_t offset) {
     off64_t actualOffset = offset;
     if (offset == fs::CURRENT_OFFSET)
         actualOffset = _currentOffset;
 
-    if (currentIov.length > std::numeric_limits<off_t>::max() ||
-        actualOffset > std::numeric_limits<off_t>::max() - currentIov.length)
+    if (iov.length > std::numeric_limits<off_t>::max() ||
+        actualOffset > std::numeric_limits<off_t>::max() - iov.length)
         throw std::invalid_argument("Final file offset overflows a off_t");
 
-    auto map = std::make_shared<std::pair<uint8_t*, memory::ScopedMapping>>(
-        memory::UserMemory(currentIov.buffer).mapIn<uint8_t>(
-            currentIov.length,
-            memory::Attributes{.read = false, .write = true}
-        )
-    );
-    return nfs::read(_handle, actualOffset, currentIov.length, map->first)
-        .then(asyncExecutor, [this, map](auto result) {
-            size_t read = result.get();
-            this->_currentOffset += read;
+    return memory::UserMemory(iov.buffer).mapIn<uint8_t>(
+        iov.length,
+        memory::Attributes{.read = false, .write = true}
+    ).then([this, iov, actualOffset](auto map) {
+        auto _map = std::make_shared<std::pair<uint8_t*, memory::ScopedMapping>>(std::move(map.get()));
 
-            return static_cast<ssize_t>(read);
-        });
+        return nfs::read(this->_handle, actualOffset, iov.length, _map->first)
+            .then([this, _map](auto result) {
+                size_t read = result.get();
+                this->_currentOffset += read;
+
+                return static_cast<ssize_t>(read);
+            });
+    });
 }
 
-boost::future<ssize_t> NFSFile::write(const std::vector<IoVector>& iov, off64_t offset) {
-    // XXX: Only writes one IO vector
-    IoVector currentIov = iov[0];
-
+async::future<ssize_t> NFSFile::_writeOne(const IoVector& iov, off64_t offset) {
     off64_t actualOffset = offset;
     if (offset == fs::CURRENT_OFFSET)
         actualOffset = _currentOffset;
 
-    if (currentIov.length > std::numeric_limits<off_t>::max() ||
-        actualOffset > std::numeric_limits<off_t>::max() - currentIov.length)
+    if (iov.length > std::numeric_limits<off_t>::max() ||
+        actualOffset > std::numeric_limits<off_t>::max() - iov.length)
         throw std::invalid_argument("Final file offset overflows a off_t");
 
-    auto map = std::make_shared<std::pair<uint8_t*, memory::ScopedMapping>>(
-        memory::UserMemory(currentIov.buffer).mapIn<uint8_t>(
-            currentIov.length,
-            memory::Attributes{.read = true}
-        )
-    );
-    return nfs::write(_handle, actualOffset, currentIov.length, map->first)
-        .then(asyncExecutor, [this, map](auto result) {
-            size_t written = result.get();
-            this->_currentOffset += written;
+    return memory::UserMemory(iov.buffer).mapIn<uint8_t>(
+        iov.length,
+        memory::Attributes{.read = true}
+    ).then([this, iov, actualOffset](auto map) {
+        auto _map = std::make_shared<std::pair<uint8_t*, memory::ScopedMapping>>(std::move(map.get()));
 
-            return static_cast<ssize_t>(written);
-        });
+        return nfs::write(this->_handle, actualOffset, iov.length, _map->first)
+            .then([this, _map](auto result) {
+                size_t written = result.get();
+                this->_currentOffset += written;
+
+                return static_cast<ssize_t>(written);
+            });
+    });
 }
 
 //////////////////
@@ -80,17 +76,21 @@ NFSDirectory::NFSDirectory(const nfs::fhandle_t& handle):
     _currentPosition(0)
 {}
 
-boost::future<ssize_t> NFSDirectory::getdents(memory::UserMemory dirp, size_t length) {
+async::future<ssize_t> NFSDirectory::getdents(memory::UserMemory dirp, size_t length) {
     length = std::min(length, static_cast<size_t>(std::numeric_limits<ssize_t>::max()));
 
-    return nfs::readdir(_handle).then(asyncExecutor, [=](auto names) mutable {
-        auto _names = names.get();
-        auto map = dirp.mapIn<uint8_t>(length, memory::Attributes{.read = false, .write = true});
+    return async::when_all(
+        nfs::readdir(_handle),
+        dirp.mapIn<uint8_t>(length, memory::Attributes{.read = false, .write = true})
+    ).then([=](auto results) mutable {
+        auto _results = results.get();
+        auto names = std::move(std::get<0>(_results).get());
+        auto map = std::move(std::get<1>(_results).get());
 
         dirent* curDirent = reinterpret_cast<dirent*>(map.first);
         size_t writtenBytes = 0;
-        for (; this->_currentPosition < _names.size(); ++this->_currentPosition) {
-            auto& name = _names[this->_currentPosition];
+        for (; this->_currentPosition < names.size(); ++this->_currentPosition) {
+            auto& name = names[this->_currentPosition];
 
             dirent* nextDirent = _alignNextDirent(curDirent, name.size());
             size_t size = reinterpret_cast<size_t>(nextDirent) - reinterpret_cast<size_t>(curDirent);
@@ -110,7 +110,7 @@ boost::future<ssize_t> NFSDirectory::getdents(memory::UserMemory dirp, size_t le
             writtenBytes += size;
         }
 
-        if (writtenBytes == 0 && _currentPosition < _names.size())
+        if (writtenBytes == 0 && _currentPosition < names.size())
             throw std::invalid_argument("Result buffer is too small");
 
         return static_cast<ssize_t>(writtenBytes);

@@ -24,9 +24,9 @@ NFSFileSystem::~NFSFileSystem() {
     timer::clearTimer(_timeoutTimer);
 }
 
-boost::future<struct stat> NFSFileSystem::stat(const std::string& pathname) {
+async::future<struct stat> NFSFileSystem::stat(const std::string& pathname) {
     return nfs::lookup(_handle, pathname)
-        .then(asyncExecutor, [](auto result) {
+        .then([](auto result) {
             auto _result = result.get().second;
 
             struct stat result2 = {0};
@@ -56,9 +56,9 @@ boost::future<struct stat> NFSFileSystem::stat(const std::string& pathname) {
         });
 }
 
-boost::future<std::shared_ptr<File>> NFSFileSystem::open(const std::string& pathname, OpenFlags flags) {
+async::future<std::shared_ptr<File>> NFSFileSystem::open(const std::string& pathname, OpenFlags flags) {
     return nfs::lookup(_handle, pathname)
-        .then(asyncExecutor, [=](auto result) {
+        .then([=](auto result) {
             try {
                 if (result.has_exception())
                     result.get();
@@ -78,7 +78,7 @@ boost::future<std::shared_ptr<File>> NFSFileSystem::open(const std::string& path
                     .mtime = {.seconds = -1U, .useconds = -1U}
                 });
             }
-        }).unwrap().then(asyncExecutor, [](auto result) {
+        }).unwrap().then([](auto result) {
             auto _result = result.get();
 
             // XXX: Would check permissions here, but we have no idea what user

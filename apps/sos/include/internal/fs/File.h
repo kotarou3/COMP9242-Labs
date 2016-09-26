@@ -6,15 +6,7 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 
-#define syscall(...) _syscall(__VA_ARGS__)
-// Includes missing from inline_executor.hpp
-#include <boost/thread/thread.hpp>
-#include <boost/thread/concurrent_queues/sync_queue.hpp>
-
-#include <boost/thread/executors/inline_executor.hpp>
-#include <boost/thread/future.hpp>
-#undef syscall
-
+#include "internal/async.h"
 #include "internal/memory/UserMemory.h"
 
 struct dirent;
@@ -32,20 +24,24 @@ class File {
     public:
         virtual ~File() = default;
 
-        virtual boost::future<ssize_t> read(const std::vector<IoVector>& iov, off64_t offset);
-        virtual boost::future<ssize_t> write(const std::vector<IoVector>& iov, off64_t offset);
+        virtual async::future<ssize_t> read(const std::vector<IoVector>& iov, off64_t offset);
+        virtual async::future<ssize_t> write(const std::vector<IoVector>& iov, off64_t offset);
 
-        virtual boost::future<int> ioctl(size_t request, memory::UserMemory argp);
+        virtual async::future<int> ioctl(size_t request, memory::UserMemory argp);
+
+    protected:
+        virtual async::future<ssize_t> _readOne(const IoVector& iov, off64_t offset);
+        virtual async::future<ssize_t> _writeOne(const IoVector& iov, off64_t offset);
 };
 
 class Directory : public File {
     public:
         virtual ~Directory() = default;
 
-        virtual boost::future<ssize_t> read(const std::vector<IoVector>& iov, off64_t offset) override;
-        virtual boost::future<ssize_t> write(const std::vector<IoVector>& iov, off64_t offset) override;
+        virtual async::future<ssize_t> read(const std::vector<IoVector>& iov, off64_t offset) override;
+        virtual async::future<ssize_t> write(const std::vector<IoVector>& iov, off64_t offset) override;
 
-        virtual boost::future<ssize_t> getdents(memory::UserMemory dirp, size_t length) = 0;
+        virtual async::future<ssize_t> getdents(memory::UserMemory dirp, size_t length) = 0;
 
     protected:
         static dirent* _alignNextDirent(dirent* curDirent, size_t nameLength);
@@ -62,11 +58,10 @@ class FileSystem {
 
         virtual ~FileSystem() = default;
 
-        virtual boost::future<struct stat> stat(const std::string& pathname) = 0;
-        virtual boost::future<std::shared_ptr<File>> open(const std::string& pathname, OpenFlags flags) = 0;
+        virtual async::future<struct stat> stat(const std::string& pathname) = 0;
+        virtual async::future<std::shared_ptr<File>> open(const std::string& pathname, OpenFlags flags) = 0;
 };
 
 extern std::unique_ptr<FileSystem> rootFileSystem;
-extern boost::inline_executor asyncExecutor;
 
 }

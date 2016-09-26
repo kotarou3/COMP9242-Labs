@@ -10,8 +10,9 @@ class NFSFile : public File {
     public:
         virtual ~NFSFile() = default;
 
-        virtual boost::future<ssize_t> read(const std::vector<IoVector>& iov, off64_t offset) override;
-        virtual boost::future<ssize_t> write(const std::vector<IoVector>& iov, off64_t offset) override;
+    protected:
+        virtual async::future<ssize_t> _readOne(const IoVector& iov, off64_t offset) override;
+        virtual async::future<ssize_t> _writeOne(const IoVector& iov, off64_t offset) override;
 
     private:
         NFSFile(const nfs::fhandle_t& handle);
@@ -25,7 +26,7 @@ class NFSDirectory : public Directory {
     public:
         virtual ~NFSDirectory() = default;
 
-        virtual boost::future<ssize_t> getdents(memory::UserMemory dirp, size_t length) override;
+        virtual async::future<ssize_t> getdents(memory::UserMemory dirp, size_t length) override;
 
     private:
         NFSDirectory(const nfs::fhandle_t& handle);
