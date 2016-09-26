@@ -6,6 +6,7 @@
 #include <sys/mman.h>
 
 #include "internal/memory/Mappings.h"
+#include "internal/memory/layout.h"
 #include "internal/syscall/mmap.h"
 
 namespace syscall {
@@ -22,7 +23,7 @@ async::future<int> mmap2(process::Process& process, memory::vaddr_t addr, size_t
     if (prot & ~(PROT_READ | PROT_WRITE | PROT_EXEC))
         throw std::invalid_argument("Invalid page protection");
 
-    if (flags & ~(MAP_SHARED | MAP_PRIVATE | MAP_ANONYMOUS))
+    if (flags & ~(MAP_SHARED | MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED))
         throw std::invalid_argument("Invalid flags");
     if ((flags & MAP_SHARED) && (flags & MAP_PRIVATE))
         throw std::invalid_argument("Page cannot be both shared and private");
@@ -40,7 +41,8 @@ async::future<int> mmap2(process::Process& process, memory::vaddr_t addr, size_t
             .execute = prot & PROT_EXEC
         },
         memory::Mapping::Flags{
-            .shared = flags & MAP_SHARED
+            .shared = flags & MAP_SHARED,
+            .fixed = flags & MAP_FIXED
         }
     ));
 
@@ -77,12 +79,30 @@ async::future<int> munmap(process::Process& process, memory::vaddr_t addr, size_
 extern "C" int sys_brk(va_list ap) {
     // Use an static allocation to allow malloc() before the memory subsystem
     // is ready for mmap()s
-    constexpr const size_t SOS_PROCESS_INIT_SIZE = 0x100000;
-    static uint8_t initArea[SOS_PROCESS_INIT_SIZE];
-    static uint8_t* brk = initArea;
+    static uint8_t brkArea[memory::SOS_INIT_AREA_SIZE] [[gnu::section(".sos_brk_area")]];
+    static uint8_t* brk = brkArea;
+    static uint8_t* brkEnd = &brkArea[memory::SOS_INIT_AREA_SIZE];
+    static bool isUpdatingBrk;
+
+    assert(reinterpret_cast<memory::vaddr_t>(&brkArea) == memory::SOS_BRK_START);
+
+    if (brkEnd == &brkArea[memory::SOS_INIT_AREA_SIZE] && !isUpdatingBrk && memory::isReady()) {
+        isUpdatingBrk = true;
+
+        // We can mmap() now, so let's expand our brk to its full size
+        assert(mmap(
+            brkEnd,
+            memory::SOS_BRK_END - reinterpret_cast<memory::vaddr_t>(brkEnd),
+            PROT_READ | PROT_WRITE,
+            MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED,
+            0, 0
+        ) == brkEnd);
+
+        brkEnd = reinterpret_cast<uint8_t*>(memory::SOS_BRK_END);
+    }
 
     uint8_t* newbrk = va_arg(ap, uint8_t*);
-    if (initArea <= newbrk && newbrk <= &initArea[SOS_PROCESS_INIT_SIZE])
+    if (brkArea <= newbrk && newbrk <= brkEnd)
         return reinterpret_cast<int>(brk = newbrk);
     else
         return reinterpret_cast<int>(brk);

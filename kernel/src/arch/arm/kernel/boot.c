@@ -322,12 +322,12 @@ try_init_kernel(
     ui_v_reg.start = ui_p_reg_start - pv_offset;
     ui_v_reg.end   = ui_p_reg_end   - pv_offset;
 
-    ipcbuf_vptr = ui_v_reg.end;
-    bi_frame_vptr = ipcbuf_vptr + BIT(PAGE_BITS);
+    ipcbuf_vptr = ui_v_reg.start - BIT(PAGE_BITS);
+    bi_frame_vptr = ipcbuf_vptr - BIT(PAGE_BITS);
 
-    /* The region of the initial thread is the user image + ipcbuf and boot info */
-    it_v_reg.start = ui_v_reg.start;
-    it_v_reg.end = bi_frame_vptr + BIT(PAGE_BITS);
+    /* The region of the initial thread is the boot info and ipcbuf + user image */
+    it_v_reg.start = bi_frame_vptr;
+    it_v_reg.end = ui_v_reg.end;
 
     /* setup virtual memory for the kernel */
     map_kernel_window();

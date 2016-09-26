@@ -13,6 +13,11 @@ extern "C" {
 }
 
 namespace memory {
+
+namespace {
+    bool _isReady;
+}
+
 namespace FrameTable {
 
 struct Frame {
@@ -82,6 +87,8 @@ void init(paddr_t start, paddr_t end) {
     assert(_table[frameCount - 1].getAddress() == end - PAGE_SIZE);
 
     tableMap.release();
+
+    _isReady = true;
 }
 
 async::future<Page> alloc() {
@@ -197,6 +204,10 @@ Page& Page::operator=(Page&& other) noexcept {
     }
 
     return *this;
+}
+
+bool isReady() noexcept {
+    return _isReady;
 }
 
 }

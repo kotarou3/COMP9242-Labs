@@ -246,7 +246,12 @@ Process::Process(bool isSosProcess):
     memory::Mapping::Flags flags = {0};
     flags.fixed = true;
     flags.reserved = true;
-    maps.insert(0, memory::MMAP_START / PAGE_SIZE, memory::Attributes{}, flags).release();
+    maps.insert(
+        0,
+        memory::numPages(memory::SOS_BRK_START + memory::SOS_INIT_AREA_SIZE),
+        memory::Attributes{},
+        flags
+    ).release();
 
     // Make sure all of SOS's page tables are allocated
     pageDirectory.reservePages(memory::MMAP_START, memory::MMAP_END);

@@ -74,4 +74,6 @@ class Page {
         friend Page FrameTable::alloc(paddr_t address);
 };
 
+bool isReady() noexcept;
+
 }
