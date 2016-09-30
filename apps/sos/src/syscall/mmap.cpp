@@ -99,15 +99,23 @@ extern "C" int sys_brk(va_list ap) {
         isUpdatingBrk = true;
 
         // We can mmap() now, so let's expand our brk to its full size
-        assert(mmap(
-            brkEnd,
-            memory::SOS_BRK_END - reinterpret_cast<memory::vaddr_t>(brkEnd),
-            PROT_READ | PROT_WRITE,
-            MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED,
-            0, 0
-        ) == brkEnd);
 
-        brkEnd = reinterpret_cast<uint8_t*>(memory::SOS_BRK_END);
+        // Incrementally expand the heap, so cap memory can be allocated properly
+        // as we fault in pages. Allocating too much at once will make cspace
+        // use more memory than available in the init area and end up calling
+        // itself (via mmap faulting in pages), resulting in an assertion failure
+        constexpr size_t targetSize = memory::SOS_BRK_END - memory::SOS_BRK_START;
+        for (size_t size = 2 * memory::SOS_INIT_AREA_SIZE; size < targetSize; size *= 2) {
+            assert(mmap(
+                brkEnd,
+                size - (brkEnd - brkArea),
+                PROT_READ | PROT_WRITE,
+                MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED,
+                0, 0
+            ) == brkEnd);
+
+            brkEnd = &brkArea[size];
+        }
     }
 
     uint8_t* newbrk = va_arg(ap, uint8_t*);
