@@ -11,12 +11,12 @@
 
 namespace syscall {
 
-async::future<int> brk(process::Process& /*process*/, memory::vaddr_t /*addr*/) {
+async::future<int> brk(std::weak_ptr<process::Process> /*process*/, memory::vaddr_t /*addr*/) {
     // We don't actually implement this - we let malloc() use mmap2() instead
     throw std::system_error(ENOSYS, std::system_category(), "brk() not implemented");
 }
 
-async::future<int> mmap2(process::Process& process, memory::vaddr_t addr, size_t length, int prot, int flags, int /*fd*/, off_t /*offset*/) {
+async::future<int> mmap2(std::weak_ptr<process::Process> process, memory::vaddr_t addr, size_t length, int prot, int flags, int /*fd*/, off_t /*offset*/) {
     if (memory::pageAlign(addr) != addr || memory::pageAlign(length) != length)
         throw std::invalid_argument("Invalid page or length alignment");
 
@@ -33,13 +33,14 @@ async::future<int> mmap2(process::Process& process, memory::vaddr_t addr, size_t
     if (!(flags & MAP_ANONYMOUS))
         throw std::system_error(ENOSYS, std::system_category(), "Non-anonymous pages are not implemented");
 
-    if (process.isSosProcess) {
+    std::shared_ptr<process::Process> _process(process);
+    if (_process->isSosProcess) {
         // We need to lock all SOS allocations, since we can't handle page faults
         // on ourself
         flags |= MAP_LOCKED;
     }
 
-    auto map = std::make_shared<memory::ScopedMapping>(process.maps.insert(
+    auto map = std::make_shared<memory::ScopedMapping>(_process->maps.insert(
         addr, memory::numPages(length),
         memory::Attributes{
             .read = prot & PROT_READ,
@@ -55,11 +56,11 @@ async::future<int> mmap2(process::Process& process, memory::vaddr_t addr, size_t
 
     // XXX: We shouldn't reserve pages, but currently our page table layout
     // requires this
-    process.pageDirectory.reservePages(map->getStart(), map->getEnd());
+    _process->pageDirectory.reservePages(map->getStart(), map->getEnd());
 
     async::future<void> future;
     if (flags & MAP_LOCKED) {
-        future = process.pageFaultMultiple(map->getStart(), map->getPages(), memory::Attributes{}, map);
+        future = _process->pageFaultMultiple(map->getStart(), map->getPages(), memory::Attributes{}, map);
     } else {
         async::promise<void> promise;
         promise.set_value();
@@ -75,11 +76,11 @@ async::future<int> mmap2(process::Process& process, memory::vaddr_t addr, size_t
     });
 }
 
-async::future<int> munmap(process::Process& process, memory::vaddr_t addr, size_t length) {
+async::future<int> munmap(std::weak_ptr<process::Process> process, memory::vaddr_t addr, size_t length) {
     if (memory::pageAlign(addr) != addr || memory::pageAlign(length) != length)
         throw std::invalid_argument("Invalid page or length alignment");
 
-    process.maps.erase(addr, length / PAGE_SIZE);
+    std::shared_ptr<process::Process>(process)->maps.erase(addr, length / PAGE_SIZE);
     return async::make_ready_future(0);
 }
 

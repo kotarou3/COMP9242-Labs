@@ -174,7 +174,7 @@ void Thread::handleFault(const seL4_MessageInfo_t& message) noexcept {
         case seL4_NoFault: { // Syscall
             try {
                 auto result = syscall::handle(
-                    *this,
+                    shared_from_this(),
                     seL4_GetMR(0),
                     seL4_MessageInfo_get_length(message) - 1,
                     &seL4_GetIPCBuffer()->msg[1]
@@ -223,7 +223,6 @@ void Thread::handleFault(const seL4_MessageInfo_t& message) noexcept {
 /////////////
 
 Process::Process():
-    maps([this](memory::vaddr_t address) {this->pageDirectory.unmap(address);}),
     isSosProcess(false),
 
     // Create a simple 1 level CSpace
@@ -239,23 +238,10 @@ Process::Process():
 
 Process::Process(bool isSosProcess):
     pageDirectory(seL4_CapInitThreadPD),
-    maps([this](memory::vaddr_t address) {this->pageDirectory.unmap(address);}),
     isSosProcess(isSosProcess),
     _cspace(cur_cspace, [](cspace_t*) {})
 {
     assert(isSosProcess);
-
-    // Reserve areas of memory already in-use
-    // TODO: Do better
-    memory::Mapping::Flags flags = {0};
-    flags.fixed = true;
-    flags.reserved = true;
-    maps.insert(
-        0,
-        memory::numPages(memory::SOS_BRK_START + memory::SOS_INIT_AREA_SIZE),
-        memory::Attributes{},
-        flags
-    ).release();
 
     // Make sure all of SOS's page tables are allocated
     pageDirectory.reservePages(memory::MMAP_START, memory::MMAP_END);
@@ -306,8 +292,25 @@ async::future<void> Process::pageFaultMultiple(memory::vaddr_t start, size_t pag
     return future;
 }
 
-Process& getSosProcess() noexcept {
-    static Process sosProcess(true);
+std::shared_ptr<Process> getSosProcess() noexcept {
+    static std::shared_ptr<Process> sosProcess(new Process(true));
+    if (sosProcess->maps._process.expired()) {
+        sosProcess->maps._process = sosProcess;
+
+        // Reserve areas of memory already in-use (not in constructor due to
+        // memory::Mappings requiring a valid _process)
+        // TODO: Do better
+        memory::Mapping::Flags flags = {0};
+        flags.fixed = true;
+        flags.reserved = true;
+        sosProcess->maps.insert(
+            0,
+            memory::numPages(memory::SOS_BRK_START + memory::SOS_INIT_AREA_SIZE),
+            memory::Attributes{},
+            flags
+        ).release();
+    }
+
     return sosProcess;
 }
 

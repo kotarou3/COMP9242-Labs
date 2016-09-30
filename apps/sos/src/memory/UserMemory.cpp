@@ -6,7 +6,7 @@
 
 namespace memory {
 
-UserMemory::UserMemory(process::Process& process, vaddr_t address):
+UserMemory::UserMemory(std::weak_ptr<process::Process> process, vaddr_t address):
     _process(process),
     _address(address)
 {}
@@ -14,7 +14,7 @@ UserMemory::UserMemory(process::Process& process, vaddr_t address):
 async::future<std::string> UserMemory::readString(bool bypassAttributes) {
     // Map in one page
     return mapIn<char>(1, Attributes{.read = true}, bypassAttributes)
-        .then([&_process = _process, _address = _address, bypassAttributes](auto map) {
+        .then([_process = _process, _address = _address, bypassAttributes](auto map) {
             auto map_ = std::move(map.get());
 
             // Read until end of string or page
@@ -40,17 +40,18 @@ async::future<std::pair<uint8_t*, ScopedMapping>> UserMemory::_mapIn(size_t byte
     vaddr_t alignedAddress = _address - startPadding;
     size_t pages = numPages(bytes + startPadding);
 
-    if (_process.isSosProcess) {
+    std::shared_ptr<process::Process> process(_process);
+    if (process->isSosProcess) {
         // XXX: SOS currently has inaccurate mappings for itself, so we can't
         // check the address range attributes. For now, we just assume they're
         // read+write
-        _process.maps.lookup(alignedAddress);
+        process->maps.lookup(alignedAddress);
 
         return async::make_ready_future(std::make_pair(reinterpret_cast<uint8_t*>(_address), ScopedMapping()));
     } else {
         // Allocate some space in SOS' virtual memory for the target pages
         attributes.locked = true;
-        auto map = std::make_shared<ScopedMapping>(process::getSosProcess().maps.insert(
+        auto map = std::make_shared<ScopedMapping>(process::getSosProcess()->maps.insert(
             0, pages,
             attributes,
             Mapping::Flags{.shared = false}
@@ -65,17 +66,17 @@ async::future<std::pair<uint8_t*, ScopedMapping>> UserMemory::_mapIn(size_t byte
             vaddr_t destAddr = map->getAddress() + p * PAGE_SIZE;
             Attributes attr = bypassAttributes ? Attributes{} : attributes;
 
-            future = future.then([&_process = _process, srcAddr, attr, map](async::future<void> result) {
+            future = future.then([process, srcAddr, attr, map](async::future<void> result) {
                 result.get();
 
                 // Make sure the page is allocated in the target process
-                return _process.handlePageFault(srcAddr, attr);
-            }).unwrap().then([&_process = _process, srcAddr, destAddr, attributes, map](async::future<void> result) {
+                return process->handlePageFault(srcAddr, attr);
+            }).unwrap().then([process, srcAddr, destAddr, attributes, map](async::future<void> result) {
                 result.get();
 
                 // Map in a copy of the process' page into the SOS process
-                process::getSosProcess().pageDirectory.map(
-                    _process.pageDirectory.lookup(srcAddr)->getPage().copy(),
+                process::getSosProcess()->pageDirectory.map(
+                    process->pageDirectory.lookup(srcAddr)->getPage().copy(),
                     destAddr, attributes
                 );
             });

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <exception>
+#include <memory>
 
 #include <stdarg.h>
 #include <sys/syscall.h>
@@ -14,8 +15,8 @@ extern "C" {
 
 namespace syscall {
 
-async::future<int> handle(process::Thread& thread, long number, size_t argc, seL4_Word* argv);
-async::future<int> handle(process::Process& process, long number, size_t argc, seL4_Word* argv);
+async::future<int> handle(std::weak_ptr<process::Thread> thread, long number, size_t argc, seL4_Word* argv);
+async::future<int> handle(std::weak_ptr<process::Process> process, long number, size_t argc, seL4_Word* argv);
 
 int exceptionToErrno(std::exception_ptr e) noexcept;
 

@@ -6,6 +6,7 @@
 
 #include "internal/memory/Mappings.h"
 #include "internal/memory/layout.h"
+#include "internal/process/Thread.h"
 #include "internal/RandomDevice.h"
 
 extern "C" {
@@ -17,10 +18,6 @@ namespace memory {
 //////////////
 // Mappings //
 //////////////
-
-Mappings::Mappings(const std::function<void (vaddr_t)>& unmapPageCallback):
-    _unmapPageCallback(unmapPageCallback)
-{}
 
 ScopedMapping Mappings::insert(vaddr_t address, size_t pages, Attributes attributes, Mapping::Flags flags) {
     _checkAddress(address, pages);
@@ -133,9 +130,12 @@ void Mappings::erase(vaddr_t address, size_t pages) {
                 __builtin_unreachable();
         }
 
-        for (size_t p = 0; p < unmapPages; ++p) {
-            _unmapPageCallback(unmapStart);
-            unmapStart += PAGE_SIZE;
+        auto process = _process.lock();
+        if (process) {
+            for (size_t p = 0; p < unmapPages; ++p) {
+                process->pageDirectory.unmap(unmapStart);
+                unmapStart += PAGE_SIZE;
+            }
         }
     }
 }
@@ -227,33 +227,18 @@ Mappings::OverlapType Mappings::_classifyOverlap(vaddr_t address, size_t pages, 
 ///////////////////
 
 ScopedMapping::ScopedMapping(Mappings& maps, vaddr_t address, size_t pages):
-    _maps(&maps),
+    _process(maps._process),
     _address(address),
     _pages(pages)
 {}
 
 ScopedMapping::~ScopedMapping() {
-    if (_maps)
-        _maps->erase(_address, _pages);
-}
-
-ScopedMapping::ScopedMapping(ScopedMapping&& other) noexcept {
-    *this = std::move(other);
-}
-
-ScopedMapping& ScopedMapping::operator=(ScopedMapping&& other) noexcept {
-    _maps = std::move(other._maps);
-    _address = std::move(other._address);
-    _pages = std::move(other._pages);
-    other._maps = nullptr;
-    other._pages = 0;
-
-    return *this;
+    if (_process)
+        _process->maps.erase(_address, _pages);
 }
 
 void ScopedMapping::release() noexcept {
-    _maps = nullptr;
-    _pages = 0;
+    _process.reset();
 }
 
 }

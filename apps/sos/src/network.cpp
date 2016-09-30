@@ -71,14 +71,14 @@ sos_map_device(void* /*cookie*/, uintptr_t addr, size_t size, int cached, ps_mem
             .locked = true,
             .notCacheable = !cached
         };
-        auto map = process::getSosProcess().maps.insert(
+        auto map = process::getSosProcess()->maps.insert(
             0, memory::numPages(size),
             attributes,
             memory::Mapping::Flags{.shared = false}
         );
 
         for (size_t offset = 0; offset < size; offset += PAGE_SIZE) {
-            process::getSosProcess().pageDirectory.map(
+            process::getSosProcess()->pageDirectory.map(
                 memory::FrameTable::alloc(addr + offset), map.getAddress() + offset,
                 attributes
             );
@@ -94,7 +94,7 @@ sos_map_device(void* /*cookie*/, uintptr_t addr, size_t size, int cached, ps_mem
 
 static void
 sos_unmap_device(void* /*cookie*/, void* addr, size_t size) {
-    process::getSosProcess().maps.erase(reinterpret_cast<memory::vaddr_t>(addr), memory::numPages(size));
+    process::getSosProcess()->maps.erase(reinterpret_cast<memory::vaddr_t>(addr), memory::numPages(size));
 }
 
 extern "C"

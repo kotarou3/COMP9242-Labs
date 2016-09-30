@@ -15,7 +15,7 @@ extern "C" {
 namespace memory {
 
 Swap::Swap():
-    _bufferMapping(process::getSosProcess().maps.insert(
+    _bufferMapping(process::getSosProcess()->maps.insert(
         0, 1,
         Attributes{
             .read = true,
@@ -56,7 +56,7 @@ async::future<void> Swap::swapOut(FrameTable::Frame& frame) {
     Attributes attributes = {0};
     attributes.read = true;
     attributes.locked = true;
-    process::getSosProcess().pageDirectory.map(
+    process::getSosProcess()->pageDirectory.map(
         frame._pages->copy(),
         _bufferMapping.getAddress(),
         attributes
@@ -68,7 +68,7 @@ async::future<void> Swap::swapOut(FrameTable::Frame& frame) {
         return _store->write(_bufferIoVectors, id * PAGE_SIZE).then([=, &frame](auto written) {
             _isSwapping = false;
 
-            process::getSosProcess().pageDirectory.unmap(_bufferMapping.getAddress());
+            process::getSosProcess()->pageDirectory.unmap(_bufferMapping.getAddress());
 
             try {
                 if (static_cast<size_t>(written.get()) != PAGE_SIZE)
@@ -94,7 +94,7 @@ async::future<void> Swap::swapOut(FrameTable::Frame& frame) {
     } catch (...) {
         _isSwapping = false;
 
-        process::getSosProcess().pageDirectory.unmap(_bufferMapping.getAddress());
+        process::getSosProcess()->pageDirectory.unmap(_bufferMapping.getAddress());
         _free(id);
 
         throw;
@@ -122,7 +122,7 @@ async::future<void> Swap::swapIn(Page& page) {
         attributes.read = true;
         attributes.write = true;
         attributes.locked = true;
-        process::getSosProcess().pageDirectory.map(
+        process::getSosProcess()->pageDirectory.map(
             std::move(_bufferPage),
             _bufferMapping.getAddress(),
             attributes
@@ -159,7 +159,7 @@ async::future<void> Swap::swapIn(Page& page) {
                             page->_swapId = id;
                         }
 
-                        process::getSosProcess().pageDirectory.unmap(_bufferMapping.getAddress());
+                        process::getSosProcess()->pageDirectory.unmap(_bufferMapping.getAddress());
                         throw std::system_error(ENOMEM, std::system_category(), "Failed to copy page cap");
                     }
                     assert(page->_resident.cap != 0);
@@ -177,7 +177,7 @@ async::future<void> Swap::swapIn(Page& page) {
                     0, PAGE_SIZE
                 ) == seL4_NoError);
 
-                process::getSosProcess().pageDirectory.unmap(_bufferMapping.getAddress());
+                process::getSosProcess()->pageDirectory.unmap(_bufferMapping.getAddress());
                 this->_free(id);
             });
     });

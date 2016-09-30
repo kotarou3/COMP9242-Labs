@@ -15,7 +15,7 @@
 namespace syscall {
 
 namespace {
-    async::future<ssize_t> _preadwritev2(bool isWrite, process::Process& process, int fd, const std::vector<fs::IoVector>& iov, off64_t offset) {
+    async::future<ssize_t> _preadwritev2(bool isWrite, std::weak_ptr<process::Process> process, int fd, const std::vector<fs::IoVector>& iov, off64_t offset) {
         if (iov.size() == 0)
             return async::make_ready_future(0);
 
@@ -24,18 +24,18 @@ namespace {
             .write = isWrite
         };
 
-        auto file = process.fdTable.get(fd, flags);
+        auto file = std::shared_ptr<process::Process>(process)->fdTable.get(fd, flags);
         if (isWrite)
             return file->write(iov, offset);
         else
             return file->read(iov, offset);
     }
 
-    async::future<std::vector<fs::IoVector>> _getIovs(process::Process& process, memory::vaddr_t iov, size_t iovcnt) {
+    async::future<std::vector<fs::IoVector>> _getIovs(std::weak_ptr<process::Process> process, memory::vaddr_t iov, size_t iovcnt) {
         if (iovcnt > IOV_MAX)
             throw std::invalid_argument("Too many IO vectors");
 
-        return memory::UserMemory(process, iov).get<iovec>(iovcnt).then([&process, iovcnt](auto iov) {
+        return memory::UserMemory(process, iov).get<iovec>(iovcnt).then([process, iovcnt](auto iov) {
             auto _iov = iov.get();
 
             std::vector<fs::IoVector> result;
@@ -60,13 +60,13 @@ namespace {
         });
     }
 
-    async::future<ssize_t> _preadwritev(bool isWrite, process::Process& process, int fd, memory::vaddr_t iov, size_t iovcnt, off64_t offset) {
-        return _getIovs(process, iov, iovcnt).then([=, &process](auto iov) {
+    async::future<ssize_t> _preadwritev(bool isWrite, std::weak_ptr<process::Process> process, int fd, memory::vaddr_t iov, size_t iovcnt, off64_t offset) {
+        return _getIovs(process, iov, iovcnt).then([=](auto iov) {
             return _preadwritev2(isWrite, process, fd, iov.get(), offset);
         });
     }
 
-    async::future<ssize_t> _preadwrite(bool isWrite, process::Process& process, int fd, memory::vaddr_t buf, size_t count, off64_t offset) {
+    async::future<ssize_t> _preadwrite(bool isWrite, std::weak_ptr<process::Process> process, int fd, memory::vaddr_t buf, size_t count, off64_t offset) {
         return _preadwritev2(
             isWrite, process, fd,
             std::vector<fs::IoVector>{fs::IoVector{
@@ -78,10 +78,10 @@ namespace {
     }
 }
 
-async::future<int> stat64(process::Process& process, memory::vaddr_t pathname, memory::vaddr_t buf) {
+async::future<int> stat64(std::weak_ptr<process::Process> process, memory::vaddr_t pathname, memory::vaddr_t buf) {
     return memory::UserMemory(process, pathname).readString().then([](auto pathname) {
         return fs::rootFileSystem->stat(pathname.get());
-    }).unwrap().then([&process, buf](auto stat) mutable {
+    }).unwrap().then([process, buf](auto stat) mutable {
         return memory::UserMemory(process, buf).set(stat.get());
     }).unwrap().then([](async::future<void> result) {
         result.get();
@@ -89,7 +89,7 @@ async::future<int> stat64(process::Process& process, memory::vaddr_t pathname, m
     });
 }
 
-async::future<int> open(process::Process& process, memory::vaddr_t pathname, int flags, mode_t mode) {
+async::future<int> open(std::weak_ptr<process::Process> process, memory::vaddr_t pathname, int flags, mode_t mode) {
     fs::FileSystem::OpenFlags openFlags = {0};
     int access = flags & O_ACCMODE;
     if (access == O_RDONLY) {
@@ -119,7 +119,7 @@ async::future<int> open(process::Process& process, memory::vaddr_t pathname, int
 
     return memory::UserMemory(process, pathname).readString().then([openFlags](auto pathname) {
         return fs::rootFileSystem->open(pathname.get(), openFlags);
-    }).unwrap().then([flags, openFlags, &process](auto file) {
+    }).unwrap().then([flags, openFlags, process](auto file) {
         auto _file = file.get();
 
         if (std::dynamic_pointer_cast<fs::Directory>(_file)) {
@@ -130,59 +130,59 @@ async::future<int> open(process::Process& process, memory::vaddr_t pathname, int
                 throw std::system_error(ENOTDIR, std::system_category(), "O_DIRECTORY set but file isn't a directory");
         }
 
-        return process.fdTable.insert(std::make_shared<fs::OpenFile>(
+        return std::shared_ptr<process::Process>(process)->fdTable.insert(std::make_shared<fs::OpenFile>(
             _file,
             fs::OpenFile::Flags{.read = openFlags.read, .write = openFlags.write}
         ));
     });
 }
 
-async::future<int> close(process::Process& process, int fd) {
-    if (process.fdTable.erase(fd))
+async::future<int> close(std::weak_ptr<process::Process> process, int fd) {
+    if (std::shared_ptr<process::Process>(process)->fdTable.erase(fd))
         return async::make_ready_future(0);
 
     throw std::system_error(EBADF, std::system_category());
 }
 
-async::future<int> read(process::Process& process, int fd, memory::vaddr_t buf, size_t count) {
+async::future<int> read(std::weak_ptr<process::Process> process, int fd, memory::vaddr_t buf, size_t count) {
     return _preadwrite(false, process, fd, buf, count, fs::CURRENT_OFFSET);
 }
-async::future<int> readv(process::Process& process, int fd, memory::vaddr_t iov, size_t iovcnt) {
+async::future<int> readv(std::weak_ptr<process::Process> process, int fd, memory::vaddr_t iov, size_t iovcnt) {
     return _preadwritev(false, process, fd, iov, iovcnt, fs::CURRENT_OFFSET);
 }
-async::future<int> pread(process::Process& process, int fd, memory::vaddr_t buf, size_t count, off64_t offset) {
+async::future<int> pread(std::weak_ptr<process::Process> process, int fd, memory::vaddr_t buf, size_t count, off64_t offset) {
     if (offset < 0)
         throw std::invalid_argument("Invalid offset");
     return _preadwrite(false, process, fd, buf, count, offset);
 }
-async::future<int> preadv(process::Process& process, int fd, memory::vaddr_t iov, size_t iovcnt, off64_t offset) {
+async::future<int> preadv(std::weak_ptr<process::Process> process, int fd, memory::vaddr_t iov, size_t iovcnt, off64_t offset) {
     if (offset < 0)
         throw std::invalid_argument("Invalid offset");
     return _preadwritev(false, process, fd, iov, iovcnt, offset);
 }
 
-async::future<int> write(process::Process& process, int fd, memory::vaddr_t buf, size_t count) {
+async::future<int> write(std::weak_ptr<process::Process> process, int fd, memory::vaddr_t buf, size_t count) {
     return _preadwrite(true, process, fd, buf, count, fs::CURRENT_OFFSET);
 }
-async::future<int> writev(process::Process& process, int fd, memory::vaddr_t iov, size_t iovcnt) {
+async::future<int> writev(std::weak_ptr<process::Process> process, int fd, memory::vaddr_t iov, size_t iovcnt) {
     return _preadwritev(true, process, fd, iov, iovcnt, fs::CURRENT_OFFSET);
 }
-async::future<int> pwrite(process::Process& process, int fd, memory::vaddr_t buf, size_t count, off64_t offset) {
+async::future<int> pwrite(std::weak_ptr<process::Process> process, int fd, memory::vaddr_t buf, size_t count, off64_t offset) {
     if (offset < 0)
         throw std::invalid_argument("Invalid offset");
     return _preadwrite(true, process, fd, buf, count, offset);
 }
-async::future<int> pwritev(process::Process& process, int fd, memory::vaddr_t iov, size_t iovcnt, off64_t offset) {
+async::future<int> pwritev(std::weak_ptr<process::Process> process, int fd, memory::vaddr_t iov, size_t iovcnt, off64_t offset) {
     if (offset < 0)
         throw std::invalid_argument("Invalid offset");
     return _preadwritev(true, process, fd, iov, iovcnt, offset);
 }
 
-async::future<int> getdents64(process::Process& process, int fd, memory::vaddr_t dirp, size_t count) {
+async::future<int> getdents64(std::weak_ptr<process::Process> process, int fd, memory::vaddr_t dirp, size_t count) {
     if (dirp & ~-alignof(dirent))
         throw std::system_error(EFAULT, std::system_category(), "Result buffer isn't aligned");
 
-    auto file = process.fdTable.get(fd, fs::OpenFile::Flags{});
+    auto file = std::shared_ptr<process::Process>(process)->fdTable.get(fd, fs::OpenFile::Flags{});
     auto directory = std::dynamic_pointer_cast<fs::Directory>(file);
     if (!directory)
         throw std::system_error(ENOTDIR, std::system_category());
@@ -190,8 +190,8 @@ async::future<int> getdents64(process::Process& process, int fd, memory::vaddr_t
     return directory->getdents(memory::UserMemory(process, dirp), count);
 }
 
-async::future<int> fcntl64(process::Process& process, int fd, int cmd, int arg) {
-    process.fdTable.get(fd, fs::OpenFile::Flags{});
+async::future<int> fcntl64(std::weak_ptr<process::Process> process, int fd, int cmd, int arg) {
+    std::shared_ptr<process::Process>(process)->fdTable.get(fd, fs::OpenFile::Flags{});
 
     if (cmd == F_SETFD && arg == FD_CLOEXEC)
         return async::make_ready_future(0); // XXX: Ignore for now
@@ -199,8 +199,10 @@ async::future<int> fcntl64(process::Process& process, int fd, int cmd, int arg) 
     throw std::system_error(ENOSYS, std::system_category());
 }
 
-async::future<int> ioctl(process::Process& process, int fd, size_t request, memory::vaddr_t argp) {
-    return process.fdTable.get(fd, fs::OpenFile::Flags{})->ioctl(request, memory::UserMemory(process, argp));
+async::future<int> ioctl(std::weak_ptr<process::Process> process, int fd, size_t request, memory::vaddr_t argp) {
+    return std::shared_ptr<process::Process>(process)->
+        fdTable.get(fd, fs::OpenFile::Flags{})->
+            ioctl(request, memory::UserMemory(process, argp));
 }
 
 }

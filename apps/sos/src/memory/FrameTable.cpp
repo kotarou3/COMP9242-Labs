@@ -130,7 +130,7 @@ void init(paddr_t start, paddr_t end) {
         .execute = false,
         .locked = true
     };
-    auto tableMap = process::getSosProcess().maps.insert(
+    auto tableMap = process::getSosProcess()->maps.insert(
         0, _frameTablePages,
         attributes,
         Mapping::Flags{.shared = false}
@@ -144,7 +144,7 @@ void init(paddr_t start, paddr_t end) {
         paddr_t phys = ut_alloc(seL4_PageBits);
         vaddr_t virt = tableMap.getAddress() + (p * PAGE_SIZE);
 
-        process::getSosProcess().pageDirectory.map(Page(phys), virt, attributes);
+        process::getSosProcess()->pageDirectory.map(Page(phys), virt, attributes);
 
         frameTableAddresses.push_back(std::make_pair(phys, virt));
     }
@@ -155,7 +155,7 @@ void init(paddr_t start, paddr_t end) {
 
     // Connect the frame table frames to the pages
     for (const auto& pair : frameTableAddresses) {
-        Page& page = const_cast<Page&>(process::getSosProcess().pageDirectory.lookup(pair.second)->_page);
+        Page& page = const_cast<Page&>(process::getSosProcess()->pageDirectory.lookup(pair.second)->_page);
         Frame& frame = _getFrame(pair.first);
 
         assert(page._status == Page::Status::LOCKED);

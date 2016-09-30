@@ -18,12 +18,12 @@ namespace syscall {
 
 namespace {
     using ThreadSyscall = async::future<int> (*)(
-        process::Thread&,
+        std::weak_ptr<process::Thread>,
         seL4_Word, seL4_Word, seL4_Word, seL4_Word,
         seL4_Word, seL4_Word, seL4_Word, seL4_Word
     );
     using ProcessSyscall = async::future<int> (*)(
-        process::Process&,
+        std::weak_ptr<process::Process>,
         seL4_Word, seL4_Word, seL4_Word, seL4_Word,
         seL4_Word, seL4_Word, seL4_Word, seL4_Word
     );
@@ -71,7 +71,7 @@ namespace {
     }
 }
 
-async::future<int> handle(process::Thread& thread, long number, size_t argc, seL4_Word* argv) {
+async::future<int> handle(std::weak_ptr<process::Thread> thread, long number, size_t argc, seL4_Word* argv) {
     if (_getThreadSyscall(number)) {
         seL4_Word args[8] = {0};
         std::copy(argv, argv + std::min(argc, 8U), args);
@@ -82,11 +82,11 @@ async::future<int> handle(process::Thread& thread, long number, size_t argc, seL
             args[4], args[5], args[6], args[7]
         );
     } else {
-        return handle(thread.getProcess(), number, argc, argv);
+        return handle(std::shared_ptr<process::Thread>(thread)->getProcess(), number, argc, argv);
     }
 }
 
-async::future<int> handle(process::Process& process, long number, size_t argc, seL4_Word* argv) {
+async::future<int> handle(std::weak_ptr<process::Process> process, long number, size_t argc, seL4_Word* argv) {
     if (_getProcessSyscall(number)) {
         seL4_Word args[8] = {0};
         std::copy(argv, argv + std::min(argc, 8U), args);
@@ -106,6 +106,9 @@ int exceptionToErrno(std::exception_ptr e) noexcept {
         std::rethrow_exception(e);
     } catch (const std::bad_alloc& e) {
         kprintf(LOGLEVEL_DEBUG, "Got std::bad_alloc: %s\n", e.what());
+        return ENOMEM;
+    } catch (const std::bad_weak_ptr& e) {
+        kprintf(LOGLEVEL_DEBUG, "Got std::bad_weak_ptr: %s (Process probably got killed while executing a syscall)\n", e.what());
         return ENOMEM;
     } catch (const std::invalid_argument& e) {
         kprintf(LOGLEVEL_DEBUG, "Got std::invalid_argument: %s\n", e.what());

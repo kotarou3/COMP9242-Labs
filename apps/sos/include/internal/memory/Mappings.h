@@ -2,9 +2,15 @@
 
 #include <functional>
 #include <map>
+#include <memory>
 #include <vector>
 
 #include "internal/memory/PageDirectory.h"
+
+namespace process {
+    class Process;
+    std::shared_ptr<Process> getSosProcess() noexcept;
+}
 
 namespace memory {
 
@@ -24,8 +30,6 @@ class ScopedMapping;
 
 class Mappings {
     public:
-        Mappings(const std::function<void (vaddr_t)>& unmapPagesCallback);
-
         Mappings(const Mappings&) = delete;
         Mappings& operator=(const Mappings&) = delete;
 
@@ -35,6 +39,8 @@ class Mappings {
         const Mapping& lookup(vaddr_t address) const;
 
     private:
+        Mappings() = default;
+
         static bool _isOverflowing(vaddr_t address, size_t pages) noexcept;
         static void _checkAddress(vaddr_t address, size_t pages);
 
@@ -45,9 +51,14 @@ class Mappings {
         enum class OverlapType { None, Complete, Start, Middle, End };
         static OverlapType _classifyOverlap(vaddr_t address, size_t pages, const Mapping& map) noexcept;
 
-        std::function<void (vaddr_t)> _unmapPageCallback;
+        std::weak_ptr<process::Process> _process;
 
         std::map<vaddr_t, Mapping> _maps;
+
+        friend class ScopedMapping;
+
+        friend class process::Process;
+        friend std::shared_ptr<process::Process> process::getSosProcess() noexcept;
 };
 
 class ScopedMapping {
@@ -59,8 +70,8 @@ class ScopedMapping {
         ScopedMapping(const ScopedMapping&) = delete;
         ScopedMapping& operator=(const ScopedMapping&) = delete;
 
-        ScopedMapping(ScopedMapping&& other) noexcept;
-        ScopedMapping& operator=(ScopedMapping&& other) noexcept;
+        ScopedMapping(ScopedMapping&& other) = default;
+        ScopedMapping& operator=(ScopedMapping&& other) = default;
 
         void release() noexcept;
 
@@ -71,7 +82,7 @@ class ScopedMapping {
         vaddr_t getEnd() const noexcept {return _address + _pages * PAGE_SIZE;};
 
     private:
-        Mappings* _maps;
+        std::shared_ptr<process::Process> _process;
         vaddr_t _address;
         size_t _pages;
 };

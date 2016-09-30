@@ -69,7 +69,7 @@ constexpr size_t SWAP_SIZE = memory::pageAlign(static_cast<size_t>(std::numeric_
  * of an archive of attached applications.                */
 extern char _cpio_archive[];
 
-std::unique_ptr<process::Thread> _tty_start_thread;
+std::shared_ptr<process::Thread> _tty_start_thread;
 
 seL4_CPtr _sos_ipc_ep_cap;
 seL4_CPtr _sos_interrupt_ep_cap;
@@ -135,7 +135,7 @@ static void print_bootinfo(const seL4_BootInfo* info) {
 }
 
 void start_first_process(const char* app_name, seL4_CPtr fault_ep) try {
-    auto process = std::make_shared<process::Process>();
+    auto process = process::Process::create();
 
     /* open the console device */
     fs::rootFileSystem->open("console", fs::FileSystem::OpenFlags{.read = true, .write = true})
@@ -159,9 +159,9 @@ void start_first_process(const char* app_name, seL4_CPtr fault_ep) try {
             uint8_t* elf_base = (uint8_t*)cpio_get_file(_cpio_archive, app_name, &elf_size);
             conditional_panic(!elf_base, "Unable to locate cpio header");
 
-            return elf::load(*process, elf_base);
+            return elf::load(process, elf_base);
         }).unwrap().then([=](auto ep) {
-            _tty_start_thread = std::make_unique<process::Thread>(
+            _tty_start_thread = process::Thread::create(
                 process, fault_ep, TTY_EP_BADGE, ep.get()
             );
         });
@@ -244,9 +244,9 @@ static void _sos_init(seL4_CPtr* ipc_ep, seL4_CPtr* async_ep) try {
             .write = true
         }
     );
-    assert(process::getSosProcess().fdTable.insert(debugDevice) == STDIN_FILENO);
-    assert(process::getSosProcess().fdTable.insert(debugDevice) == STDOUT_FILENO);
-    assert(process::getSosProcess().fdTable.insert(debugDevice) == STDERR_FILENO);
+    assert(process::getSosProcess()->fdTable.insert(debugDevice) == STDIN_FILENO);
+    assert(process::getSosProcess()->fdTable.insert(debugDevice) == STDOUT_FILENO);
+    assert(process::getSosProcess()->fdTable.insert(debugDevice) == STDERR_FILENO);
 
     _sos_ipc_init(ipc_ep, async_ep);
 } catch (const std::exception& e) {

@@ -14,7 +14,7 @@ namespace memory {
 
 class UserMemory {
     public:
-        UserMemory(process::Process& process, vaddr_t address);
+        UserMemory(std::weak_ptr<process::Process> process, vaddr_t address);
 
         async::future<std::string> readString(bool bypassAttributes = false);
 
@@ -79,7 +79,7 @@ class UserMemory {
     private:
         async::future<std::pair<uint8_t*, ScopedMapping>> _mapIn(size_t bytes, Attributes attributes, bool bypassAttributes);
 
-        process::Process& _process;
+        std::weak_ptr<process::Process> _process;
         vaddr_t _address;
 };
 
