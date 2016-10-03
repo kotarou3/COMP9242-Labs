@@ -34,6 +34,13 @@ PageDirectory::~PageDirectory() {
         _cap.release();
 }
 
+size_t PageDirectory::countPages() const noexcept {
+    size_t pages = 0;
+    for (const auto& table : _tables)
+        pages += table.second.countPages();
+    return pages;
+}
+
 void PageDirectory::reservePages(vaddr_t from, vaddr_t to) {
     from = pageTableAlign(from);
     for (vaddr_t address = from; address < to; address += PAGE_TABLE_SIZE) {
@@ -143,6 +150,10 @@ PageTable::~PageTable() {
     // If we haven't been moved away, unmap the page table
     if (_cap)
         assert(seL4_ARM_PageTable_Unmap(_cap.get()) == seL4_NoError);
+}
+
+size_t PageTable::countPages() const noexcept {
+    return _pages.size();
 }
 
 void PageTable::reservePages() {

@@ -1,8 +1,11 @@
+#include <algorithm>
+#include <limits>
 #include <stdexcept>
 #include <system_error>
 
 extern "C" {
     #include <cpio/cpio.h>
+    #include <sos.h>
 
     #include "internal/sys/debug.h"
 }
@@ -120,8 +123,10 @@ async::future<pid_t> process_create(std::weak_ptr<process::Process> process, mem
     // exec-like in that fds are copied from parent to child
     auto newProcess = process::Process::create(std::shared_ptr<process::Process>(process));
     return memory::UserMemory(process, filename).readString().then([=](auto filename) {
+        newProcess->filename = std::move(filename.get());
+
         unsigned long elf_size;
-        uint8_t* elf_base = (uint8_t*)cpio_get_file(_cpio_archive, filename.get().c_str(), &elf_size);
+        uint8_t* elf_base = (uint8_t*)cpio_get_file(_cpio_archive, newProcess->filename.c_str(), &elf_size);
         if (!elf_base)
             throw std::system_error(ENOENT, std::system_category(), "Unable to locate cpio header");
 
@@ -149,11 +154,32 @@ async::future<pid_t> process_create(std::weak_ptr<process::Process> process, mem
 }
 
 async::future<int> sos_process_status(std::weak_ptr<process::Process> process, memory::vaddr_t processes, unsigned max) {
-    // TODO
-    (void)process;
-    (void)processes;
-    (void)max;
-    throw std::system_error(ENOSYS, std::system_category());
+    max = std::min(max, static_cast<unsigned>(std::numeric_limits<int>::max()));
+    return memory::UserMemory(process, processes)
+        .mapIn<sos_process_t>(max, memory::Attributes{.read = false, .write = true})
+        .then([=](auto map) {
+            auto _map = std::move(map.get());
+
+            size_t n = 0;
+            for (const auto& thread : process::ThreadTable::get()) {
+                if (n >= max)
+                    break;
+
+                // XXX: Assumes single-threaded processes and pid = tid
+                auto process = thread.second->getProcess();
+                if (process->isZombie())
+                    continue;
+
+                using namespace std::chrono;
+                _map.first[n].pid = thread.first;
+                _map.first[n].size = process->pageDirectory.countPages();
+                _map.first[n].stime = duration_cast<milliseconds>(thread.second->getStartTime().time_since_epoch()).count();
+                _map.first[n].command[process->filename.copy(_map.first[n].command, N_NAME - 1)] = 0;
+                ++n;
+            }
+
+            return static_cast<int>(n);
+        });
 }
 
 }

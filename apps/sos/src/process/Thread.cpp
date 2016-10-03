@@ -121,6 +121,9 @@ async::future<void> Thread::start(
 
         _status = Status::STARTED;
         _tid = tid;
+
+        _startTime = timer::getTimestamp();
+
         kprintf(LOGLEVEL_DEBUG, "<Process %p>::<Thread %p (%d)> Started\n", _process.get(), this, _tid);
     });
 }

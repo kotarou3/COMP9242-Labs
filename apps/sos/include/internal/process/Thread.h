@@ -12,6 +12,7 @@ extern "C" {
 #include "internal/fs/FileDescriptor.h"
 #include "internal/memory/Mappings.h"
 #include "internal/memory/PageDirectory.h"
+#include "internal/timer/timer.h"
 #include "internal/Capability.h"
 
 namespace process {
@@ -43,10 +44,13 @@ class Process : public std::enable_shared_from_this<Process> {
         async::future<void> pageFaultMultiple(memory::vaddr_t start, size_t pages, memory::Attributes attributes, std::shared_ptr<memory::ScopedMapping> map);
 
         pid_t getPid() const noexcept;
+        bool isZombie() const noexcept {return _isZombie;}
 
         memory::PageDirectory pageDirectory;
         memory::Mappings maps;
         fs::FDTable fdTable;
+
+        std::string filename;
 
         const bool isSosProcess;
 
@@ -101,6 +105,8 @@ class Thread : public std::enable_shared_from_this<Thread> {
         std::shared_ptr<Process> getProcess() noexcept {return _process;}
         seL4_TCB getCap() const noexcept {return _tcbCap.get();}
 
+        timer::Timestamp getStartTime() const noexcept {return _startTime;}
+
     private:
         explicit Thread(std::shared_ptr<Process> process);
 
@@ -115,6 +121,8 @@ class Thread : public std::enable_shared_from_this<Thread> {
 
         memory::ScopedMapping _stack;
         memory::ScopedMapping _ipcBuffer;
+
+        timer::Timestamp _startTime;
 };
 
 std::shared_ptr<Process> getSosProcess() noexcept;

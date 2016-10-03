@@ -47,6 +47,8 @@ class PageDirectory {
         PageDirectory(PageDirectory&&) = delete;
         PageDirectory& operator=(PageDirectory&&) = delete;
 
+        size_t countPages() const noexcept;
+
         void reservePages(vaddr_t from, vaddr_t to);
 
         // Warning: Returned MappedPage reference is invalidated after another mapping
@@ -80,6 +82,8 @@ class PageTable {
 
         PageTable(PageTable&& other) = default;
         PageTable& operator=(PageTable&& other) = default;
+
+        size_t countPages() const noexcept;
 
         void reservePages();
 

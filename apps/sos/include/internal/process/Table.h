@@ -29,6 +29,10 @@ class ThreadTable {
 
         std::shared_ptr<Thread> get(pid_t tid) const;
 
+        auto size() const {return _table.size();}
+        auto begin() const {return _table.begin();}
+        auto end() const {return _table.end();}
+
         static ThreadTable& get() noexcept;
 
     private:
