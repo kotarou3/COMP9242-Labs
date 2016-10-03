@@ -119,6 +119,10 @@ void PageDirectory::unmap(vaddr_t address) noexcept {
     table->second.unmap(address);
 }
 
+void PageDirectory::clear() noexcept {
+    _tables.clear();
+}
+
 const MappedPage* PageDirectory::lookup(vaddr_t address, bool noThrow) const {
     auto table = _tables.find(_toIndex(address));
     if (table == _tables.end()) {

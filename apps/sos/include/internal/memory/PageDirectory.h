@@ -58,6 +58,7 @@ class PageDirectory {
 
         const MappedPage& map(Page page, vaddr_t address, Attributes attributes);
         void unmap(vaddr_t address) noexcept;
+        void clear() noexcept;
 
         const MappedPage* lookup(vaddr_t address, bool noThrow = false) const;
 

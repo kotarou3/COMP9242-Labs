@@ -29,6 +29,7 @@ class FDTable {
     public:
         FileDescriptor insert(std::shared_ptr<OpenFile> file);
         bool erase(FileDescriptor fd) noexcept;
+        void clear() noexcept;
 
         std::shared_ptr<OpenFile> get(FileDescriptor fd) const;
         std::shared_ptr<File> get(FileDescriptor fd, OpenFile::Flags flags) const;

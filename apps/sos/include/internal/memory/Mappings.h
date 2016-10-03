@@ -35,6 +35,7 @@ class Mappings {
 
         ScopedMapping insert(vaddr_t address, size_t pages, Attributes attributes, Mapping::Flags flags);
         void erase(vaddr_t address, size_t pages);
+        void clear() noexcept;
 
         const Mapping& lookup(vaddr_t address) const;
 

@@ -53,6 +53,10 @@ bool FDTable::erase(FileDescriptor fd) noexcept {
     return _table.erase(fd);
 }
 
+void FDTable::clear() noexcept {
+    _table.clear();
+}
+
 std::shared_ptr<OpenFile> FDTable::get(FileDescriptor fd) const {
     try {
         return _table.at(fd);

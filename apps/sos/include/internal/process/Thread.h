@@ -59,6 +59,8 @@ class Process : public std::enable_shared_from_this<Process> {
         explicit Process(bool isSosProcess);
         friend std::shared_ptr<Process> getSosProcess() noexcept;
 
+        void _shrinkZombie() noexcept;
+
         bool _isZombie = false;
 
         std::weak_ptr<Process> _parent;

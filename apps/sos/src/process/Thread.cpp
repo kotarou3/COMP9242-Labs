@@ -182,8 +182,11 @@ void Thread::handleFault(const seL4_MessageInfo_t& message) noexcept {
             try {
                 auto result = _process->handlePageFault(address, faultType);
 
-                if (_status == Status::ZOMBIE)
+                if (_status == Status::ZOMBIE) {
+                    if (_process->_isZombie)
+                        _process->_shrinkZombie();
                     break;
+                }
 
                 if (result.is_ready()) {
                     result.get();
@@ -197,23 +200,29 @@ void Thread::handleFault(const seL4_MessageInfo_t& message) noexcept {
                     std::weak_ptr<Thread> thread = shared_from_this();
                     result.then([=](async::future<void> result) {
                         std::shared_ptr<Thread> _thread = thread.lock();
-                        if (_thread && _thread->_status != Status::ZOMBIE) try {
-                            result.get();
-                            seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 0);
-                            seL4_Send(replyCap, reply);
-                        } catch (const std::exception& e) {
-                            kprintf(LOGLEVEL_DEBUG, "Caught %s\n", e.what());
+                        if (_thread) {
+                            if (_thread->_status != Status::ZOMBIE) {
+                                try {
+                                    result.get();
+                                    seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 0);
+                                    seL4_Send(replyCap, reply);
+                                } catch (const std::exception& e) {
+                                    kprintf(LOGLEVEL_DEBUG, "Caught %s\n", e.what());
 
-                            kprintf(LOGLEVEL_NOTICE,
-                                "Segmentation fault at 0x%08x, pc = 0x%08x, %c%c%c\n",
-                                address, pc,
-                                faultType.read ? 'r' : '-',
-                                faultType.write ? 'w' : '-',
-                                faultType.execute ? 'x' : '-'
-                            );
+                                    kprintf(LOGLEVEL_NOTICE,
+                                        "Segmentation fault at 0x%08x, pc = 0x%08x, %c%c%c\n",
+                                        address, pc,
+                                        faultType.read ? 'r' : '-',
+                                        faultType.write ? 'w' : '-',
+                                        faultType.execute ? 'x' : '-'
+                                    );
 
-                            kprintf(LOGLEVEL_WARNING, "Would raise SIGSEGV, but not implemented yet - killing thread\n");
-                            _thread->kill();
+                                    kprintf(LOGLEVEL_WARNING, "Would raise SIGSEGV, but not implemented yet - killing thread\n");
+                                    _thread->kill();
+                                }
+                            } else if (_thread->_process->_isZombie) {
+                                _thread->_process->_shrinkZombie();
+                            }
                         }
 
                         assert(cspace_free_slot(cur_cspace, replyCap) == CSPACE_NOERROR);
@@ -246,8 +255,11 @@ void Thread::handleFault(const seL4_MessageInfo_t& message) noexcept {
                     &seL4_GetIPCBuffer()->msg[1]
                 );
 
-                if (_status == Status::ZOMBIE)
+                if (_status == Status::ZOMBIE) {
+                    if (_process->_isZombie)
+                        _process->_shrinkZombie();
                     break;
+                }
 
                 if (result.is_ready()) {
                     seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
@@ -265,14 +277,18 @@ void Thread::handleFault(const seL4_MessageInfo_t& message) noexcept {
                     std::weak_ptr<Thread> thread = shared_from_this();
                     result.then([replyCap, thread](async::future<int> result) {
                         std::shared_ptr<Thread> _thread = thread.lock();
-                        if (_thread && _thread->_status != Status::ZOMBIE) {
-                            seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
-                            try {
-                                seL4_SetMR(0, result.get());
-                            } catch (...) {
-                                seL4_SetMR(0, -syscall::exceptionToErrno(std::current_exception()));
+                        if (_thread) {
+                            if (_thread->_status != Status::ZOMBIE) {
+                                seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
+                                try {
+                                    seL4_SetMR(0, result.get());
+                                } catch (...) {
+                                    seL4_SetMR(0, -syscall::exceptionToErrno(std::current_exception()));
+                                }
+                                seL4_Send(replyCap, reply);
+                            } else if (_thread->_process->_isZombie) {
+                                _thread->_process->_shrinkZombie();
                             }
-                            seL4_Send(replyCap, reply);
                         }
 
                         assert(cspace_free_slot(cur_cspace, replyCap) == CSPACE_NOERROR);
@@ -437,6 +453,14 @@ pid_t Process::getPid() const noexcept {
 
     assert(thread);
     return thread->getTid();
+}
+
+void Process::_shrinkZombie() noexcept {
+    assert(_isZombie);
+
+    fdTable.clear();
+    maps.clear();
+    pageDirectory.clear();
 }
 
 std::shared_ptr<Process> getSosProcess() noexcept {

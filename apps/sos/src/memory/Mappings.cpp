@@ -140,6 +140,11 @@ void Mappings::erase(vaddr_t address, size_t pages) {
     }
 }
 
+void Mappings::clear() noexcept {
+    erase(0, numPages(MMAP_STACK_END));
+    _maps.clear();
+}
+
 const Mapping& Mappings::lookup(vaddr_t address) const {
     _checkAddress(address, 1);
 
