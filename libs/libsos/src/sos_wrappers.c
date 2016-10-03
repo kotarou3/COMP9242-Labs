@@ -1,18 +1,29 @@
 #include <sys/stat.h>
+#include <sys/wait.h>
+#include <assert.h>
 #include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <math.h>
+#include <signal.h>
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
 
 #include "sos.h"
 
-static int _unimplemented(void) {
-    fprintf(stderr, "system call not implemented\n");
-    errno = ENOSYS;
-    return -1;
+__attribute__((__constructor__))
+static void open_console(void) {
+    // The spec is very picky in what is open at process start
+    close(STDIN_FILENO);
+    close(STDOUT_FILENO);
+    close(STDERR_FILENO);
+
+    // XXX: dup2() not implemented, so this will have to do
+    assert(open("console", O_RDONLY) == STDIN_FILENO);
+    assert(open("console", O_WRONLY) == STDOUT_FILENO);
+    assert(open("console", O_WRONLY) == STDERR_FILENO);
+    close(STDIN_FILENO);
 }
 
 static long posix_to_sos_time(struct timespec time) {
@@ -105,13 +116,23 @@ int sos_stat(const char *path, sos_stat_t *buf) {
 }
 
 pid_t sos_process_create(const char *path) {
-    (void)path;
-    return _unimplemented();
+    seL4_SetMR(0, SYS_process_create);
+    seL4_SetMR(1, (seL4_Word)path);
+
+    seL4_MessageInfo_t req = seL4_MessageInfo_new(seL4_NoFault, 0, 0, 2);
+    seL4_Call(SOS_IPC_EP_CAP, req);
+
+    pid_t pid = (pid_t)seL4_GetMR(0);
+    if (pid < 0) {
+        errno = -pid;
+        return -1;
+    } else {
+        return pid;
+    }
 }
 
 int sos_process_delete(pid_t pid) {
-    (void)pid;
-    return _unimplemented();
+    return kill(pid, SIGKILL);
 }
 
 pid_t sos_my_id(void) {
@@ -119,14 +140,24 @@ pid_t sos_my_id(void) {
 }
 
 int sos_process_status(sos_process_t *processes, unsigned max) {
-    (void)processes;
-    (void)max;
-    return _unimplemented();
+    seL4_SetMR(0, SYS_sos_process_status);
+    seL4_SetMR(1, (seL4_Word)processes);
+    seL4_SetMR(2, (seL4_Word)max);
+
+    seL4_MessageInfo_t req = seL4_MessageInfo_new(seL4_NoFault, 0, 0, 3);
+    seL4_Call(SOS_IPC_EP_CAP, req);
+
+    int result = (int)seL4_GetMR(0);
+    if (result < 0) {
+        errno = -result;
+        return -1;
+    } else {
+        return result;
+    }
 }
 
 pid_t sos_process_wait(pid_t pid) {
-    (void)pid;
-    return _unimplemented();
+    return waitpid(pid, NULL, 0);
 }
 
 int64_t sos_sys_time_stamp(void) {
@@ -148,5 +179,8 @@ int sos_share_vm(void *adr, size_t size, int writable) {
     (void)adr;
     (void)size;
     (void)writable;
-    return _unimplemented();
+
+    fprintf(stderr, "system call not implemented\n");
+    errno = ENOSYS;
+    return -1;
 }

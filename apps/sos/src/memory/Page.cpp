@@ -12,6 +12,13 @@ extern "C" {
 
 namespace memory {
 
+Page::Page():
+    _status(Status::INVALID),
+    _resident({.cap = 0, .frame = nullptr}),
+    _prev(nullptr),
+    _next(nullptr)
+{}
+
 Page::Page(FrameTable::Frame& frame):
     Page(frame.getAddress())
 {
@@ -20,10 +27,7 @@ Page::Page(FrameTable::Frame& frame):
 }
 
 Page::Page(paddr_t address):
-    _status(Status::INVALID),
-    _resident({.cap = 0, .frame = nullptr}),
-    _prev(nullptr),
-    _next(nullptr)
+    Page()
 {
     int err = cspace_ut_retype_addr(
         address,
@@ -95,11 +99,16 @@ Page::Page(const Page& other):
     }
 }
 
-Page::Page(Page&& other) noexcept {
+Page::Page(Page&& other) noexcept:
+    Page()
+{
     *this = std::move(other);
 }
 
 Page& Page::operator=(Page&& other) noexcept {
+    // XXX: Only supported for moving to an invalid Page
+    assert(_status == Status::INVALID);
+
     _status = std::move(other._status);
     _prev = std::move(other._prev);
     _next = std::move(other._next);

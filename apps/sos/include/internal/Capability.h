@@ -35,10 +35,7 @@ class Capability {
         Capability(seL4_Word memory, seL4_CPtr cap): _memory(memory), _cap(cap) {}
 
         ~Capability() {
-            if (_cap != 0)
-                assert(cspace_delete_cap(cur_cspace, _cap) == CSPACE_NOERROR);
-            if (_memory != 0)
-                ut_free(_memory, SizeBits);
+            reset();
         }
 
         Capability(const Capability&) = delete;
@@ -64,6 +61,15 @@ class Capability {
             _memory = 0;
             _cap = 0;
             return result;
+        }
+
+        void reset() noexcept {
+            if (_cap != 0)
+                assert(cspace_delete_cap(cur_cspace, _cap) == CSPACE_NOERROR);
+            if (_memory != 0)
+                ut_free(_memory, SizeBits);
+            _cap = 0;
+            _memory = 0;
         }
 
     private:

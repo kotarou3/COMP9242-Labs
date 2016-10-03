@@ -12,6 +12,7 @@ using SwapId = size_t;
 
 class Page {
     public:
+        Page();
         ~Page();
 
         Page(Page&& other) noexcept;

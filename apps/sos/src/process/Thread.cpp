@@ -1,4 +1,5 @@
 #include <string>
+#include <stdexcept>
 #include <system_error>
 
 #include <assert.h>
@@ -15,6 +16,7 @@ extern "C" {
 #include "internal/memory/layout.h"
 #include "internal/process/Thread.h"
 #include "internal/syscall/syscall.h"
+#include "internal/process/Table.h"
 
 namespace process {
 
@@ -22,8 +24,10 @@ namespace process {
 // Thread //
 ////////////
 
-Thread::Thread(std::shared_ptr<Process> process, seL4_CPtr faultEndpoint, seL4_Word faultEndpointBadge, memory::vaddr_t entryPoint):
+Thread::Thread(std::shared_ptr<Process> process):
+    _status(Status::CREATED),
     _process(process),
+    _faultEndpoint(0),
     _stack(_process->maps.insert(
         0, memory::STACK_PAGES,
         memory::Attributes{.read = true, .write = true},
@@ -40,7 +44,38 @@ Thread::Thread(std::shared_ptr<Process> process, seL4_CPtr faultEndpoint, seL4_W
         memory::Mapping::Flags{.shared = false}
     ))
 {
-    auto page = _process->pageDirectory.allocateAndMap(
+    kprintf(LOGLEVEL_DEBUG, "<Process %p>::<Thread %p> Created\n", process.get(), this);
+}
+
+Thread::~Thread() {
+    // Free the fault endpoint if valid
+    if (_status == Status::STARTED)
+        assert(cspace_delete_cap(_process->_cspace.get(), _faultEndpoint) == CSPACE_NOERROR);
+
+    // C++17: _process->_threads.erase(weak_from_this());
+    for (auto thread = _process->_threads.begin(); thread != _process->_threads.end(); ++thread) {
+        if (thread->expired()) {
+            _process->_threads.erase(thread);
+            break;
+        }
+    }
+
+    if (_status == Status::CREATED)
+        kprintf(LOGLEVEL_DEBUG, "<Process %p>::<Thread %p> Destroyed\n", _process.get(), this);
+    else
+        kprintf(LOGLEVEL_DEBUG, "<Process %p>::<Thread %p (%d)> Destroyed\n", _process.get(), this, _tid);
+}
+
+async::future<void> Thread::start(
+    pid_t tid,
+    const Capability<seL4_EndpointObject, seL4_EndpointBits>& faultEndpoint,
+    seL4_Word faultEndpointBadge,
+    memory::vaddr_t entryPoint
+) {
+    if (_status != Status::CREATED)
+        throw std::logic_error("Thread already started once");
+
+    return _process->pageDirectory.allocateAndMap(
         _ipcBuffer.getAddress(),
         memory::Attributes{
             .read = true,
@@ -48,48 +83,69 @@ Thread::Thread(std::shared_ptr<Process> process, seL4_CPtr faultEndpoint, seL4_W
             .execute = false,
             .locked = true
         }
-    );
-    assert(page.is_ready()); // TODO: Fix this
-    const memory::MappedPage& ipcBufferMappedPage = page.get();
+    ).then([=, &faultEndpoint](auto page) {
+        const memory::MappedPage& ipcBufferMappedPage = page.get();
 
-    // Copy the fault endpoint to the user app to allow IPC
-    _faultEndpoint = cspace_mint_cap(
-        _process->_cspace.get(), cur_cspace,
-        faultEndpoint, seL4_AllRights,
-        seL4_CapData_Badge_new(faultEndpointBadge)
-    );
-    if (_faultEndpoint == CSPACE_NULL)
-        throw std::system_error(ENOMEM, std::system_category(), "Failed to mint user fault endpoint");
-    assert(_faultEndpoint == SOS_IPC_EP_CAP);
+        // Copy the fault endpoint to the user app to allow IPC
+        _faultEndpoint = cspace_mint_cap(
+            _process->_cspace.get(), cur_cspace,
+            faultEndpoint.get(), seL4_AllRights,
+            seL4_CapData_Badge_new(faultEndpointBadge)
+        );
+        if (_faultEndpoint == CSPACE_NULL)
+            throw std::system_error(ENOMEM, std::system_category(), "Failed to mint user fault endpoint");
+        assert(_faultEndpoint == SOS_IPC_EP_CAP);
 
-    // Configure the TCB
-    int err = seL4_TCB_Configure(
-        _tcbCap.get(), _faultEndpoint, 0,
-        _process->_cspace->root_cnode, seL4_NilData,
-        _process->pageDirectory.getCap(), seL4_NilData,
-        ipcBufferMappedPage.getAddress(), ipcBufferMappedPage.getPage().getCap()
-    );
-    if (err != seL4_NoError) {
-        assert(cspace_delete_cap(_process->_cspace.get(), _faultEndpoint) == CSPACE_NOERROR);
-        throw std::system_error(ENOMEM, std::system_category(), "Failed to configure the TCB: " + std::to_string(err));
-    }
+        // Configure the TCB
+        int err = seL4_TCB_Configure(
+            _tcbCap.get(), _faultEndpoint, 0,
+            _process->_cspace->root_cnode, seL4_NilData,
+            _process->pageDirectory.getCap(), seL4_NilData,
+            ipcBufferMappedPage.getAddress(), ipcBufferMappedPage.getPage().getCap()
+        );
+        if (err != seL4_NoError) {
+            assert(cspace_delete_cap(_process->_cspace.get(), _faultEndpoint) == CSPACE_NOERROR);
+            throw std::system_error(ENOMEM, std::system_category(), "Failed to configure the TCB: " + std::to_string(err));
+        }
 
-    // Start the thread
-    seL4_UserContext context = {
-        .pc = entryPoint,
-        .sp = _stack.getEnd()
-    };
-    err = seL4_TCB_WriteRegisters(_tcbCap.get(), true, 0, 2, &context);
-    if (err != seL4_NoError) {
-        assert(cspace_delete_cap(_process->_cspace.get(), _faultEndpoint) == CSPACE_NOERROR);
-        throw std::system_error(ENOMEM, std::system_category(), "Failed to start the thread: " + std::to_string(err));
-    }
+        // Start the thread
+        seL4_UserContext context = {
+            .pc = entryPoint,
+            .sp = _stack.getEnd()
+        };
+        err = seL4_TCB_WriteRegisters(_tcbCap.get(), true, 0, 2, &context);
+        if (err != seL4_NoError) {
+            assert(cspace_delete_cap(_process->_cspace.get(), _faultEndpoint) == CSPACE_NOERROR);
+            throw std::system_error(ENOMEM, std::system_category(), "Failed to start the thread: " + std::to_string(err));
+        }
+
+        _status = Status::STARTED;
+        _tid = tid;
+        kprintf(LOGLEVEL_DEBUG, "<Process %p>::<Thread %p (%d)> Started\n", _process.get(), this, _tid);
+    });
 }
 
-Thread::~Thread() {
-    // If we haven't been moved away, free the fault endpoint
-    if (_tcbCap)
-        assert(cspace_delete_cap(_process->_cspace.get(), _faultEndpoint) == CSPACE_NOERROR);
+void Thread::kill() noexcept {
+    if (_status != Status::STARTED)
+        return;
+
+    _tcbCap.reset();
+    assert(cspace_delete_cap(_process->_cspace.get(), _faultEndpoint) == CSPACE_NOERROR);
+
+    _ipcBuffer.reset();
+    _stack.reset();
+
+    _status = Status::ZOMBIE;
+
+    // TODO: Only supports single-threaded processes
+    _process->_isZombie = true;
+    std::shared_ptr<Process> parent = _process->_parent.lock();
+    if (parent)
+        parent->emitChildExit(_process);
+    else
+        ThreadTable::get().erase(_process->getPid());
+
+    kprintf(LOGLEVEL_DEBUG, "<Process %p>::<Thread %p (%d)> Killed\n", _process.get(), this, _tid);
 }
 
 void Thread::handleFault(const seL4_MessageInfo_t& message) noexcept {
@@ -113,7 +169,8 @@ void Thread::handleFault(const seL4_MessageInfo_t& message) noexcept {
                 ((seL4_GetMR(3) & (1 << 10)) >> (10 - 4)) |
                 (seL4_GetMR(3) & 0b1111);
             if (status == 0b000001) {
-                kprintf(LOGLEVEL_WARNING, "Would raise SIGBUS, but not implemented yet - halting thread\n");
+                kprintf(LOGLEVEL_WARNING, "Would raise SIGBUS, but not implemented yet - killing thread\n");
+                kill();
                 break;
             } else if (status != 0b000101 && status != 0b000111) {
                 kprintf(LOGLEVEL_ERR, "Unknown status flag: %02x\n", status);
@@ -121,6 +178,10 @@ void Thread::handleFault(const seL4_MessageInfo_t& message) noexcept {
 
             try {
                 auto result = _process->handlePageFault(address, faultType);
+
+                if (_status == Status::ZOMBIE)
+                    break;
+
                 if (result.is_ready()) {
                     result.get();
                     seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 0);
@@ -130,13 +191,13 @@ void Thread::handleFault(const seL4_MessageInfo_t& message) noexcept {
                     if (replyCap == CSPACE_NULL)
                         throw std::system_error(ENOMEM, std::system_category(), "Failed to save reply cap");
 
+                    std::weak_ptr<Thread> thread = shared_from_this();
                     result.then([=](async::future<void> result) {
-                        try {
+                        std::shared_ptr<Thread> _thread = thread.lock();
+                        if (_thread && _thread->_status != Status::ZOMBIE) try {
                             result.get();
-
                             seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 0);
                             seL4_Send(replyCap, reply);
-                            assert(cspace_free_slot(cur_cspace, replyCap) == CSPACE_NOERROR);
                         } catch (const std::exception& e) {
                             kprintf(LOGLEVEL_DEBUG, "Caught %s\n", e.what());
 
@@ -148,10 +209,11 @@ void Thread::handleFault(const seL4_MessageInfo_t& message) noexcept {
                                 faultType.execute ? 'x' : '-'
                             );
 
-                            kprintf(LOGLEVEL_WARNING, "Would raise SIGSEGV, but not implemented yet - halting thread\n");
-
-                            assert(cspace_free_slot(cur_cspace, replyCap) == CSPACE_NOERROR);
+                            kprintf(LOGLEVEL_WARNING, "Would raise SIGSEGV, but not implemented yet - killing thread\n");
+                            _thread->kill();
                         }
+
+                        assert(cspace_free_slot(cur_cspace, replyCap) == CSPACE_NOERROR);
                     });
                 }
             } catch (const std::exception& e) {
@@ -165,7 +227,8 @@ void Thread::handleFault(const seL4_MessageInfo_t& message) noexcept {
                     faultType.execute ? 'x' : '-'
                 );
 
-                kprintf(LOGLEVEL_WARNING, "Would raise SIGSEGV, but not implemented yet - halting thread\n");
+                kprintf(LOGLEVEL_WARNING, "Would raise SIGSEGV, but not implemented yet - killing thread\n");
+                kill();
             }
 
             break;
@@ -179,6 +242,10 @@ void Thread::handleFault(const seL4_MessageInfo_t& message) noexcept {
                     seL4_MessageInfo_get_length(message) - 1,
                     &seL4_GetIPCBuffer()->msg[1]
                 );
+
+                if (_status == Status::ZOMBIE)
+                    break;
+
                 if (result.is_ready()) {
                     seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
                     seL4_SetMR(0, result.get());
@@ -192,14 +259,18 @@ void Thread::handleFault(const seL4_MessageInfo_t& message) noexcept {
                         break;
                     }
 
-                    result.then([replyCap](async::future<int> result) {
-                        seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
-                        try {
-                            seL4_SetMR(0, result.get());
-                        } catch (...) {
-                            seL4_SetMR(0, -syscall::exceptionToErrno(std::current_exception()));
+                    std::weak_ptr<Thread> thread = shared_from_this();
+                    result.then([replyCap, thread](async::future<int> result) {
+                        std::shared_ptr<Thread> _thread = thread.lock();
+                        if (_thread && _thread->_status != Status::ZOMBIE) {
+                            seL4_MessageInfo_t reply = seL4_MessageInfo_new(0, 0, 0, 1);
+                            try {
+                                seL4_SetMR(0, result.get());
+                            } catch (...) {
+                                seL4_SetMR(0, -syscall::exceptionToErrno(std::current_exception()));
+                            }
+                            seL4_Send(replyCap, reply);
                         }
-                        seL4_Send(replyCap, reply);
 
                         assert(cspace_free_slot(cur_cspace, replyCap) == CSPACE_NOERROR);
                     });
@@ -222,18 +293,23 @@ void Thread::handleFault(const seL4_MessageInfo_t& message) noexcept {
 // Process //
 /////////////
 
-Process::Process():
+Process::Process(std::shared_ptr<Process> parent):
     isSosProcess(false),
+    _parent(parent),
 
     // Create a simple 1 level CSpace
     _cspace(cspace_create(1), [](cspace_t* cspace) {assert(cspace_destroy(cspace) == CSPACE_NOERROR);})
 {
+    assert(parent);
+
     if (!_cspace)
         throw std::system_error(ENOMEM, std::system_category(), "Failed to create CSpace");
 
     // XXX: We shouldn't reserve pages, but currently our page table layout
     // requires this
     pageDirectory.reservePages(memory::MMAP_START, memory::MMAP_STACK_END);
+
+    kprintf(LOGLEVEL_DEBUG, "<Process %p> Created\n", this);
 }
 
 Process::Process(bool isSosProcess):
@@ -245,6 +321,62 @@ Process::Process(bool isSosProcess):
 
     // Make sure all of SOS's page tables are allocated
     pageDirectory.reservePages(memory::MMAP_START, memory::MMAP_END);
+}
+
+Process::~Process() {
+    // Clean up any zombie children
+    for (std::weak_ptr<Process> child : _children) {
+        std::shared_ptr<Process> _child = child.lock();
+        assert(_child);
+
+        if (_child->_isZombie)
+            ThreadTable::get().erase(_child->getPid());
+    }
+
+    auto parent = _parent.lock();
+    if (parent) {
+        // C++17: parent->_children.erase(weak_from_this());
+        for (auto child = parent->_children.begin(); child != parent->_children.end(); ++child) {
+            if (child->expired()) {
+                parent->_children.erase(child);
+                break;
+            }
+        }
+    }
+
+    kprintf(LOGLEVEL_DEBUG, "<Process %p> Destroyed\n", this);
+}
+
+void Process::onChildExit(const ChildExitCallback& callback) {
+    // First check for any zombie children
+    for (std::weak_ptr<Process> child : _children) {
+        std::shared_ptr<Process> _child = child.lock();
+        assert(_child);
+
+        if (_child->_isZombie && callback(_child)) {
+            ThreadTable::get().erase(_child->getPid());
+            assert(_children.erase(child));
+            return;
+        }
+    }
+
+    _childExitListeners.push_back(callback);
+}
+
+void Process::emitChildExit(std::shared_ptr<Process> process) noexcept {
+    assert(process->_isZombie);
+    assert(_children.count(process) > 0);
+
+    for (auto listener = _childExitListeners.begin(); listener != _childExitListeners.end(); ) {
+        if ((*listener)(process)) {
+            listener = _childExitListeners.erase(listener);
+
+            ThreadTable::get().erase(process->getPid());
+            _children.erase(process);
+        } else {
+            ++listener;
+        }
+    }
 }
 
 async::future<void> Process::handlePageFault(memory::vaddr_t address, memory::Attributes cause) {
@@ -290,6 +422,18 @@ async::future<void> Process::pageFaultMultiple(memory::vaddr_t start, size_t pag
     }
 
     return future;
+}
+
+pid_t Process::getPid() const noexcept {
+    if (isSosProcess)
+        return 0;
+
+    // TODO: Supports only single-threaded processes
+    assert(_threads.size() > 0);
+    auto thread = _threads.begin()->lock();
+
+    assert(thread);
+    return thread->getTid();
 }
 
 std::shared_ptr<Process> getSosProcess() noexcept {

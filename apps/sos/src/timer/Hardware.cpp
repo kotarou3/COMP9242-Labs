@@ -26,8 +26,9 @@ struct Hardware::Registers {
     uint32_t counter;
 };
 
-Hardware::Hardware(seL4_CPtr irqEndpoint):
-    _registers(GPT1_DEVICE_PADDR)
+Hardware::Hardware(Capability<seL4_AsyncEndpointObject, seL4_EndpointBits> irqEndpoint):
+    _registers(GPT1_DEVICE_PADDR),
+    _irqEndpoint(std::move(irqEndpoint))
 {
     // Set the timer to use the peripheral clock
     _registers->control = 0;
@@ -56,7 +57,7 @@ Hardware::Hardware(seL4_CPtr irqEndpoint):
     _irqCap = cspace_irq_control_get_cap(cur_cspace, seL4_CapIRQControl, GPT1_INTERRUPT);
     if (_irqCap == CSPACE_NULL)
         throw std::system_error(ENOMEM, std::system_category(), "Failed to get IRQ capability");
-    if (int err = seL4_IRQHandler_SetEndpoint(_irqCap, irqEndpoint)) {
+    if (int err = seL4_IRQHandler_SetEndpoint(_irqCap, _irqEndpoint.get())) {
         assert(cspace_delete_cap(cur_cspace, _irqCap) == CSPACE_NOERROR);
         throw std::system_error(ENOMEM, std::system_category(), "Failed to set IRQ endpoint: " + std::to_string(err));
     }

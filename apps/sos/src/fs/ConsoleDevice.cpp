@@ -5,6 +5,8 @@
 #include <utility>
 #include <vector>
 
+#include <boost/circular_buffer.hpp>
+
 #include <sys/ioctl.h>
 
 extern "C" {
@@ -17,14 +19,17 @@ extern "C" {
 namespace fs {
 
 namespace {
+    constexpr const size_t MIN_BUFFER_SIZE = 8192;
     constexpr const size_t MAX_BUFFER_SIZE = 1048576;
 
     serial* _serial;
 
-    std::deque<char> _readBuffer;
+    boost::circular_buffer_space_optimized<char> _readBuffer(
+        boost::circular_buffer_space_optimized<char>::capacity_type(MAX_BUFFER_SIZE, MIN_BUFFER_SIZE)
+    );
     std::queue<std::pair<IoVector, async::promise<ssize_t>>> _readRequests;
 
-    void _tryRead(std::deque<char>::const_iterator newlinePos) noexcept {
+    void _tryRead(decltype(_readBuffer)::iterator newlinePos) noexcept {
         // TODO: Better mutual exclusion
         static bool _isExecuting;
         if (_readRequests.empty() || _isExecuting)
@@ -35,8 +40,8 @@ namespace {
         IoVector& iov = request.first;
 
         size_t newlineIndex = -1U;
-        if (newlinePos != _readBuffer.cend())
-            newlineIndex = newlinePos - _readBuffer.cbegin();
+        if (newlinePos != _readBuffer.end())
+            newlineIndex = newlinePos - _readBuffer.begin();
 
         size_t bytesToRead;
         if (_readBuffer.size() >= iov.length) {
@@ -49,20 +54,20 @@ namespace {
         }
 
         try {
-            iov.buffer.write(_readBuffer.cbegin(), _readBuffer.cbegin() + bytesToRead)
+            iov.buffer.write(_readBuffer.begin(), _readBuffer.begin() + bytesToRead)
                 .then([&request, newlineIndex, newlinePos, bytesToRead](async::future<void> result) {
                     _isExecuting = false;
 
                     try {
                         result.get();
 
-                        _readBuffer.erase(_readBuffer.cbegin(), _readBuffer.cbegin() + bytesToRead);
+                        _readBuffer.erase(_readBuffer.begin(), _readBuffer.begin() + bytesToRead);
 
                         request.second.set_value(bytesToRead);
                         _readRequests.pop();
 
                         if (newlineIndex != -1U && newlineIndex < bytesToRead)
-                            _tryRead(std::find(_readBuffer.cbegin(), _readBuffer.cend(), '\n'));
+                            _tryRead(std::find(_readBuffer.begin(), _readBuffer.end(), '\n'));
                         else
                             _tryRead(newlinePos);
                     } catch (...) {
@@ -85,11 +90,8 @@ namespace {
     void _serialHandler(serial* /*serial*/, char c) noexcept {
         try {
             _readBuffer.push_back(c);
-            if (_readBuffer.size() > MAX_BUFFER_SIZE)
-                _readBuffer.pop_front();
-
             if (!_readRequests.empty())
-                _tryRead(_readBuffer.cend() - (c == '\n' ? 1 : 0));
+                _tryRead(_readBuffer.end() - (c == '\n' ? 1 : 0));
         } catch (const std::bad_alloc&) {
             _readBuffer.pop_front();
             _serialHandler(nullptr, c);
@@ -116,7 +118,7 @@ async::future<ssize_t> ConsoleDevice::_readOne(const IoVector& iov, off64_t offs
     auto future = promise.get_future();
     _readRequests.push(std::make_pair(iov, std::move(promise)));
 
-    _tryRead(std::find(_readBuffer.cbegin(), _readBuffer.cend(), '\n'));
+    _tryRead(std::find(_readBuffer.begin(), _readBuffer.end(), '\n'));
 
     return future;
 }

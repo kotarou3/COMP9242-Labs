@@ -18,6 +18,8 @@
 #include <sel4/sel4.h>
 
 /* System calls for SOS */
+#define SYS_process_create     0x10000
+#define SYS_sos_process_status 0x10001
 
 /* Endpoint for talking to SOS */
 #define SOS_IPC_EP_CAP     (0x1)

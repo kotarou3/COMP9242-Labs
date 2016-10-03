@@ -44,142 +44,196 @@ void Swap::addBackingStore(std::shared_ptr<fs::File> store, size_t size) {
 }
 
 async::future<void> Swap::swapOut(FrameTable::Frame& frame) {
-    if (_isSwapping || !_store)
+    if (!_store)
         throw std::bad_alloc();
 
-    assert(frame._pages);
-    assert(!frame._isLocked);
-    assert(!frame._isReferenced);
+    auto promise = std::make_shared<async::promise<void>>();
+    _pendingSwaps.push([=, &frame]() noexcept {
+        assert(frame._pages);
+        assert(!frame._isLocked);
+        assert(!frame._isReferenced);
 
-    SwapId id = _allocate();
-
-    Attributes attributes = {0};
-    attributes.read = true;
-    attributes.locked = true;
-    process::getSosProcess()->pageDirectory.map(
-        frame._pages->copy(),
-        _bufferMapping.getAddress(),
-        attributes
-    );
-
-    try {
-        _isSwapping = true;
-
-        return _store->write(_bufferIoVectors, id * PAGE_SIZE).then([=, &frame](auto written) {
-            _isSwapping = false;
-
-            process::getSosProcess()->pageDirectory.unmap(_bufferMapping.getAddress());
+        try {
+            SwapId id = _allocate();
 
             try {
-                if (static_cast<size_t>(written.get()) != PAGE_SIZE)
-                    throw std::bad_alloc();
+                Attributes attributes = {0};
+                attributes.read = true;
+                attributes.locked = true;
+                process::getSosProcess()->pageDirectory.map(
+                    frame._pages->copy(),
+                    _bufferMapping.getAddress(),
+                    attributes
+                );
+
+                try {
+                    _store->write(_bufferIoVectors, id * PAGE_SIZE).then([=, &frame](auto written) {
+                        process::getSosProcess()->pageDirectory.unmap(_bufferMapping.getAddress());
+
+                        try {
+                            if (static_cast<size_t>(written.get()) != PAGE_SIZE)
+                                throw std::bad_alloc();
+                        } catch (...) {
+                            this->_free(id);
+                            throw;
+                        }
+
+                        for (Page* page = frame._pages; page != nullptr; page = page->_next) {
+                            assert(page->_status == Page::Status::UNREFERENCED);
+                            assert(page->_resident.frame == &frame);
+
+                            assert(cspace_delete_cap(cur_cspace, page->_resident.cap) == CSPACE_NOERROR);
+
+                            page->_status = Page::Status::SWAPPED;
+                            page->_swapId = id;
+                        }
+
+                        ut_free(frame.getAddress(), seL4_PageBits);
+                        frame._pages = nullptr;
+                    }).then([=](async::future<void> result) noexcept {
+                        try {
+                            result.get();
+                            promise->set_value();
+                        } catch (...) {
+                            promise->set_exception(std::current_exception());
+                        }
+
+                        _pendingSwaps.pop();
+                        if (!_pendingSwaps.empty())
+                            _pendingSwaps.front()();
+                    });
+                } catch (...) {
+                    process::getSosProcess()->pageDirectory.unmap(_bufferMapping.getAddress());
+                    throw;
+                }
             } catch (...) {
-                this->_free(id);
+                _free(id);
                 throw;
             }
+        } catch (...) {
+            promise->set_exception(std::current_exception());
 
-            for (Page* page = frame._pages; page != nullptr; page = page->_next) {
-                assert(page->_status == Page::Status::UNREFERENCED);
-                assert(page->_resident.frame == &frame);
+            _pendingSwaps.pop();
+            if (!_pendingSwaps.empty())
+                _pendingSwaps.front()();
+        }
+    });
 
-                assert(cspace_delete_cap(cur_cspace, page->_resident.cap) == CSPACE_NOERROR);
+    if (_pendingSwaps.size() == 1)
+        _pendingSwaps.front()();
 
-                page->_status = Page::Status::SWAPPED;
-                page->_swapId = id;
-            }
-
-            ut_free(frame.getAddress(), seL4_PageBits);
-            frame._pages = nullptr;
-        });
-    } catch (...) {
-        _isSwapping = false;
-
-        process::getSosProcess()->pageDirectory.unmap(_bufferMapping.getAddress());
-        _free(id);
-
-        throw;
-    }
+    return promise->get_future();
 }
 
-async::future<void> Swap::swapIn(Page& page) {
+async::future<void> Swap::swapIn(const Page& page) {
     if (!_store)
         throw std::bad_alloc();
 
     assert(page._status == Page::Status::SWAPPED);
     assert(_usedBitset[page._swapId]);
 
-    return FrameTable::alloc().then([this, &page](auto bufferPage) {
-        auto _bufferPage = std::move(bufferPage.get());
+    auto targetPage = std::make_shared<Page>(page.copy());
+    auto _bufferPage = std::make_shared<Page>();
 
-        if (_isSwapping)
-            throw std::bad_alloc();
-        _isSwapping = true;
+    return FrameTable::alloc().then([this, targetPage, _bufferPage](auto bufferPage) {
+        *_bufferPage = std::move(bufferPage.get());
 
-        seL4_Word bufferPageCap = _bufferPage.getCap();
-        FrameTable::Frame& bufferFrame = *_bufferPage._resident.frame;
+        auto promise = std::make_shared<async::promise<void>>();
+        _pendingSwaps.push([=]() noexcept {
+            seL4_Word bufferPageCap = _bufferPage->getCap();
+            FrameTable::Frame& bufferFrame = *_bufferPage->_resident.frame;
 
-        Attributes attributes = {0};
-        attributes.read = true;
-        attributes.write = true;
-        attributes.locked = true;
-        process::getSosProcess()->pageDirectory.map(
-            std::move(_bufferPage),
-            _bufferMapping.getAddress(),
-            attributes
-        );
-
-        return _store->read(_bufferIoVectors, page._swapId * PAGE_SIZE)
-            .then([this, &page, bufferPageCap, &bufferFrame](auto read) {
-                _isSwapping = false;
+            try {
+                Attributes attributes = {0};
+                attributes.read = true;
+                attributes.write = true;
+                attributes.locked = true;
+                process::getSosProcess()->pageDirectory.map(
+                    std::move(*_bufferPage),
+                    _bufferMapping.getAddress(),
+                    attributes
+                );
 
                 try {
-                    if (static_cast<size_t>(read.get()) != PAGE_SIZE)
-                        throw std::bad_alloc();
+                    _store->read(_bufferIoVectors, targetPage->_swapId * PAGE_SIZE)
+                        .then([=, &bufferFrame](auto read) {
+                            try {
+                                if (static_cast<size_t>(read.get()) != PAGE_SIZE)
+                                    throw std::bad_alloc();
+                            } catch (...) {
+                                process::getSosProcess()->pageDirectory.unmap(_bufferMapping.getAddress());
+                                throw;
+                            }
+
+                            Page* head = targetPage.get();
+                            while (head->_prev)
+                                head = head->_prev;
+
+                            SwapId id = targetPage->_swapId;
+
+                            for (Page* page = head; page != nullptr; page = page->_next) {
+                                assert(page->_status == Page::Status::SWAPPED);
+                                assert(page->_swapId == id);
+
+                                page->_resident.cap = cspace_copy_cap(cur_cspace, cur_cspace, bufferPageCap, seL4_AllRights);
+                                if (page->_resident.cap == CSPACE_NULL) {
+                                    // Rollback
+                                    page->_swapId = id;
+                                    for (page = page->_prev; page != nullptr; page = page->_prev) {
+                                        assert(cspace_delete_cap(cur_cspace, page->_resident.cap) == CSPACE_NOERROR);
+                                        page->_status = Page::Status::SWAPPED;
+                                        page->_swapId = id;
+                                    }
+
+                                    process::getSosProcess()->pageDirectory.unmap(_bufferMapping.getAddress());
+                                    throw std::system_error(ENOMEM, std::system_category(), "Failed to copy page cap");
+                                }
+                                assert(page->_resident.cap != 0);
+
+                                page->_status = Page::Status::UNREFERENCED;
+                                page->_resident.frame = &bufferFrame;
+                            }
+
+                            assert(!bufferFrame._pages->_next);
+                            bufferFrame._pages->_next = head;
+                            head->_prev = bufferFrame._pages;
+
+                            assert(seL4_ARM_Page_Unify_Instruction(
+                                bufferPageCap,
+                                0, PAGE_SIZE
+                            ) == seL4_NoError);
+
+                            process::getSosProcess()->pageDirectory.unmap(_bufferMapping.getAddress());
+                            this->_free(id);
+                        }).then([=](async::future<void> result) noexcept {
+                            try {
+                                result.get();
+                                promise->set_value();
+                            } catch (...) {
+                                promise->set_exception(std::current_exception());
+                            }
+
+                            _pendingSwaps.pop();
+                            if (!_pendingSwaps.empty())
+                                _pendingSwaps.front()();
+                        });
                 } catch (...) {
+                    process::getSosProcess()->pageDirectory.unmap(_bufferMapping.getAddress());
                     throw;
                 }
+            } catch (...) {
+                promise->set_exception(std::current_exception());
 
-                Page* head = &page;
-                while (head->_prev)
-                    head = head->_prev;
+                _pendingSwaps.pop();
+                if (!_pendingSwaps.empty())
+                    _pendingSwaps.front()();
+            }
+        });
 
-                SwapId id = page._swapId;
+        if (_pendingSwaps.size() == 1)
+            _pendingSwaps.front()();
 
-                for (Page* page = head; page != nullptr; page = page->_next) {
-                    assert(page->_status == Page::Status::SWAPPED);
-                    assert(page->_swapId == id);
-
-                    page->_resident.cap = cspace_copy_cap(cur_cspace, cur_cspace, bufferPageCap, seL4_AllRights);
-                    if (page->_resident.cap == CSPACE_NULL) {
-                        // Rollback
-                        page->_swapId = id;
-                        for (page = page->_prev; page != nullptr; page = page->_prev) {
-                            assert(cspace_delete_cap(cur_cspace, page->_resident.cap) == CSPACE_NOERROR);
-                            page->_status = Page::Status::SWAPPED;
-                            page->_swapId = id;
-                        }
-
-                        process::getSosProcess()->pageDirectory.unmap(_bufferMapping.getAddress());
-                        throw std::system_error(ENOMEM, std::system_category(), "Failed to copy page cap");
-                    }
-                    assert(page->_resident.cap != 0);
-
-                    page->_status = Page::Status::UNREFERENCED;
-                    page->_resident.frame = &bufferFrame;
-                }
-
-                assert(!bufferFrame._pages->_next);
-                bufferFrame._pages->_next = head;
-                head->_prev = bufferFrame._pages;
-
-                assert(seL4_ARM_Page_Unify_Instruction(
-                    bufferPageCap,
-                    0, PAGE_SIZE
-                ) == seL4_NoError);
-
-                process::getSosProcess()->pageDirectory.unmap(_bufferMapping.getAddress());
-                this->_free(id);
-            });
+        return promise->get_future();
     });
 }
 
@@ -193,8 +247,9 @@ void Swap::copy(const Page& from, Page& to) noexcept {
 
     to._prev = const_cast<Page*>(&from);
     to._next = from._next;
-    from._next->_prev = &to;
-    from._next = &to;
+    to._prev->_next = &to;
+    if (to._next)
+        to._next->_prev = &to;
 }
 
 void Swap::erase(Page& page) noexcept {

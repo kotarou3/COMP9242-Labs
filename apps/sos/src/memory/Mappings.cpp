@@ -232,13 +232,24 @@ ScopedMapping::ScopedMapping(Mappings& maps, vaddr_t address, size_t pages):
     _pages(pages)
 {}
 
+ScopedMapping::ScopedMapping(vaddr_t address, size_t pages):
+    _address(address),
+    _pages(pages)
+{}
+
 ScopedMapping::~ScopedMapping() {
-    if (_process)
-        _process->maps.erase(_address, _pages);
+    reset();
 }
 
 void ScopedMapping::release() noexcept {
     _process.reset();
+}
+
+void ScopedMapping::reset() noexcept {
+    if (_process) {
+        _process->maps.erase(_address, _pages);
+        _process.reset();
+    }
 }
 
 }

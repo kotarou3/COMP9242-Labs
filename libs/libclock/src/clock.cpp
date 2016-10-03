@@ -5,7 +5,7 @@ extern "C" {
     #include "clock/clock.h"
 }
 
-#include "sos-timer.h"
+#include "internal/timer/timer.h"
 
 namespace {
     bool is_timer_started;
@@ -16,7 +16,7 @@ int start_timer(seL4_CPtr interrupt_ep) {
         assert(stop_timer() == CLOCK_R_OK);
 
     try {
-        timer::init(interrupt_ep);
+        timer::init(Capability<seL4_AsyncEndpointObject, seL4_EndpointBits>(0, interrupt_ep));
         is_timer_started = true;
         return CLOCK_R_OK;
     } catch (...) {

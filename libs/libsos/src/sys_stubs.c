@@ -185,11 +185,11 @@ long sys_sync()
     assert(!"sys_sync not implemented");
     __builtin_unreachable();
 }
-long sys_kill()
+/*long sys_kill()
 {
     assert(!"sys_kill not implemented");
     __builtin_unreachable();
-}
+}*/
 long sys_rename()
 {
     assert(!"sys_rename not implemented");
@@ -568,11 +568,11 @@ long sys_vm86old()
     assert(!"sys_vm86old not implemented");
     __builtin_unreachable();
 }
-long sys_wait4()
+/*long sys_wait4()
 {
     assert(!"sys_wait4 not implemented");
     __builtin_unreachable();
-}
+}*/
 long sys_swapoff()
 {
     assert(!"sys_swapoff not implemented");
@@ -1395,11 +1395,11 @@ long sys_kexec_load()
     assert(!"sys_kexec_load not implemented");
     __builtin_unreachable();
 }
-long sys_waitid()
+/*long sys_waitid()
 {
     assert(!"sys_waitid not implemented");
     __builtin_unreachable();
-}
+}*/
 long sys_add_key()
 {
     assert(!"sys_add_key not implemented");
@@ -1819,11 +1819,11 @@ long sys_sync()
     assert(!"sys_sync not implemented");
     __builtin_unreachable();
 }
-long sys_kill()
+/*long sys_kill()
 {
     assert(!"sys_kill not implemented");
     __builtin_unreachable();
-}
+}*/
 long sys_rename()
 {
     assert(!"sys_rename not implemented");
@@ -2102,11 +2102,11 @@ long sys_vhangup()
     assert(!"sys_vhangup not implemented");
     __builtin_unreachable();
 }
-long sys_wait4()
+/*long sys_wait4()
 {
     assert(!"sys_wait4 not implemented");
     __builtin_unreachable();
-}
+}*/
 long sys_swapoff()
 {
     assert(!"sys_swapoff not implemented");
@@ -2850,11 +2850,11 @@ long sys_mq_getsetattr()
     assert(!"sys_mq_getsetattr not implemented");
     __builtin_unreachable();
 }
-long sys_waitid()
+/*long sys_waitid()
 {
     assert(!"sys_waitid not implemented");
     __builtin_unreachable();
-}
+}*/
 long sys_socket()
 {
     assert(!"sys_socket not implemented");

@@ -11,7 +11,7 @@ namespace timer {
 
 class Hardware {
     public:
-        Hardware(seL4_CPtr irqEndpoint);
+        Hardware(Capability<seL4_AsyncEndpointObject, seL4_EndpointBits> irqEndpoint);
         ~Hardware();
 
         Hardware(const Hardware&) = delete;
@@ -35,7 +35,9 @@ class Hardware {
         struct Registers;
         memory::DeviceMemory<Registers> _registers;
 
+        Capability<seL4_AsyncEndpointObject, seL4_EndpointBits> _irqEndpoint;
         seL4_IRQHandler _irqCap;
+
         Timestamp _counterZeroTimestamp;
 };
 

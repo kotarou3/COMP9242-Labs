@@ -39,8 +39,8 @@ namespace {
     std::priority_queue<Interrupt> interrupts;
 }
 
-void init(seL4_CPtr irqEndpoint) {
-    hardware = std::make_unique<timer::Hardware>(irqEndpoint);
+void init(Capability<seL4_AsyncEndpointObject, seL4_EndpointBits> irqEndpoint) {
+    hardware = std::make_unique<timer::Hardware>(std::move(irqEndpoint));
     nextFree = 1;
 }
 

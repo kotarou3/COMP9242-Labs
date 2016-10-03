@@ -2,6 +2,7 @@
 #include <system_error>
 #include <limits.h>
 
+#include "internal/memory/FrameTable.h"
 #include "internal/memory/UserMemory.h"
 
 namespace memory {
@@ -27,7 +28,7 @@ async::future<std::string> UserMemory::readString(bool bypassAttributes) {
                     return async::make_ready_future(string);
 
             // Continue reading from next page
-            return UserMemory(_process, _address + pageEnd - map_.first)
+            return UserMemory(_process, map_.second.getEnd())
                 .readString(bypassAttributes)
                 .then([string](auto result) {
                     return string + result.get();
@@ -45,9 +46,12 @@ async::future<std::pair<uint8_t*, ScopedMapping>> UserMemory::_mapIn(size_t byte
         // XXX: SOS currently has inaccurate mappings for itself, so we can't
         // check the address range attributes. For now, we just assume they're
         // read+write
-        process->maps.lookup(alignedAddress);
+        const auto& map = process->maps.lookup(alignedAddress);
 
-        return async::make_ready_future(std::make_pair(reinterpret_cast<uint8_t*>(_address), ScopedMapping()));
+        return async::make_ready_future(std::make_pair(
+            reinterpret_cast<uint8_t*>(_address),
+            ScopedMapping(map.start, numPages(map.end - map.start))
+        ));
     } else {
         // Allocate some space in SOS' virtual memory for the target pages
         attributes.locked = true;

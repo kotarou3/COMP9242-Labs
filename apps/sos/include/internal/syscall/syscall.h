@@ -23,8 +23,10 @@ int exceptionToErrno(std::exception_ptr e) noexcept;
 #define FORWARD_SYSCALL(name, argc)                                                          \
     extern "C" int sys_##name(va_list ap) noexcept {                                         \
         seL4_Word argv[argc];                                                                \
+        _Pragma("GCC diagnostic ignored \"-Wtype-limits\"");                                 \
         for (size_t a = 0; a < argc; ++a)                                                    \
             argv[a] = va_arg(ap, seL4_Word);                                                 \
+        _Pragma("GCC diagnostic pop");                                                       \
                                                                                              \
         try {                                                                                \
             auto result = syscall::handle(process::getSosProcess(), SYS_##name, argc, argv); \

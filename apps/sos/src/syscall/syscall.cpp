@@ -5,14 +5,18 @@
 #include <sys/syscall.h>
 #include <errno.h>
 
-#include "internal/syscall/fs.h"
-#include "internal/syscall/mmap.h"
-#include "internal/syscall/syscall.h"
-#include "internal/syscall/time.h"
-
 extern "C" {
+    #include <sos.h>
+
     #include "internal/sys/debug.h"
 }
+
+#include "internal/syscall/fs.h"
+#include "internal/syscall/mmap.h"
+#include "internal/syscall/process.h"
+#include "internal/syscall/syscall.h"
+#include "internal/syscall/time.h"
+#include "internal/syscall/thread.h"
 
 namespace syscall {
 
@@ -28,8 +32,13 @@ namespace {
         seL4_Word, seL4_Word, seL4_Word, seL4_Word
     );
 
-    constexpr ThreadSyscall _getThreadSyscall(long /*number*/) {
+    constexpr ThreadSyscall _getThreadSyscall(long number) {
         #define ADD_SYSCALL(name) if (number == SYS_##name) return reinterpret_cast<ThreadSyscall>(syscall::name)
+
+        // thread
+        ADD_SYSCALL(gettid);
+        ADD_SYSCALL(exit);
+
         #undef ADD_SYSCALL
         return nullptr;
     }
@@ -62,9 +71,22 @@ namespace {
         ADD_SYSCALL(mmap2);
         ADD_SYSCALL(munmap);
 
+        // process
+        ADD_SYSCALL(getpid);
+        ADD_SYSCALL(waitid);
+        ADD_SYSCALL(wait4);
+        ADD_SYSCALL(kill);
+        ADD_SYSCALL(exit_group);
+        ADD_SYSCALL(process_create);
+        ADD_SYSCALL(sos_process_status);
+
         // time
         ADD_SYSCALL(clock_gettime);
         ADD_SYSCALL(nanosleep);
+
+        // thread
+        ADD_SYSCALL(tkill);
+        ADD_SYSCALL(tgkill);
 
         #undef ADD_SYSCALL
         return nullptr;

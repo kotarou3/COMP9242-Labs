@@ -1,5 +1,7 @@
 #pragma once
 
+#include <functional>
+#include <queue>
 #include <vector>
 
 #include "internal/async.h"
@@ -18,7 +20,7 @@ class Swap {
         void addBackingStore(std::shared_ptr<fs::File> store, size_t size);
 
         async::future<void> swapOut(FrameTable::Frame& frame);
-        async::future<void> swapIn(Page& page);
+        async::future<void> swapIn(const Page& page);
 
         void copy(const Page& from, Page& to) noexcept;
         void erase(Page& page) noexcept;
@@ -42,8 +44,7 @@ class Swap {
         ScopedMapping _bufferMapping;
         std::vector<fs::IoVector> _bufferIoVectors;
 
-        // TODO: Better mutual exclusion
-        bool _isSwapping = false;
+        std::queue<std::function<void ()>> _pendingSwaps;
 };
 
 }

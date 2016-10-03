@@ -17,3 +17,5 @@ CXXFILES := $(patsubst $(SOURCE_DIR)/%,%,$(wildcard $(SOURCE_DIR)/src/*.cpp))
 HDRFILES := $(wildcard $(SOURCE_DIR)/include/*)
 
 include $(SEL4_COMMON)/common.mk
+
+CPPFLAGS += -I$(SEL4_APPS_PATH)/sos/include

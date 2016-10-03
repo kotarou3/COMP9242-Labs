@@ -63,7 +63,6 @@ class Mappings {
 
 class ScopedMapping {
     public:
-        ScopedMapping() = default;
         ScopedMapping(Mappings& maps, vaddr_t address, size_t pages);
         ~ScopedMapping();
 
@@ -74,6 +73,7 @@ class ScopedMapping {
         ScopedMapping& operator=(ScopedMapping&& other) = default;
 
         void release() noexcept;
+        void reset() noexcept;
 
         vaddr_t getAddress() const noexcept {return _address;};
         size_t getPages() const noexcept {return _pages;};
@@ -82,9 +82,13 @@ class ScopedMapping {
         vaddr_t getEnd() const noexcept {return _address + _pages * PAGE_SIZE;};
 
     private:
+        ScopedMapping(vaddr_t address, size_t pages);
+
         std::shared_ptr<process::Process> _process;
         vaddr_t _address;
         size_t _pages;
+
+        friend class UserMemory;
 };
 
 }

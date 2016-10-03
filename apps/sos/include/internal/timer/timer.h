@@ -8,6 +8,8 @@ extern "C" {
     #include <sel4/types.h>
 }
 
+#include "internal/Capability.h"
+
 namespace timer {
 
 struct clock {
@@ -31,7 +33,7 @@ using TimerId = size_t;
  * @param irqEndpoint A (possibly badged) async endpoint that the driver should
  *                        use for delivering interrupts to.
  */
-void init(seL4_CPtr irqEndpoint);
+void init(Capability<seL4_AsyncEndpointObject, seL4_EndpointBits> irqEndpoint);
 void deinit() noexcept;
 
 /**
