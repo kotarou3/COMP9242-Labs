@@ -15,19 +15,35 @@ extern "C" {
 namespace memory {
 
 Swap::Swap():
-    _bufferMapping(process::getSosProcess()->maps.insert(
+    _swapOutBufferMapping(process::getSosProcess()->maps.insert(
         0, 1,
         Attributes{
             .read = true,
+            .write = false,
+            .execute = false,
+            .locked = true
+        },
+        Mapping::Flags{.shared = false}
+    )),
+    _swapOutBufferIoVectors({
+        fs::IoVector{
+            .buffer = UserMemory(process::getSosProcess(), _swapOutBufferMapping.getAddress()),
+            .length = PAGE_SIZE
+        }
+    }),
+    _swapInBufferMapping(process::getSosProcess()->maps.insert(
+        0, 1,
+        Attributes{
+            .read = false,
             .write = true,
             .execute = false,
             .locked = true
         },
         Mapping::Flags{.shared = false}
     )),
-    _bufferIoVectors({
+    _swapInBufferIoVectors({
         fs::IoVector{
-            .buffer = UserMemory(process::getSosProcess(), _bufferMapping.getAddress()),
+            .buffer = UserMemory(process::getSosProcess(), _swapInBufferMapping.getAddress()),
             .length = PAGE_SIZE
         }
     })
@@ -48,7 +64,7 @@ async::future<void> Swap::swapOut(FrameTable::Frame& frame) {
         throw std::bad_alloc();
 
     auto promise = std::make_shared<async::promise<void>>();
-    _pendingSwaps.push([=, &frame]() noexcept {
+    _pendingSwapOuts.push([=, &frame]() noexcept {
         assert(frame._pages);
         assert(!frame._isLocked);
         assert(!frame._isReferenced);
@@ -62,13 +78,13 @@ async::future<void> Swap::swapOut(FrameTable::Frame& frame) {
                 attributes.locked = true;
                 process::getSosProcess()->pageDirectory.map(
                     frame._pages->copy(),
-                    _bufferMapping.getAddress(),
+                    _swapOutBufferMapping.getAddress(),
                     attributes
                 );
 
                 try {
-                    _store->write(_bufferIoVectors, id * PAGE_SIZE).then([=, &frame](auto written) {
-                        process::getSosProcess()->pageDirectory.unmap(_bufferMapping.getAddress());
+                    _store->write(_swapOutBufferIoVectors, id * PAGE_SIZE).then([=, &frame](auto written) {
+                        process::getSosProcess()->pageDirectory.unmap(_swapOutBufferMapping.getAddress());
 
                         try {
                             if (static_cast<size_t>(written.get()) != PAGE_SIZE)
@@ -98,12 +114,12 @@ async::future<void> Swap::swapOut(FrameTable::Frame& frame) {
                             promise->set_exception(std::current_exception());
                         }
 
-                        _pendingSwaps.pop();
-                        if (!_pendingSwaps.empty())
-                            _pendingSwaps.front()();
+                        _pendingSwapOuts.pop();
+                        if (!_pendingSwapOuts.empty())
+                            _pendingSwapOuts.front()();
                     });
                 } catch (...) {
-                    process::getSosProcess()->pageDirectory.unmap(_bufferMapping.getAddress());
+                    process::getSosProcess()->pageDirectory.unmap(_swapOutBufferMapping.getAddress());
                     throw;
                 }
             } catch (...) {
@@ -113,14 +129,14 @@ async::future<void> Swap::swapOut(FrameTable::Frame& frame) {
         } catch (...) {
             promise->set_exception(std::current_exception());
 
-            _pendingSwaps.pop();
-            if (!_pendingSwaps.empty())
-                _pendingSwaps.front()();
+            _pendingSwapOuts.pop();
+            if (!_pendingSwapOuts.empty())
+                _pendingSwapOuts.front()();
         }
     });
 
-    if (_pendingSwaps.size() == 1)
-        _pendingSwaps.front()();
+    if (_pendingSwapOuts.size() == 1)
+        _pendingSwapOuts.front()();
 
     return promise->get_future();
 }
@@ -133,15 +149,13 @@ async::future<void> Swap::swapIn(const Page& page) {
     assert(_usedBitset[page._swapId]);
 
     auto targetPage = std::make_shared<Page>(page.copy());
-    auto _bufferPage = std::make_shared<Page>();
+    auto promise = std::make_shared<async::promise<void>>();
 
-    return FrameTable::alloc().then([this, targetPage, _bufferPage](auto bufferPage) {
-        *_bufferPage = std::move(bufferPage.get());
-
-        auto promise = std::make_shared<async::promise<void>>();
-        _pendingSwaps.push([=]() noexcept {
-            seL4_Word bufferPageCap = _bufferPage->getCap();
-            FrameTable::Frame& bufferFrame = *_bufferPage->_resident.frame;
+    _pendingSwapIns.push([this, targetPage, promise]() noexcept {
+        FrameTable::alloc().then([=](auto bufferPage) {
+            Page _bufferPage = std::move(bufferPage.get());
+            seL4_Word bufferPageCap = _bufferPage.getCap();
+            FrameTable::Frame& bufferFrame = *_bufferPage._resident.frame;
 
             try {
                 Attributes attributes = {0};
@@ -149,19 +163,19 @@ async::future<void> Swap::swapIn(const Page& page) {
                 attributes.write = true;
                 attributes.locked = true;
                 process::getSosProcess()->pageDirectory.map(
-                    std::move(*_bufferPage),
-                    _bufferMapping.getAddress(),
+                    std::move(_bufferPage),
+                    _swapInBufferMapping.getAddress(),
                     attributes
                 );
 
                 try {
-                    _store->read(_bufferIoVectors, targetPage->_swapId * PAGE_SIZE)
+                    _store->read(_swapInBufferIoVectors, targetPage->_swapId * PAGE_SIZE)
                         .then([=, &bufferFrame](auto read) {
                             try {
                                 if (static_cast<size_t>(read.get()) != PAGE_SIZE)
                                     throw std::bad_alloc();
                             } catch (...) {
-                                process::getSosProcess()->pageDirectory.unmap(_bufferMapping.getAddress());
+                                process::getSosProcess()->pageDirectory.unmap(_swapInBufferMapping.getAddress());
                                 throw;
                             }
 
@@ -185,7 +199,7 @@ async::future<void> Swap::swapIn(const Page& page) {
                                         page->_swapId = id;
                                     }
 
-                                    process::getSosProcess()->pageDirectory.unmap(_bufferMapping.getAddress());
+                                    process::getSosProcess()->pageDirectory.unmap(_swapInBufferMapping.getAddress());
                                     throw std::system_error(ENOMEM, std::system_category(), "Failed to copy page cap");
                                 }
                                 assert(page->_resident.cap != 0);
@@ -203,8 +217,10 @@ async::future<void> Swap::swapIn(const Page& page) {
                                 0, PAGE_SIZE
                             ) == seL4_NoError);
 
-                            process::getSosProcess()->pageDirectory.unmap(_bufferMapping.getAddress());
+                            process::getSosProcess()->pageDirectory.unmap(_swapInBufferMapping.getAddress());
                             this->_free(id);
+
+                            targetPage->_status = Page::Status::UNMAPPED;
                         }).then([=](async::future<void> result) noexcept {
                             try {
                                 result.get();
@@ -213,28 +229,28 @@ async::future<void> Swap::swapIn(const Page& page) {
                                 promise->set_exception(std::current_exception());
                             }
 
-                            _pendingSwaps.pop();
-                            if (!_pendingSwaps.empty())
-                                _pendingSwaps.front()();
+                            _pendingSwapIns.pop();
+                            if (!_pendingSwapIns.empty())
+                                _pendingSwapIns.front()();
                         });
                 } catch (...) {
-                    process::getSosProcess()->pageDirectory.unmap(_bufferMapping.getAddress());
+                    process::getSosProcess()->pageDirectory.unmap(_swapInBufferMapping.getAddress());
                     throw;
                 }
             } catch (...) {
                 promise->set_exception(std::current_exception());
 
-                _pendingSwaps.pop();
-                if (!_pendingSwaps.empty())
-                    _pendingSwaps.front()();
+                _pendingSwapIns.pop();
+                if (!_pendingSwapIns.empty())
+                    _pendingSwapIns.front()();
             }
         });
-
-        if (_pendingSwaps.size() == 1)
-            _pendingSwaps.front()();
-
-        return promise->get_future();
     });
+
+    if (_pendingSwapIns.size() == 1)
+        _pendingSwapIns.front()();
+
+    return promise->get_future();
 }
 
 void Swap::copy(const Page& from, Page& to) noexcept {
@@ -264,8 +280,9 @@ void Swap::erase(Page& page) noexcept {
     if (!page._prev && !page._next) {
         // Last page
         _free(page._swapId);
-        page._status = Page::Status::INVALID;
     }
+
+    page._status = Page::Status::INVALID;
 }
 
 SwapId Swap::_allocate() {

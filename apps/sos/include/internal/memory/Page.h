@@ -21,7 +21,12 @@ class Page {
         Page copy() const {return *this;};
 
         enum class Status {
-            INVALID, LOCKED, REFERENCED, UNREFERENCED, SWAPPED
+            INVALID,        // Happens when default constructed or moved away
+            LOCKED,         // Mapped and locked in memory
+            REFERENCED,     // Mapped in memory
+            UNREFERENCED,   // Unmapped in memory
+            UNMAPPED,       // Unmapped in memory, but not swappable. Only occurs on newly created Pages
+            SWAPPED         // Swapped out
         };
 
         Status getStatus() const noexcept {return _status;}
@@ -30,6 +35,7 @@ class Page {
                 case Status::LOCKED:
                 case Status::REFERENCED:
                 case Status::UNREFERENCED:
+                case Status::UNMAPPED:
                     break;
 
                 default:

@@ -41,10 +41,13 @@ class Swap {
         std::vector<bool> _usedBitset;
         size_t _lastUsed = -1U;
 
-        ScopedMapping _bufferMapping;
-        std::vector<fs::IoVector> _bufferIoVectors;
+        std::queue<std::function<void ()>> _pendingSwapOuts;
+        ScopedMapping _swapOutBufferMapping;
+        std::vector<fs::IoVector> _swapOutBufferIoVectors;
 
-        std::queue<std::function<void ()>> _pendingSwaps;
+        std::queue<std::function<void ()>> _pendingSwapIns;
+        ScopedMapping _swapInBufferMapping;
+        std::vector<fs::IoVector> _swapInBufferIoVectors;
 };
 
 }

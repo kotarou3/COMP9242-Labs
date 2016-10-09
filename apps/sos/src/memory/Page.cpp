@@ -40,7 +40,7 @@ Page::Page(paddr_t address):
     // The CSpace library should never return a 0 cap
     assert(_resident.cap != 0);
 
-    _status = Status::UNREFERENCED;
+    _status = Status::UNMAPPED;
 }
 
 Page::~Page() {
@@ -50,11 +50,12 @@ Page::~Page() {
 
         case Status::LOCKED:
         case Status::REFERENCED:
+        case Status::UNREFERENCED:
             // This should never happen, since MappedPage will remove these
             // statuses when it's destroyed
             assert(false);
 
-        case Status::UNREFERENCED:
+        case Status::UNMAPPED:
             assert(cspace_delete_cap(cur_cspace, _resident.cap) == CSPACE_NOERROR);
 
             if (_resident.frame)
@@ -83,12 +84,13 @@ Page::Page(const Page& other):
         case Status::LOCKED:
         case Status::REFERENCED:
         case Status::UNREFERENCED:
+        case Status::UNMAPPED:
             _resident.cap = cspace_copy_cap(cur_cspace, cur_cspace, other._resident.cap, seL4_AllRights);
             if (_resident.cap == CSPACE_NULL)
                 throw std::system_error(ENOMEM, std::system_category(), "Failed to copy page cap");
             assert(_resident.cap != 0);
 
-            _status = Status::UNREFERENCED;
+            _status = Status::UNMAPPED;
             assert(other._resident.frame); // Non-frame pages cannot be copied
             other._resident.frame->insert(*this);
             break;
@@ -133,6 +135,7 @@ Page& Page::operator=(Page&& other) noexcept {
         case Status::LOCKED:
         case Status::REFERENCED:
         case Status::UNREFERENCED:
+        case Status::UNMAPPED:
             _resident = std::move(other._resident);
 
             if (_resident.frame) {

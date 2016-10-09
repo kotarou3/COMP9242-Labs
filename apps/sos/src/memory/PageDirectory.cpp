@@ -71,6 +71,7 @@ async::future<const MappedPage&> PageDirectory::makeResident(vaddr_t address, At
 
     switch (page->getPage().getStatus()) {
         case memory::Page::Status::INVALID:
+        case memory::Page::Status::UNMAPPED:
             assert(false);
 
         case memory::Page::Status::LOCKED:
@@ -224,6 +225,9 @@ MappedPage::MappedPage(Page page, PageDirectory& directory, vaddr_t address, Att
     _address(address),
     _attributes(attributes)
 {
+    assert(_page._status == Page::Status::UNMAPPED);
+    _page._status = Page::Status::UNREFERENCED;
+
     enableReference(directory);
 }
 
@@ -273,24 +277,24 @@ MappedPage::~MappedPage() {
     // If we haven't been moved away, unmap the page
     if (_page) {
         switch (_page._status) {
+            case memory::Page::Status::INVALID:
+            case memory::Page::Status::UNMAPPED:
+                assert(false);
+
             case Page::Status::LOCKED:
             case Page::Status::REFERENCED:
                 assert(seL4_ARM_Page_Unmap(_page.getCap()) == seL4_NoError);
-                _page._status = Page::Status::UNREFERENCED;
-
-                if (_page._resident.frame)
-                    _page._resident.frame->updateStatus();
-                break;
+                // Fallthrough
 
             case Page::Status::UNREFERENCED:
+                _page._status = Page::Status::UNMAPPED;
+                if (_page._resident.frame)
+                    _page._resident.frame->updateStatus();
                 break;
 
             case Page::Status::SWAPPED:
                 Swap::get().erase(_page);
                 break;
-
-            default:
-                assert(false);
         }
     }
 }

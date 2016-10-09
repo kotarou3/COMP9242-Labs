@@ -32,7 +32,7 @@ namespace {
 }
 
 void Frame::insert(Page& page) noexcept {
-    assert(page._status == Page::Status::UNREFERENCED);
+    assert(page._status == Page::Status::UNMAPPED);
     assert(!page._resident.frame);
     assert(!page._prev && !page._next);
 
@@ -55,10 +55,12 @@ void Frame::insert(Page& page) noexcept {
         _pages->_prev = &page;
         _pages = &page;
     }
+
+    updateStatus();
 }
 
 void Frame::erase(Page& page) noexcept {
-    assert(page._status == Page::Status::UNREFERENCED);
+    assert(page._status == Page::Status::UNMAPPED);
     assert(_pages && page._resident.frame == this);
 
     if (_pages == &page) {
@@ -79,6 +81,7 @@ void Frame::erase(Page& page) noexcept {
 }
 
 void Frame::disableReference() noexcept {
+    assert(_isLocked == false);
     assert(_isReferenced == true);
 
     // Unmap all the pages associated with said frame
@@ -106,7 +109,7 @@ void Frame::updateStatus() noexcept {
                 assert(page->_resident.frame == this);
         }
 
-        _isLocked |= page->_status == Page::Status::LOCKED;
+        _isLocked |= page->_status == Page::Status::LOCKED || page->_status == Page::Status::UNMAPPED;
         _isReferenced |= _isLocked || page->_status == Page::Status::REFERENCED;
     }
 }
@@ -159,7 +162,7 @@ void init(paddr_t start, paddr_t end) {
         Frame& frame = _getFrame(pair.first);
 
         assert(page._status == Page::Status::LOCKED);
-        page._status = Page::Status::UNREFERENCED;
+        page._status = Page::Status::UNMAPPED;
         frame.insert(page);
         page._status = Page::Status::LOCKED;
         frame.updateStatus();
