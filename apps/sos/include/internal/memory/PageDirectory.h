@@ -82,7 +82,7 @@ class PageTable {
         PageTable& operator=(const PageTable&) = delete;
 
         PageTable(PageTable&& other) = default;
-        PageTable& operator=(PageTable&& other) = default;
+        PageTable& operator=(PageTable&& other) = delete;
 
         size_t countPages() const noexcept;
 
@@ -118,7 +118,7 @@ class MappedPage {
         MappedPage& operator=(const MappedPage&) = delete;
 
         MappedPage(MappedPage&& other) = default;
-        MappedPage& operator=(MappedPage&& other) = default;
+        MappedPage& operator=(MappedPage&& other) = delete;
 
         void enableReference(PageDirectory& directory);
         async::future<void> swapIn();
