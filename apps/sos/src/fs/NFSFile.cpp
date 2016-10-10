@@ -6,6 +6,11 @@
 
 #include "internal/fs/NFSFile.h"
 
+namespace {
+    // No read pipelining because our ethernet driver sucks
+    constexpr const size_t WRITE_MAX_PIPELINE_DEPTH = 16;
+}
+
 namespace fs {
 
 /////////////
@@ -58,13 +63,35 @@ async::future<ssize_t> NFSFile::_writeOne(const IoVector& iov, off64_t offset) {
     ).then([this, iov, actualOffset](auto map) {
         auto _map = std::make_shared<std::pair<uint8_t*, memory::ScopedMapping>>(std::move(map.get()));
 
-        return nfs::write(this->_handle, actualOffset, iov.length, _map->first)
-            .then([this, _map](auto result) {
-                size_t written = result.get();
-                this->_currentOffset += written;
+        size_t parallelWrites = std::max(std::min(iov.length / NFS_WRITE_BLOCK_SIZE, WRITE_MAX_PIPELINE_DEPTH), 1U);
+        std::vector<async::future<size_t>> writes;
+        writes.reserve(parallelWrites);
 
-                return static_cast<ssize_t>(written);
-            });
+        size_t writeOffset = 0;
+        size_t writeLength = iov.length / parallelWrites;
+        for (size_t n = 0; n < parallelWrites; ++n) {
+            writes.push_back(
+                nfs::write(this->_handle, actualOffset + writeOffset, writeLength, _map->first + writeOffset)
+                    .then([this, _map](auto result) {
+                        size_t written = result.get();
+                        this->_currentOffset += written;
+
+                        return written;
+                    })
+            );
+
+            writeOffset += writeLength;
+            if (n + 1 == parallelWrites)
+                writeLength += iov.length - parallelWrites * writeLength;
+        }
+
+        return async::when_all(writes.begin(), writes.end()).then([](auto writes) {
+            auto _writes = writes.get();
+            ssize_t totalWritten = 0;
+            for (auto& written : _writes)
+                totalWritten += written.get();
+            return totalWritten;
+        });
     });
 }
 
