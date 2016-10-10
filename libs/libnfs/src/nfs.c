@@ -77,7 +77,7 @@
  *
  * READDIR_BUF_SIZE > 4 longs + max name length = 4*4 + 256 = 272
  */
-#define READDIR_BUF_SIZE   1024
+#define READDIR_BUF_SIZE   NFS_READ_BLOCK_SIZE
 
 static struct udp_pcb *_nfs_pcb = NULL;
 

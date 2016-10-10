@@ -22,6 +22,10 @@ NFSFile::NFSFile(const nfs::fhandle_t& handle):
     _currentOffset(0)
 {}
 
+NFSFile::~NFSFile() {
+    nfs::flush(_handle);
+}
+
 async::future<ssize_t> NFSFile::_readOne(const IoVector& iov, off64_t offset, bool bypassAttributes) {
     off64_t actualOffset = offset;
     if (offset == fs::CURRENT_OFFSET)
