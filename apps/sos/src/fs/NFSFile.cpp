@@ -35,13 +35,14 @@ async::future<ssize_t> NFSFile::_readOne(const IoVector& iov, off64_t offset, bo
         iov.length,
         memory::Attributes{.read = false, .write = true},
         bypassAttributes
-    ).then([this, iov, actualOffset](auto map) {
+    ).then([this, iov, offset, actualOffset](auto map) {
         auto _map = std::make_shared<std::pair<uint8_t*, memory::ScopedMapping>>(std::move(map.get()));
 
         return nfs::read(this->_handle, actualOffset, iov.length, _map->first)
-            .then([this, _map](auto result) {
+            .then([this, offset, _map](auto result) {
                 size_t read = result.get();
-                this->_currentOffset += read;
+                if (offset == fs::CURRENT_OFFSET)
+                    this->_currentOffset += read;
 
                 return static_cast<ssize_t>(read);
             });
@@ -60,11 +61,22 @@ async::future<ssize_t> NFSFile::_writeOne(const IoVector& iov, off64_t offset) {
     return memory::UserMemory(iov.buffer).mapIn<uint8_t>(
         iov.length,
         memory::Attributes{.read = true}
-    ).then([this, iov, actualOffset](auto map) {
+    ).then([this, iov, offset, actualOffset](auto map) {
         auto _map = std::make_shared<std::pair<uint8_t*, memory::ScopedMapping>>(std::move(map.get()));
 
         size_t parallelWrites = std::max(std::min(iov.length / NFS_WRITE_BLOCK_SIZE, WRITE_MAX_PIPELINE_DEPTH), 1U);
-        std::vector<async::future<size_t>> writes;
+        if (parallelWrites == 1) {
+            return nfs::write(this->_handle, actualOffset, iov.length, _map->first)
+                .then([this, offset, _map](auto result) {
+                    size_t written = result.get();
+                    if (offset == fs::CURRENT_OFFSET)
+                        this->_currentOffset += written;
+
+                    return static_cast<ssize_t>(written);
+                });
+        }
+
+        std::vector<async::future<ssize_t>> writes;
         writes.reserve(parallelWrites);
 
         size_t writeOffset = 0;
@@ -72,11 +84,12 @@ async::future<ssize_t> NFSFile::_writeOne(const IoVector& iov, off64_t offset) {
         for (size_t n = 0; n < parallelWrites; ++n) {
             writes.push_back(
                 nfs::write(this->_handle, actualOffset + writeOffset, writeLength, _map->first + writeOffset)
-                    .then([this, _map](auto result) {
+                    .then([this, offset, _map](auto result) {
                         size_t written = result.get();
-                        this->_currentOffset += written;
+                        if (offset == fs::CURRENT_OFFSET)
+                            this->_currentOffset += written;
 
-                        return written;
+                        return static_cast<ssize_t>(written);
                     })
             );
 

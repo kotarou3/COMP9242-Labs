@@ -10,6 +10,11 @@
 namespace fs {
 
 async::future<ssize_t> File::read(const std::vector<IoVector>& iov, off64_t offset, bool bypassAttributes) {
+    if (iov.size() == 1) {
+        // Fast common case of single iov
+        return this->_readOne(iov[0], offset, bypassAttributes);
+    }
+
     auto future = async::make_ready_future<ssize_t>(0);
 
     ssize_t expectedBytesRead = 0;
@@ -37,6 +42,11 @@ async::future<ssize_t> File::read(const std::vector<IoVector>& iov, off64_t offs
 }
 
 async::future<ssize_t> File::write(const std::vector<IoVector>& iov, off64_t offset) {
+    if (iov.size() == 1) {
+        // Fast common case of single iov
+        return this->_writeOne(iov[0], offset);
+    }
+
     auto future = async::make_ready_future<ssize_t>(0);
 
     ssize_t expectedBytesWritten = 0;
