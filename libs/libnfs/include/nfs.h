@@ -88,8 +88,8 @@ extern "C" {
  * kills performance. 7292 was empirically found to be the highest before
  * packets start getting dropped, with exactly 5 full IPv4 fragments at 1500 MTU.
  */
-#define NFS_READ_BLOCK_SIZE  7292
-#define NFS_WRITE_BLOCK_SIZE 8192
+#define NFS_READ_BLOCK_SIZE  7292U
+#define NFS_WRITE_BLOCK_SIZE 8192U
 
 /**
  * The "nfs_stat" type is returned with every NFS procedure results.  A value
@@ -634,9 +634,10 @@ boost::future<std::pair<const fhandle_t*, fattr_t*>> lookup(const fhandle_t& pfh
 boost::future<std::pair<const fhandle_t*, fattr_t*>> create(const fhandle_t& pfh, const std::string& name, const sattr_t& sattr);
 boost::future<void> remove(const fhandle_t& pfh, const std::string& name);
 
-boost::future<fattr_t*> getattr(const fhandle_t& fh);
+boost::future<const fattr_t*> getattr(const fhandle_t& fh);
 boost::future<size_t> read(const fhandle_t& fh, off_t offset, size_t count, uint8_t* data);
 boost::future<size_t> write(const fhandle_t& fh, off_t offset, size_t count, const uint8_t* data);
+void flush(const fhandle_t& fh);
 
 }
 #endif

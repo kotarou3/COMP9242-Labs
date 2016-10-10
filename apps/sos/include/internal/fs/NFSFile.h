@@ -8,7 +8,7 @@ namespace fs {
 
 class NFSFile : public File {
     public:
-        virtual ~NFSFile() = default;
+        virtual ~NFSFile();
 
     protected:
         virtual async::future<ssize_t> _readOne(const IoVector& iov, off64_t offset, bool bypassAttributes) override;

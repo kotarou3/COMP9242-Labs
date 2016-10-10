@@ -3,7 +3,15 @@
 #include <system_error>
 #include <unordered_map>
 
+#include <boost/functional/hash.hpp>
+#include <boost/multi_index_container.hpp>
+#include <boost/multi_index/hashed_index.hpp>
+#include <boost/multi_index/member.hpp>
+#include <boost/multi_index/sequenced_index.hpp>
+
+#include <cstring>
 #include <assert.h>
+#include <limits.h>
 
 extern "C" {
     #include <lwip/pbuf.h>
@@ -13,7 +21,258 @@ extern "C" {
 
 namespace nfs {
 
+constexpr bool operator==(const fhandle_t& a, const fhandle_t& b) {
+    return !std::memcmp(a.data, b.data, FHSIZE);
+}
+
+size_t hash_value(const fhandle_t& a) {
+    return boost::hash_range(a.data, a.data + FHSIZE);
+}
+
 namespace {
+    constexpr const bool ENABLE_CACHING = true;
+    constexpr const size_t MAX_CACHE_ENTRIES = 50;
+    constexpr const size_t MAX_CACHE_DATA_SIZE = 4 * NFS_WRITE_BLOCK_SIZE;
+    constexpr const size_t MAX_CACHE_DATA_WRITE_MISSES = 4;
+
+    struct CacheEntry {
+        fhandle_t handle;
+
+        fattr_t attributes;
+        bool isAttributesValid = false;
+
+        std::vector<std::string> readdirResult;
+        bool isReaddirResultValid = false;
+
+        // Simple cache for forward linear accesses
+        std::vector<uint8_t> data;
+        off_t dataOffset;
+        size_t dataWriteMisses = 0;
+        bool isDataValid = false;
+        bool isDataDirty = false;
+
+        CacheEntry(const CacheEntry&) = delete;
+        CacheEntry& operator=(const CacheEntry&) = delete;
+
+        CacheEntry(CacheEntry&&) = default;
+        CacheEntry& operator=(CacheEntry&&) = default;
+
+        void flush() {
+            if (!isDataValid || !isDataDirty)
+                return;
+
+            // XXX: We assume always-successful NFS ops for caching, so no
+            // error handling is performed
+            for (size_t offset = 0; offset < data.size(); offset += NFS_WRITE_BLOCK_SIZE) {
+                nfs_write(
+                    &handle,
+                    dataOffset + offset,
+                    std::min(data.size() - offset, NFS_WRITE_BLOCK_SIZE),
+                    data.data() + offset,
+                    [](size_t, nfs_stat_t, fattr_t*, int) {}, 0
+                );
+            }
+
+            // nfs_write() copies the buffer to it's own buffer, so we are free
+            // to trash the buffer
+            data.clear();
+            isDataValid = false;
+        }
+    };
+
+    using namespace boost::multi_index;
+    class Cache : public multi_index_container<
+        CacheEntry,
+        indexed_by<
+            sequenced<>,
+            hashed_unique<member<CacheEntry, fhandle_t, &CacheEntry::handle>>
+        >
+    > {
+        public:
+            iterator insert(const fhandle_t& handle) {
+                auto result = push_front(CacheEntry{.handle = handle});
+
+                if (!result.second) {
+                    // Already in cache - move to front
+                    relocate(begin(), result.first);
+                    return begin();
+                } else if (size() > MAX_CACHE_ENTRIES) {
+                    // Cache full - remove LRU entry
+                    if (back().isDataValid && back().isDataDirty)
+                        modify(--end(), [](auto& entry) {entry.flush();});
+                    pop_back();
+                }
+
+                return result.first;
+            }
+
+            iterator find(const fhandle_t& handle) noexcept {
+                auto result = get<1>().find(handle);
+                if (result != get<1>().end()) {
+                    relocate(begin(), project<0>(result));
+                    return begin();
+                } else {
+                    return end();
+                }
+            }
+
+            size_t read(const fhandle_t& handle, off_t offset, size_t length, uint8_t* to) {
+                auto entry = find(handle);
+                if (entry == end() || !entry->isDataValid)
+                    return false;
+
+                switch (_classifyOverlap(offset, length, *entry)) {
+                    case OverlapType::Complete:
+                        if (offset != entry->dataOffset || length != entry->data.size())
+                            break;
+                        // Fallthrough
+
+                    case OverlapType::Middle: {
+                        size_t overlapStart = offset - entry->dataOffset;
+                        std::copy(entry->data.begin() + overlapStart, entry->data.begin() + overlapStart + length, to);
+                        return length;
+                    }
+
+                    case OverlapType::End: {
+                        size_t overlapStart = offset - entry->dataOffset;
+                        size_t overlapSize = entry->data.size() - overlapStart;
+                        std::copy(entry->data.begin() + overlapStart, entry->data.end(), to);
+                        return overlapSize;
+                    }
+
+                    case OverlapType::None:
+                        return false;
+
+                    default:
+                        break;
+                }
+
+                if (entry->isDataDirty)
+                    modify(entry, [](auto& entry) {entry.flush();});
+                return false;
+            }
+
+            bool write(const fhandle_t& handle, off_t offset, size_t length, const uint8_t* from, bool markDataDirty) {
+                static_assert(MAX_CACHE_DATA_SIZE > 2 * NFS_WRITE_BLOCK_SIZE, "Cache data size must be at least twice larger than NFS write block size");
+                if (length > NFS_WRITE_BLOCK_SIZE)
+                    return false;
+
+                auto entry = insert(handle);
+
+                if (!entry->isDataValid || entry->dataWriteMisses >= MAX_CACHE_DATA_WRITE_MISSES) {
+                    modify(entry, [=](auto& entry) {
+                        if (entry.isDataValid && entry.isDataDirty)
+                            entry.flush();
+
+                        entry.data.clear();
+                        entry.data.reserve(MAX_CACHE_DATA_SIZE);
+                        entry.data.insert(entry.data.begin(), from, from + length);
+                        entry.dataOffset = offset;
+                        entry.dataWriteMisses = 0;
+                        entry.isDataValid = true;
+                        entry.isDataDirty = markDataDirty;
+                    });
+
+                    return true;
+                }
+
+                switch (_classifyOverlap(offset, length, *entry)) {
+                    case OverlapType::Complete:
+                        modify(entry, [=](auto& entry) {
+                            entry.data.clear();
+                            entry.data.insert(entry.data.begin(), from, from + length);
+                            entry.dataOffset = offset;
+                            entry.dataWriteMisses = 0;
+                        });
+                        break;
+
+                    case OverlapType::Start:
+                        modify(entry, [=](auto& entry) {
+                            size_t overlapSize = offset + length - entry.dataOffset;
+                            size_t newSize = length + entry.data.size() - overlapSize;
+                            assert(newSize <= MAX_CACHE_DATA_SIZE);
+                            entry.data.resize(newSize);
+
+                            std::copy(entry.data.begin() + overlapSize, entry.data.end(), entry.data.begin() + length);
+                            std::copy(from, from + length, entry.data.begin());
+                            entry.dataOffset = offset;
+                            entry.dataWriteMisses = 0;
+                        });
+                        break;
+
+                    case OverlapType::Middle:
+                        modify(entry, [=](auto& entry) {
+                            size_t overlapStart = offset - entry.dataOffset;
+                            std::copy(from, from + length, entry.data.begin() + overlapStart);
+                            entry.dataWriteMisses = 0;
+                        });
+                        break;
+
+                    case OverlapType::None:
+                        if (entry->dataOffset + entry->data.size() != offset) {
+                            modify(entry, [=](auto& entry) {
+                                ++entry.dataWriteMisses;
+                            });
+                            return false;
+                        }
+                        // Fallthrough
+
+                    case OverlapType::End:
+                        modify(entry, [=](auto& entry) {
+                            size_t overlapStart = offset - entry.dataOffset;
+                            size_t newSize = overlapStart + length;
+                            assert(newSize <= MAX_CACHE_DATA_SIZE);
+                            entry.data.resize(newSize);
+
+                            std::copy(from, from + length, entry.data.begin() + overlapStart);
+                            entry.dataWriteMisses = 0;
+                        });
+                        break;
+                }
+
+                modify(entry, [=](auto& entry) {
+                    if (entry.data.size() > MAX_CACHE_DATA_SIZE - NFS_WRITE_BLOCK_SIZE) {
+                        if (entry.isDataDirty || markDataDirty)
+                            entry.flush();
+
+                        entry.data.clear();
+                        entry.isDataValid = false;
+                    } else {
+                        entry.isDataDirty = markDataDirty;
+                    }
+                });
+
+                return true;
+            }
+
+        private:
+            enum class OverlapType {None, Complete, Start, Middle, End};
+            static OverlapType _classifyOverlap(off_t offset, size_t length, const CacheEntry& entry) noexcept {
+                assert(entry.isDataValid);
+
+                off_t start = offset;
+                off_t end = start + length;
+                off_t entryStart = entry.dataOffset;
+                off_t entryEnd = entry.dataOffset + entry.data.size();
+
+                bool startsBefore = start <= entryStart;
+                bool startsInside = entryStart < start && start < entryEnd;
+                bool endsAfter = entryEnd <= end;
+                bool endsInside = entryStart < end && end < entryEnd;
+
+                if (startsBefore && endsAfter)
+                    return OverlapType::Complete;
+                else if (startsBefore && endsInside)
+                    return OverlapType::Start;
+                else if (startsInside && endsInside)
+                    return OverlapType::Middle;
+                else if (startsInside && endsAfter)
+                    return OverlapType::End;
+                else
+                    return OverlapType::None;
+            }
+    } _cache;
+
     template <typename T>
     [[noreturn]] void _throwRpcError(rpc_stat_t e, T description) {
         int err = ECOMM;
@@ -92,6 +351,17 @@ namespace {
         request.result.insert(request.result.end(), &files[0], &files[length]);
 
         if (nfsCookie == 0) {
+            if (ENABLE_CACHING) {
+                try {
+                    _cache.modify(_cache.insert(request.handle), [&](auto& entry) {
+                        entry.readdirResult = request.result;
+                        entry.isReaddirResultValid = true;
+                    });
+                } catch (...) {
+                    // Ignore cache errors
+                }
+            }
+
             request.promise.set_value(std::move(request.result));
             _readdirRequests.erase(id);
         } else {
@@ -117,16 +387,41 @@ namespace {
         _lookupRequests.erase(id);
     }
 
-    std::unordered_map<size_t, boost::promise<std::pair<const fhandle_t*, fattr_t*>>> _createRequests;
+    struct CreateRequest {
+        fhandle_t handle;
+        std::string filename;
+        boost::promise<std::pair<const fhandle_t*, fattr_t*>> promise;
+    };
+    std::unordered_map<size_t, CreateRequest> _createRequests;
     size_t _createRequestsNextId;
     void _createCallback(size_t id, nfs_stat_t e, fhandle_t* handle, fattr_t* attr) noexcept try {
         if (e != NFS_OK)
             _throwNfsError(e, "Failed to create a NFS file");
 
-        _createRequests.at(id).set_value(std::make_pair(handle, attr));
+        auto& request = _createRequests.at(id);
+
+        if (ENABLE_CACHING) {
+            try {
+                auto dirEntry = _cache.find(request.handle);
+                if (dirEntry != _cache.end() && dirEntry->isReaddirResultValid) {
+                    _cache.modify(dirEntry, [&](auto& dirEntry) {
+                        dirEntry.readdirResult.push_back(std::move(request.filename));
+                    });
+                }
+
+                _cache.modify(_cache.insert(*handle), [&](auto& fileEntry) {
+                    fileEntry.attributes = *attr;
+                    fileEntry.isAttributesValid = true;
+                });
+            } catch (...) {
+                // Ignore cache errors
+            }
+        }
+
+        request.promise.set_value(std::make_pair(handle, attr));
         _createRequests.erase(id);
     } catch (...) {
-        _createRequests.at(id).set_exception(std::current_exception());
+        _createRequests.at(id).promise.set_exception(std::current_exception());
         _createRequests.erase(id);
     }
 
@@ -143,16 +438,33 @@ namespace {
         _removeRequests.erase(id);
     }
 
-    std::unordered_map<size_t, boost::promise<fattr_t*>> _getattrRequests;
+    struct GetattrRequest {
+        fhandle_t handle;
+        boost::promise<const fattr_t*> promise;
+    };
+    std::unordered_map<size_t, GetattrRequest> _getattrRequests;
     size_t _getattrRequestsNextId;
     void _getattrCallback(size_t id, nfs_stat_t e, fattr_t* attr) noexcept try {
         if (e != NFS_OK)
             _throwNfsError(e, "Failed to get a NFS file's attributes");
 
-        _getattrRequests.at(id).set_value(attr);
+        auto& request = _getattrRequests.at(id);
+
+        if (ENABLE_CACHING) {
+            try {
+                _cache.modify(_cache.insert(request.handle), [&](auto& entry) {
+                    entry.attributes = *attr;
+                    entry.isAttributesValid = true;
+                });
+            } catch (...) {
+                // Ignore cache errors
+            }
+        }
+
+        request.promise.set_value(attr);
         _getattrRequests.erase(id);
     } catch (...) {
-        _getattrRequests.at(id).set_exception(std::current_exception());
+        _getattrRequests.at(id).promise.set_exception(std::current_exception());
         _getattrRequests.erase(id);
     }
 
@@ -167,7 +479,7 @@ namespace {
     };
     std::unordered_map<size_t, ReadRequest> _readRequests;
     size_t _readRequestsNextId;
-    void _readCallback(size_t id, nfs_stat_t e, fattr_t* attr, pbuf* packet, int length, int pos) noexcept try {
+    void _readCallback(size_t id, nfs_stat_t e, fattr_t* /*attr*/, pbuf* packet, int length, int pos) noexcept try {
         auto& request = _readRequests.at(id);
 
         if (e != NFS_OK) {
@@ -181,8 +493,26 @@ namespace {
             throw std::system_error(ECOMM, std::system_category(), "NFS returned a negative length");
         }
 
-        pbuf_copy_partial(packet, request.data + request.readBytes, length, pos);
-        request.readBytes += length;
+        if (length > request.count) {
+            // Handle readahead
+            if (ENABLE_CACHING) {
+                try {
+                    std::vector<uint8_t> buffer(length);
+                    pbuf_copy_partial(packet, buffer.data(), length, pos);
+                    _cache.write(request.handle, request.offset + request.readBytes, length, buffer.data(), false);
+                } catch (...) {
+                    // Ignore cache errors
+                }
+            }
+
+            pbuf_copy_partial(packet, request.data + request.readBytes, request.count - request.readBytes, pos);
+            request.readBytes = request.count;
+
+            goto resolvePromise;
+        } else {
+            pbuf_copy_partial(packet, request.data + request.readBytes, length, pos);
+            request.readBytes += length;
+        }
 
         if (length > 0 && request.readBytes < request.count) {
             rpc_stat_t e = nfs_read(
@@ -276,6 +606,15 @@ void print_exports() {
 }
 
 boost::future<std::vector<std::string>> readdir(const fhandle_t& pfh) {
+    if (ENABLE_CACHING) {
+        auto entry = _cache.find(pfh);
+        if (entry != _cache.end() && entry->isReaddirResultValid) {
+            boost::promise<std::vector<std::string>> promise;
+            promise.set_value(entry->readdirResult);
+            return promise.get_future();
+        }
+    }
+
     while (_readdirRequests.count(_readdirRequestsNextId) > 0)
         ++_readdirRequestsNextId;
     size_t id = _readdirRequestsNextId++;
@@ -311,8 +650,8 @@ boost::future<std::pair<const fhandle_t*, fattr_t*>> create(const fhandle_t& pfh
     while (_createRequests.count(_createRequestsNextId) > 0)
         ++_createRequestsNextId;
     size_t id = _createRequestsNextId++;
-    auto& request = _createRequests[id];
-    auto future = request.get_future();
+    auto& request = _createRequests[id] = {.handle = pfh, .filename = name};
+    auto future = request.promise.get_future();
 
     rpc_stat_t e = nfs_create(&pfh, name.c_str(), &sattr, _createCallback, id);
     if (e != RPC_OK) {
@@ -324,6 +663,12 @@ boost::future<std::pair<const fhandle_t*, fattr_t*>> create(const fhandle_t& pfh
 }
 
 boost::future<void> remove(const fhandle_t& pfh, const std::string& name) {
+    if (ENABLE_CACHING) {
+        auto entry = _cache.find(pfh);
+        if (entry != _cache.end() && entry->isReaddirResultValid)
+            _cache.modify(entry, [](auto& entry) {entry.isReaddirResultValid = false;});
+    }
+
     while (_removeRequests.count(_removeRequestsNextId) > 0)
         ++_removeRequestsNextId;
     size_t id = _removeRequestsNextId++;
@@ -339,12 +684,18 @@ boost::future<void> remove(const fhandle_t& pfh, const std::string& name) {
     return future;
 }
 
-boost::future<fattr_t*> getattr(const fhandle_t& fh) {
+boost::future<const fattr_t*> getattr(const fhandle_t& fh) {
+    if (ENABLE_CACHING) {
+        auto entry = _cache.find(fh);
+        if (entry != _cache.end() && entry->isAttributesValid)
+            return boost::make_ready_future<const fattr_t*>(&entry->attributes);
+    }
+
     while (_getattrRequests.count(_getattrRequestsNextId) > 0)
         ++_getattrRequestsNextId;
     size_t id = _getattrRequestsNextId++;
-    auto& request = _getattrRequests[id];
-    auto future = request.get_future();
+    auto& request = _getattrRequests[id] = {.handle = fh};
+    auto future = request.promise.get_future();
 
     rpc_stat_t e = nfs_getattr(&fh, _getattrCallback, id);
     if (e != RPC_OK) {
@@ -359,13 +710,21 @@ boost::future<size_t> read(const fhandle_t& fh, off_t offset, size_t count, uint
     if (count > std::numeric_limits<int>::max())
         throw std::invalid_argument("Count is bigger than what an int can store");
 
+    size_t cacheRead = 0;
+    if (ENABLE_CACHING) {
+        cacheRead = _cache.read(fh, offset, count, data);
+        if (cacheRead == count)
+            return boost::make_ready_future<size_t>(count);
+    }
+
     while (_readRequests.count(_readRequestsNextId) > 0)
         ++_readRequestsNextId;
     size_t id = _readRequestsNextId++;
-    auto& request = _readRequests[id] = {.handle = fh, .offset = offset, .count = count, .data = data};
+    auto& request = _readRequests[id] = {.handle = fh, .offset = offset, .count = count, .data = data, .readBytes = cacheRead};
     auto future = request.promise.get_future();
 
-    rpc_stat_t e = nfs_read(&request.handle, offset, count, _readCallback, id);
+    size_t toRead = ENABLE_CACHING ? std::max(count - cacheRead, NFS_READ_BLOCK_SIZE) : count - cacheRead;
+    rpc_stat_t e = nfs_read(&request.handle, offset + cacheRead, toRead, _readCallback, id);
     if (e != RPC_OK) {
         _readRequests.erase(id);
         _throwRpcError(e, "Failed to read from a NFS file");
@@ -377,6 +736,9 @@ boost::future<size_t> read(const fhandle_t& fh, off_t offset, size_t count, uint
 boost::future<size_t> write(const fhandle_t& fh, off_t offset, size_t count, const uint8_t* data) {
     if (count > std::numeric_limits<int>::max())
         throw std::invalid_argument("Count is bigger than what an int can store");
+
+    if (ENABLE_CACHING && _cache.write(fh, offset, count, data, true))
+        return boost::make_ready_future<size_t>(count);
 
     while (_writeRequests.count(_writeRequestsNextId) > 0)
         ++_writeRequestsNextId;
@@ -391,6 +753,14 @@ boost::future<size_t> write(const fhandle_t& fh, off_t offset, size_t count, con
     }
 
     return future;
+}
+
+void flush(const fhandle_t& fh) {
+    if (ENABLE_CACHING) {
+        auto entry = _cache.find(fh);
+        if (entry != _cache.end() && entry->isDataValid && entry->isDataDirty)
+            _cache.modify(entry, [](auto& entry) {entry.flush();});
+    }
 }
 
 }
