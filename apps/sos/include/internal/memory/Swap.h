@@ -42,12 +42,12 @@ class Swap {
         size_t _lastUsed = -1U;
 
         std::queue<std::function<void ()>> _pendingSwapOuts;
-        ScopedMapping _swapOutBufferMapping;
-        std::vector<fs::IoVector> _swapOutBufferIoVectors;
+        const ScopedMapping _swapOutBufferMapping;
+        const std::vector<fs::IoVector> _swapOutBufferIoVectors;
 
         std::queue<std::function<void ()>> _pendingSwapIns;
-        ScopedMapping _swapInBufferMapping;
-        std::vector<fs::IoVector> _swapInBufferIoVectors;
+        const ScopedMapping _swapInBufferMapping;
+        const std::vector<fs::IoVector> _swapInBufferIoVectors;
 };
 
 }
