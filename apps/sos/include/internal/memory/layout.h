@@ -5,7 +5,7 @@ namespace memory {
 using vaddr_t = size_t;
 
 constexpr const size_t SOS_INIT_AREA_SIZE = 0x400000;
-constexpr const vaddr_t SOS_BRK_START = 0x900000;
+constexpr const vaddr_t SOS_BRK_START = 0x200000;
 constexpr const vaddr_t SOS_BRK_END = SOS_BRK_START + 50 * 1024 * 1024;
 
 constexpr const vaddr_t MMAP_START       = 0x10000000;

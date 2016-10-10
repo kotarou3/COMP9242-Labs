@@ -22,7 +22,6 @@ class Process : public std::enable_shared_from_this<Process> {
     public:
         static std::shared_ptr<Process> create(std::shared_ptr<Process> parent) {
             auto result = std::shared_ptr<Process>(new Process(parent));
-            result->maps._process = result;
             parent->_children.insert(result);
             return result;
         }

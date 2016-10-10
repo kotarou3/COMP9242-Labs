@@ -110,9 +110,11 @@ void ConsoleDevice::mountOn(DeviceFileSystem& fs, const std::string& name) {
     });
 }
 
-async::future<ssize_t> ConsoleDevice::_readOne(const IoVector& iov, off64_t offset) {
+async::future<ssize_t> ConsoleDevice::_readOne(const IoVector& iov, off64_t offset, bool bypassAttributes) {
     if (offset != CURRENT_OFFSET)
         throw std::system_error(ESPIPE, std::system_category(), "Cannot seek the console device");
+    if (bypassAttributes)
+        throw std::system_error(ENOSYS, std::system_category(), "Bypassing memory attributes not supported on console device");
 
     async::promise<ssize_t> promise;
     auto future = promise.get_future();

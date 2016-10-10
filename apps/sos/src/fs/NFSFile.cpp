@@ -17,7 +17,7 @@ NFSFile::NFSFile(const nfs::fhandle_t& handle):
     _currentOffset(0)
 {}
 
-async::future<ssize_t> NFSFile::_readOne(const IoVector& iov, off64_t offset) {
+async::future<ssize_t> NFSFile::_readOne(const IoVector& iov, off64_t offset, bool bypassAttributes) {
     off64_t actualOffset = offset;
     if (offset == fs::CURRENT_OFFSET)
         actualOffset = _currentOffset;
@@ -28,7 +28,8 @@ async::future<ssize_t> NFSFile::_readOne(const IoVector& iov, off64_t offset) {
 
     return memory::UserMemory(iov.buffer).mapIn<uint8_t>(
         iov.length,
-        memory::Attributes{.read = false, .write = true}
+        memory::Attributes{.read = false, .write = true},
+        bypassAttributes
     ).then([this, iov, actualOffset](auto map) {
         auto _map = std::make_shared<std::pair<uint8_t*, memory::ScopedMapping>>(std::move(map.get()));
 

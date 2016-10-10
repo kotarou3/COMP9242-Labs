@@ -4,7 +4,6 @@
 #include <system_error>
 
 extern "C" {
-    #include <cpio/cpio.h>
     #include <sos.h>
 
     #include "internal/sys/debug.h"
@@ -17,8 +16,6 @@ extern "C" {
 #include "internal/process/Table.h"
 #include "internal/syscall/process.h"
 #include "internal/syscall/thread.h"
-
-extern char _cpio_archive[];
 
 namespace syscall {
 
@@ -124,13 +121,7 @@ async::future<pid_t> process_create(std::weak_ptr<process::Process> process, mem
     auto newProcess = process::Process::create(std::shared_ptr<process::Process>(process));
     return memory::UserMemory(process, filename).readString().then([=](auto filename) {
         newProcess->filename = std::move(filename.get());
-
-        unsigned long elf_size;
-        uint8_t* elf_base = (uint8_t*)cpio_get_file(_cpio_archive, newProcess->filename.c_str(), &elf_size);
-        if (!elf_base)
-            throw std::system_error(ENOENT, std::system_category(), "Unable to locate cpio header");
-
-        return elf::load(newProcess, elf_base);
+        return elf::load(newProcess, newProcess->filename);
     }).unwrap().then([=](auto ep) {
         newProcess->fdTable = std::shared_ptr<process::Process>(process)->fdTable;
 

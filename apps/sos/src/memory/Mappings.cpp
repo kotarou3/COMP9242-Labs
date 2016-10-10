@@ -19,7 +19,11 @@ namespace memory {
 // Mappings //
 //////////////
 
-ScopedMapping Mappings::insert(vaddr_t address, size_t pages, Attributes attributes, Mapping::Flags flags) {
+Mappings::Mappings(process::Process& process):
+    _process(process)
+{}
+
+ScopedMapping Mappings::insert(vaddr_t address, size_t pages, Attributes attributes, Mapping::Flags flags, std::shared_ptr<fs::File> file, off64_t fileOffset, size_t fileSize, size_t memoryOffset) {
     _checkAddress(address, pages);
 
     if (flags.shared)
@@ -69,7 +73,12 @@ haveValidAddress:
         .start = address,
         .end = address + pages * PAGE_SIZE,
         .attributes = attributes,
-        .flags = flags
+        .flags = flags,
+
+        .file = file,
+        .fileOffset = fileOffset,
+        .fileSize = fileSize,
+        .memoryOffset = memoryOffset
     };
     return ScopedMapping(*this, map.start, pages);
 }
@@ -130,12 +139,9 @@ void Mappings::erase(vaddr_t address, size_t pages) {
                 __builtin_unreachable();
         }
 
-        auto process = _process.lock();
-        if (process) {
-            for (size_t p = 0; p < unmapPages; ++p) {
-                process->pageDirectory.unmap(unmapStart);
-                unmapStart += PAGE_SIZE;
-            }
+        for (size_t p = 0; p < unmapPages; ++p) {
+            _process.pageDirectory.unmap(unmapStart);
+            unmapStart += PAGE_SIZE;
         }
     }
 }
@@ -232,7 +238,7 @@ Mappings::OverlapType Mappings::_classifyOverlap(vaddr_t address, size_t pages, 
 ///////////////////
 
 ScopedMapping::ScopedMapping(Mappings& maps, vaddr_t address, size_t pages):
-    _process(maps._process),
+    _process(maps._process.shared_from_this()),
     _address(address),
     _pages(pages)
 {}

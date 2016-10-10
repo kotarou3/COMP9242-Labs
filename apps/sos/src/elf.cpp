@@ -2,6 +2,7 @@
 #include <stdint.h>
 
 #include "internal/elf.h"
+#include "internal/fs/File.h"
 #include "internal/memory/Mappings.h"
 #include "internal/memory/PageDirectory.h"
 #include "internal/memory/UserMemory.h"
@@ -13,69 +14,59 @@ extern "C" {
 
 namespace elf {
 
-async::future<memory::vaddr_t> load(std::shared_ptr<process::Process> process, uint8_t* file) {
-    if (elf_checkFile(file))
-        throw std::invalid_argument("Invalid ELF file");
+async::future<memory::vaddr_t> load(std::shared_ptr<process::Process> process, const std::string& pathname) {
+    return fs::rootFileSystem->open(pathname, fs::FileSystem::OpenFlags{.read = true}).then([=] (auto file) {
+        std::shared_ptr<fs::File> _file = std::move(file.get());
+        auto elfHeader = std::make_shared<std::array<uint8_t, PAGE_SIZE>>();
 
-    std::vector<std::shared_ptr<memory::ScopedMapping>> maps;
-    std::vector<async::future<void>> writes;
+        return _file->read(
+            {fs::IoVector{
+                .buffer = memory::UserMemory(
+                    process::getSosProcess(),
+                    reinterpret_cast<memory::vaddr_t>(elfHeader.get())
+                ),
+                .length = PAGE_SIZE
+            }},
+            0
+        ).then([=] (auto read) {
+            read.get();
 
-    size_t headers = elf_getNumProgramHeaders(file);
-    for (size_t h = 0; h < headers; ++h) {
-        if (elf_getProgramHeaderType(file, h) != PT_LOAD)
-            continue;
+            uint8_t* header = elfHeader->data();
+            if (elf_checkFile(header))
+                throw std::invalid_argument("Invalid ELF file");
 
-        uint8_t* from = file + elf_getProgramHeaderOffset(file, h);
-        memory::vaddr_t to = elf_getProgramHeaderVaddr(file, h);
-        size_t fileSize = elf_getProgramHeaderFileSize(file, h);
-        size_t memorySize = elf_getProgramHeaderMemorySize(file, h);
-        int flags = elf_getProgramHeaderFlags(file, h);
+            size_t headers = elf_getNumProgramHeaders(header);
+            for (size_t h = 0; h < headers; ++h) {
+                if (elf_getProgramHeaderType(header, h) != PT_LOAD)
+                    continue;
 
-        if (fileSize > memorySize)
-            throw std::invalid_argument("Segment file size larger than memory size");
+                size_t fileOffset = elf_getProgramHeaderOffset(header, h);
+                memory::vaddr_t to = elf_getProgramHeaderVaddr(header, h);
+                size_t fileSize = elf_getProgramHeaderFileSize(header, h);
+                size_t memorySize = elf_getProgramHeaderMemorySize(header, h);
+                int flags = elf_getProgramHeaderFlags(header, h);
 
-        size_t startPadding = memory::pageOffset(to);
-        memory::vaddr_t start = to - startPadding;
-        size_t pages = memory::numPages(memorySize + startPadding);
+                if (fileSize > memorySize)
+                    throw std::invalid_argument("Segment file size larger than memory size");
 
-        auto map = std::make_shared<memory::ScopedMapping>(process->maps.insert(
-            start, pages,
-            memory::Attributes{
-                .read = flags & PF_R,
-                .write = flags & PF_W,
-                .execute = flags & PF_X
-            },
-            memory::Mapping::Flags{.shared = false, .fixed = true}
-        ));
+                size_t startPadding = memory::pageOffset(to);
+                memory::vaddr_t start = to - startPadding;
+                size_t pages = memory::numPages(memorySize + startPadding);
 
-        if (fileSize > 0) {
-            writes.push_back(
-                memory::UserMemory(process, to).write(from, from + fileSize, true)
-                    .then([process, map, startPadding, fileSize](async::future<void> result) {
-                        result.get();
+                process->maps.insert(
+                    start, pages,
+                    memory::Attributes{
+                        .read = flags & PF_R,
+                        .write = flags & PF_W,
+                        .execute = flags & PF_X
+                    },
+                    memory::Mapping::Flags{.shared = false, .fixed = true},
+                    _file, fileOffset, fileSize, startPadding
+                ).release();
+            }
 
-                        // Unify the data and instruction cache's view of the pages
-                        for (size_t b = 0; b < fileSize + startPadding; b += PAGE_SIZE) {
-                            assert(seL4_ARM_Page_Unify_Instruction(
-                                process->pageDirectory.lookup(map->getStart() + b)->getPage().getCap(),
-                                0, PAGE_SIZE
-                            ) == seL4_NoError);
-                        }
-                    })
-            );
-        }
-
-        maps.push_back(std::move(map));
-    }
-
-    return async::when_all(writes.begin(), writes.end()).then([maps, file](auto results) {
-        for (auto& result : results.get())
-            result.get();
-
-        for (auto& map : maps)
-            map->release();
-
-        return static_cast<memory::vaddr_t>(elf_getEntryPoint(file));
+            return static_cast<memory::vaddr_t>(elf_getEntryPoint(header));
+        });
     });
 }
 

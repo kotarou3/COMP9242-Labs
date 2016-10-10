@@ -11,7 +11,7 @@ class NFSFile : public File {
         virtual ~NFSFile() = default;
 
     protected:
-        virtual async::future<ssize_t> _readOne(const IoVector& iov, off64_t offset) override;
+        virtual async::future<ssize_t> _readOne(const IoVector& iov, off64_t offset, bool bypassAttributes) override;
         virtual async::future<ssize_t> _writeOne(const IoVector& iov, off64_t offset) override;
 
     private:

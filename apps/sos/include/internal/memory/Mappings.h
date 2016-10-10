@@ -7,6 +7,10 @@
 
 #include "internal/memory/PageDirectory.h"
 
+namespace fs {
+    class File;
+}
+
 namespace process {
     class Process;
     std::shared_ptr<Process> getSosProcess() noexcept;
@@ -25,15 +29,25 @@ struct Mapping {
         bool stack:1;
         bool reserved:1; // Never map in this mapping
     } flags;
+
+    std::shared_ptr<fs::File> file;
+    off64_t fileOffset;
+    size_t fileSize;
+    size_t memoryOffset;
 };
 class ScopedMapping;
 
 class Mappings {
     public:
+        Mappings(process::Process& process);
+
         Mappings(const Mappings&) = delete;
         Mappings& operator=(const Mappings&) = delete;
 
-        ScopedMapping insert(vaddr_t address, size_t pages, Attributes attributes, Mapping::Flags flags);
+        Mappings(Mappings&&) = delete;
+        Mappings& operator=(Mappings&&) = delete;
+
+        ScopedMapping insert(vaddr_t address, size_t pages, Attributes attributes, Mapping::Flags flags, std::shared_ptr<fs::File> file = nullptr, off64_t fileOffset = 0, size_t fileSize = 0, size_t memoryOffset = 0);
         void erase(vaddr_t address, size_t pages);
         void clear() noexcept;
 
@@ -52,7 +66,7 @@ class Mappings {
         enum class OverlapType { None, Complete, Start, Middle, End };
         static OverlapType _classifyOverlap(vaddr_t address, size_t pages, const Mapping& map) noexcept;
 
-        std::weak_ptr<process::Process> _process;
+        process::Process& _process;
 
         std::map<vaddr_t, Mapping> _maps;
 

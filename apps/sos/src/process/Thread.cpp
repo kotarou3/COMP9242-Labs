@@ -77,12 +77,7 @@ async::future<void> Thread::start(
 
     return _process->pageDirectory.allocateAndMap(
         _ipcBuffer.getAddress(),
-        memory::Attributes{
-            .read = true,
-            .write = true,
-            .execute = false,
-            .locked = true
-        }
+        _process->maps.lookup(_ipcBuffer.getAddress())
     ).then([=, &faultEndpoint](auto page) {
         const memory::MappedPage& ipcBufferMappedPage = page.get();
 
@@ -313,6 +308,8 @@ void Thread::handleFault(const seL4_MessageInfo_t& message) noexcept {
 /////////////
 
 Process::Process(std::shared_ptr<Process> parent):
+    pageDirectory(*this),
+    maps(*this),
     isSosProcess(false),
     _parent(parent),
 
@@ -332,7 +329,8 @@ Process::Process(std::shared_ptr<Process> parent):
 }
 
 Process::Process(bool isSosProcess):
-    pageDirectory(seL4_CapInitThreadPD),
+    pageDirectory(*this, seL4_CapInitThreadPD),
+    maps(*this),
     isSosProcess(isSosProcess),
     _cspace(cur_cspace, [](cspace_t*) {})
 {
@@ -414,7 +412,7 @@ async::future<void> Process::handlePageFault(memory::vaddr_t address, memory::At
     if (cause.write && !map.attributes.write)
         throw std::system_error(EFAULT, std::system_category(), "Attempted to write to a non-writeable region");
 
-    return pageDirectory.makeResident(address, map.attributes).then([](auto page) {
+    return pageDirectory.makeResident(address, map).then([](auto page) {
         (void)page.get();
     });
 }
@@ -464,9 +462,9 @@ void Process::_shrinkZombie() noexcept {
 }
 
 std::shared_ptr<Process> getSosProcess() noexcept {
-    static std::shared_ptr<Process> sosProcess(new Process(true));
-    if (sosProcess->maps._process.expired()) {
-        sosProcess->maps._process = sosProcess;
+    static std::shared_ptr<Process> sosProcess;
+    if (!sosProcess) {
+        sosProcess = std::shared_ptr<Process>(new Process(true));
 
         // Reserve areas of memory already in-use (not in constructor due to
         // memory::Mappings requiring a valid _process)

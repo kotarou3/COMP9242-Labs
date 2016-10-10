@@ -80,6 +80,7 @@
  */
 #include <elf/elf.h>
 #include <elf/debug.h>
+#include <limits.h>
 #include <string.h>
 #include <inttypes.h>
 
@@ -93,6 +94,9 @@ elf32_checkFile(struct Elf32_Header *file)
 		return -1;	/* not an elf file */
 	if (file->e_ident[EI_CLASS] != ELFCLASS32)
 		return -2;	/* not 32-bit file */
+	struct Elf32_Phdr* end = &elf32_getProgramHeaderTable(file)[elf32_getNumProgramHeaders(file)];
+	if ((size_t)end - (size_t)file >= PAGE_SIZE)
+		return -3; /* header doesn't fit in a single page */
 	return 0;		/* elf file looks OK */
 }
 

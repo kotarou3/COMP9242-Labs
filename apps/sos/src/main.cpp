@@ -14,7 +14,6 @@
 extern "C" {
     #include <autoconf.h>
 
-    #include <cpio/cpio.h>
     #include <cspace/cspace.h>
     #include <sel4/sel4.h>
 
@@ -38,8 +37,6 @@ extern "C" {
 #include "internal/process/Thread.h"
 #include "internal/syscall/process.h"
 #include "internal/timer/timer.h"
-
-extern char _cpio_archive[];
 
 const Capability<seL4_EndpointObject, seL4_EndpointBits>& getIpcEndpoint() noexcept {
     static Capability<seL4_EndpointObject, seL4_EndpointBits> _ipcEndpoint;
@@ -101,25 +98,7 @@ namespace {
             );
         }
 
-        kprintf(LOGLEVEL_INFO,"-----------------------------------------\n\n");
-
-        // Print cpio data
-        kprintf(LOGLEVEL_INFO, "Parsing cpio data:\n");
-        kprintf(LOGLEVEL_INFO, "--------------------------------------------------------\n");
-        kprintf(LOGLEVEL_INFO, "| index |        name      |  address   | size (bytes) |\n");
-        kprintf(LOGLEVEL_INFO, "|------------------------------------------------------|\n");
-        for (size_t i = 0; ; i++) {
-            unsigned long size;
-            const char *name;
-            void* data = cpio_get_entry(_cpio_archive, i, &name, &size);
-
-            if (data != nullptr) {
-                kprintf(LOGLEVEL_INFO, "| %3zu   | %16s | %p | %12lu |\n", i, name, data, size);
-            } else {
-                break;
-            }
-        }
-        kprintf(LOGLEVEL_INFO, "--------------------------------------------------------\n");
+        kprintf(LOGLEVEL_INFO,"-----------------------------------------\n");
     }
 
     void _init() noexcept {

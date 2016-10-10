@@ -24,13 +24,13 @@ class File {
     public:
         virtual ~File() = default;
 
-        virtual async::future<ssize_t> read(const std::vector<IoVector>& iov, off64_t offset);
+        virtual async::future<ssize_t> read(const std::vector<IoVector>& iov, off64_t offset, bool bypassAttributes = false);
         virtual async::future<ssize_t> write(const std::vector<IoVector>& iov, off64_t offset);
 
         virtual async::future<int> ioctl(size_t request, memory::UserMemory argp);
 
     protected:
-        virtual async::future<ssize_t> _readOne(const IoVector& iov, off64_t offset);
+        virtual async::future<ssize_t> _readOne(const IoVector& iov, off64_t offset, bool bypassAttributes);
         virtual async::future<ssize_t> _writeOne(const IoVector& iov, off64_t offset);
 };
 
@@ -38,7 +38,7 @@ class Directory : public File {
     public:
         virtual ~Directory() = default;
 
-        virtual async::future<ssize_t> read(const std::vector<IoVector>& iov, off64_t offset) override;
+        virtual async::future<ssize_t> read(const std::vector<IoVector>& iov, off64_t offset, bool bypassAttributes) override;
         virtual async::future<ssize_t> write(const std::vector<IoVector>& iov, off64_t offset) override;
 
         virtual async::future<ssize_t> getdents(memory::UserMemory dirp, size_t length) = 0;

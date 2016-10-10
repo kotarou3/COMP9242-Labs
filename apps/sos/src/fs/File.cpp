@@ -9,17 +9,17 @@
 
 namespace fs {
 
-async::future<ssize_t> File::read(const std::vector<IoVector>& iov, off64_t offset) {
+async::future<ssize_t> File::read(const std::vector<IoVector>& iov, off64_t offset, bool bypassAttributes) {
     auto future = async::make_ready_future<ssize_t>(0);
 
     ssize_t expectedBytesRead = 0;
     for (const auto& vector : iov) {
-        future = future.then([this, vector, offset, expectedBytesRead](auto read) {
+        future = future.then([=](auto read) {
             ssize_t _read = read.get();
             if (_read != expectedBytesRead)
                 return async::make_ready_future(_read);
 
-            return this->_readOne(vector, offset == CURRENT_OFFSET ? CURRENT_OFFSET : offset + _read);
+            return this->_readOne(vector, offset == CURRENT_OFFSET ? CURRENT_OFFSET : offset + _read, bypassAttributes);
         }).unwrap().then([expectedBytesRead](auto read) {
             try {
                 return expectedBytesRead + read.get();
@@ -67,7 +67,7 @@ async::future<int> File::ioctl(size_t /*request*/, memory::UserMemory /*argp*/) 
     throw std::invalid_argument("File not ioctl'able");
 }
 
-async::future<ssize_t> File::_readOne(const IoVector& /*iov*/, off64_t /*offset*/) {
+async::future<ssize_t> File::_readOne(const IoVector& /*iov*/, off64_t /*offset*/, bool /*bypassAttributes*/) {
     throw std::invalid_argument("File not readable");
 }
 
@@ -75,7 +75,7 @@ async::future<ssize_t> File::_writeOne(const IoVector& /*iov*/, off64_t /*offset
     throw std::invalid_argument("File not writeable");
 }
 
-async::future<ssize_t> Directory::read(const std::vector<IoVector>& /*iov*/, off64_t /*offset*/) {
+async::future<ssize_t> Directory::read(const std::vector<IoVector>& /*iov*/, off64_t /*offset*/, bool /*bypassAttributes*/) {
     throw std::system_error(EISDIR, std::system_category(), "Directory not directly readable");
 }
 

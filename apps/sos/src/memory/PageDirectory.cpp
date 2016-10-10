@@ -7,10 +7,12 @@ extern "C" {
     #include <cspace/cspace.h>
     #include <sel4/sel4.h>
 
+    #include "internal/sys/debug.h"
     #include "internal/ut_manager/ut.h"
 }
 
 #include "internal/memory/FrameTable.h"
+#include "internal/memory/Mappings.h"
 #include "internal/memory/PageDirectory.h"
 #include "internal/memory/Swap.h"
 
@@ -20,7 +22,12 @@ namespace memory {
 // PageDirectory //
 ///////////////////
 
-PageDirectory::PageDirectory(seL4_ARM_PageDirectory cap):
+PageDirectory::PageDirectory(process::Process& process):
+    _process(process)
+{}
+
+PageDirectory::PageDirectory(process::Process& process, seL4_ARM_PageDirectory cap):
+    _process(process),
     // Externally managed cap, so set it's memory to 0
     _cap(0, cap)
 {}
@@ -57,16 +64,16 @@ void PageDirectory::reservePages(vaddr_t from, vaddr_t to) {
     }
 }
 
-async::future<const MappedPage&> PageDirectory::makeResident(vaddr_t address, Attributes attributes) {
+async::future<const MappedPage&> PageDirectory::makeResident(vaddr_t address, const Mapping& map) {
     auto table = _tables.find(_toIndex(address));
     if (table == _tables.end())
-        return allocateAndMap(address, attributes);
+        return allocateAndMap(address, map);
 
     MappedPage* page = table->second.lookup(address, true);
     if (!page)
-        return allocateAndMap(address, attributes);
+        return allocateAndMap(address, map);
 
-    if (page->getAttributes() != attributes)
+    if (page->getAttributes() != map.attributes)
         throw std::system_error(ENOSYS, std::system_category(), "Changing page attributes not implemented");
 
     switch (page->getPage().getStatus()) {
@@ -93,9 +100,53 @@ async::future<const MappedPage&> PageDirectory::makeResident(vaddr_t address, At
     return async::make_ready_future<const MappedPage&>(static_cast<const MappedPage&>(*page));
 }
 
-async::future<const MappedPage&> PageDirectory::allocateAndMap(vaddr_t address, Attributes attributes) {
-    return FrameTable::alloc().then([=] (auto page) -> const MappedPage& {
-        return this->map(page.get(), address, attributes);
+async::future<const MappedPage&> PageDirectory::allocateAndMap(vaddr_t address, Mapping map) {
+    return FrameTable::alloc().then([=](auto page) {
+        const MappedPage& result = this->map(page.get(), address, map.attributes);
+        if (map.file) {
+            vaddr_t readTo = address;
+            size_t readSize = PAGE_SIZE;
+            if (readTo == map.start) {
+                readTo += map.memoryOffset;
+                readSize -= map.memoryOffset;
+            }
+
+            // Account for the case when the file size is smaller than the memory size
+            readSize = std::min(
+                readSize,
+                static_cast<size_t>(std::max(
+                    static_cast<ssize_t>(map.start + map.memoryOffset + map.fileSize - readTo),
+                    0
+                ))
+            );
+
+            assert(readTo - address < PAGE_SIZE);
+            assert(readSize <= PAGE_SIZE);
+
+            if (readSize > 0) {
+                off64_t fileStart = readTo - (map.start + map.memoryOffset) + map.fileOffset;
+                std::vector<fs::IoVector> iovs = {{
+                    .buffer = UserMemory(_process.shared_from_this(), readTo),
+                    .length = readSize
+                }};
+                return map.file->read(iovs, fileStart, true).then([=](auto read) {
+                    if (static_cast<size_t>(read.get()) != readSize)
+                        throw std::system_error(ENOSYS, std::system_category(), "Unable to load ELF file page from NFS");
+
+                    // this and map must still exist if the read succeeded
+                    const MappedPage* result = this->lookup(address);
+                    assert(seL4_ARM_Page_Unify_Instruction(
+                        result->getPage().getCap(),
+                        0, PAGE_SIZE
+                    ) == seL4_NoError);
+
+                    return result;
+                });
+            }
+        }
+        return boost::make_ready_future(&result);
+    }).unwrap().then([](auto result) -> const MappedPage& {
+        return *result.get();
     });
 }
 

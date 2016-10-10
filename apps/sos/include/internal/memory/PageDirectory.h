@@ -13,6 +13,10 @@ extern "C" {
 #include "internal/memory/Page.h"
 #include "internal/Capability.h"
 
+namespace process {
+    class Process;
+}
+
 namespace memory {
 
 using vaddr_t = size_t;
@@ -34,11 +38,12 @@ constexpr bool operator!=(const Attributes& a, const Attributes& b) {
 
 class PageTable;
 class MappedPage;
+class Mapping;
 
 class PageDirectory {
     public:
-        PageDirectory() = default;
-        explicit PageDirectory(seL4_ARM_PageDirectory cap);
+        explicit PageDirectory(process::Process& process);
+        PageDirectory(process::Process& process, seL4_ARM_PageDirectory cap);
         ~PageDirectory();
 
         PageDirectory(const PageDirectory&) = delete;
@@ -53,8 +58,8 @@ class PageDirectory {
 
         // Warning: Returned MappedPage reference is invalidated after another mapping
 
-        async::future<const MappedPage&> makeResident(vaddr_t address, Attributes attributes);
-        async::future<const MappedPage&> allocateAndMap(vaddr_t address, Attributes attributes);
+        async::future<const MappedPage&> makeResident(vaddr_t address, const Mapping& map);
+        async::future<const MappedPage&> allocateAndMap(vaddr_t address, Mapping map);
 
         const MappedPage& map(Page page, vaddr_t address, Attributes attributes);
         void unmap(vaddr_t address) noexcept;
@@ -68,6 +73,8 @@ class PageDirectory {
         constexpr static vaddr_t _toIndex(vaddr_t address) noexcept {
             return pageTableAlign(address);
         }
+
+        process::Process& _process;
 
         Capability<seL4_ARM_PageDirectoryObject, seL4_PageDirBits> _cap;
         std::unordered_map<vaddr_t, PageTable> _tables;
