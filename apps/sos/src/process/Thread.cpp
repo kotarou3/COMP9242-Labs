@@ -298,7 +298,8 @@ void Thread::handleFault(const seL4_MessageInfo_t& message) noexcept {
         }
 
         default:
-            kprintf(LOGLEVEL_ERR, "Unknown fault type %u\n", seL4_MessageInfo_get_label(message));
+            kprintf(LOGLEVEL_ERR, "Unknown fault type %u - killing thread\n", seL4_MessageInfo_get_label(message));
+            kill();
             break;
     }
 }
