@@ -80,6 +80,16 @@ extern "C" {
 /// The maximum number of bytes in a pathname argument.
 #define MAXPATHLEN 1024
 
+/*
+ * Block sizes to use (max: 8192 for NFSv2).
+ *
+ * Read block size is set to a lower value than max because libethdrivers
+ * can't read packets fast enough and starts dropping them, which consequently
+ * kills performance. 7292 was empirically found to be the highest before
+ * packets start getting dropped, with exactly 5 full IPv4 fragments at 1500 MTU.
+ */
+#define NFS_READ_BLOCK_SIZE  7292
+#define NFS_WRITE_BLOCK_SIZE 8192
 
 /**
  * The "nfs_stat" type is returned with every NFS procedure results.  A value
