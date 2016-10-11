@@ -342,13 +342,16 @@ Process::Process(bool isSosProcess):
 }
 
 Process::~Process() {
-    // Clean up any zombie children
+    // Pass all children to init
     for (std::weak_ptr<Process> child : _children) {
         std::shared_ptr<Process> _child = child.lock();
         assert(_child);
 
+        auto initProcess = ThreadTable::get().get(process::MIN_TID)->getProcess();
+        initProcess->_children.insert(_child);
+        _child->_parent = initProcess;
         if (_child->_isZombie)
-            ThreadTable::get().erase(_child->getPid());
+            initProcess->emitChildExit(_child);
     }
 
     auto parent = _parent.lock();
@@ -395,6 +398,8 @@ void Process::emitChildExit(std::shared_ptr<Process> process) noexcept {
             ++listener;
         }
     }
+
+    kprintf(LOGLEVEL_WARNING, "Would send SIGCHLD to <Process %p>, but not implemented yet\n", this);
 }
 
 async::future<void> Process::handlePageFault(memory::vaddr_t address, memory::Attributes cause) {
