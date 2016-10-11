@@ -84,6 +84,111 @@ async::future<int> munmap(std::weak_ptr<process::Process> process, memory::vaddr
     return async::make_ready_future(0);
 }
 
+static std::map<memory::vaddr_t, std::pair<memory::Page, bool>> _sharedPages;
+async::future<int> sos_share_vm(std::weak_ptr<process::Process> process, memory::vaddr_t addr, size_t length, bool isWritable) {
+    static bool _mutex = false;
+
+    if (memory::pageAlign(addr) != addr || memory::pageAlign(length) != length)
+        throw std::invalid_argument("Invalid page or length alignment");
+
+    if (_mutex)
+        throw std::system_error(ERESTART, std::system_category());
+    _mutex = true;
+
+    try {
+        std::shared_ptr<process::Process>(process)->maps.erase(addr, length / PAGE_SIZE);
+
+        async::promise<void> promise;
+        promise.set_value();
+        auto future = promise.get_future();
+
+        memory::vaddr_t end = addr + length;
+        for (; addr < end; ) {
+            auto pageStart = _sharedPages.lower_bound(addr);
+            memory::vaddr_t pageStartAddress = pageStart == _sharedPages.end() ? end : pageStart->first;
+
+            if (pageStartAddress != addr) {
+                // Pages don't exist yet - map in as writable
+                future = future.then([=](async::future<void> result) {
+                    result.get();
+                    return syscall::mmap2(
+                        process,
+                        addr,
+                        pageStartAddress - addr,
+                        PROT_READ | PROT_WRITE,
+                        MAP_PRIVATE | MAP_ANONYMOUS | MAP_LOCKED | MAP_FIXED,
+                        0, 0
+                    );
+                }).unwrap().then([=](auto result) {
+                    assert(static_cast<memory::vaddr_t>(result.get()) == addr);
+
+                    std::shared_ptr<process::Process> _process(process);
+                    for (memory::vaddr_t start = addr; start < pageStartAddress; start += PAGE_SIZE) {
+                        _sharedPages[start] = std::make_pair(
+                            _process->pageDirectory.lookup(start)->getPage().copy(),
+                            isWritable
+                        );
+                    }
+                });
+
+                addr = pageStartAddress;
+            } else {
+                // Pages already exist - find the end of the range
+                auto pageEnd = pageStart;
+                memory::vaddr_t pageEndAddress;
+                while (true) {
+                    auto curPage = pageEnd;
+                    pageEndAddress = curPage->first;
+
+                    ++pageEnd;
+                    if (pageEnd == _sharedPages.end() ||
+                        curPage->first + PAGE_SIZE != pageEnd->first ||
+                        curPage->second.second != pageEnd->second.second) {
+                        break;
+                    }
+                }
+                pageEndAddress += PAGE_SIZE;
+
+                // Map them in with their current writability
+                future = future.then([=](async::future<void> result) {
+                    result.get();
+                    return syscall::mmap2(
+                        process,
+                        pageStartAddress,
+                        pageEndAddress - pageStartAddress,
+                        PROT_READ | (pageStart->second.second ? PROT_WRITE : 0),
+                        MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED,
+                        0, 0
+                    );
+                }).unwrap().then([=](auto result) {
+                    assert(static_cast<memory::vaddr_t>(result.get()) == pageStartAddress);
+
+                    std::shared_ptr<process::Process> _process(process);
+                    for (auto page = pageStart; page != pageEnd; ++page) {
+                        _process->pageDirectory.map(
+                            page->second.first.copy(),
+                            page->first,
+                            memory::Attributes{.read = true, .write = page->second.second}
+                        );
+                        page->second.second &= isWritable;
+                    }
+                });
+
+                addr = pageEndAddress;
+            }
+        }
+
+        return future.then([](async::future<void> result) {
+            _mutex = false;
+            result.get();
+            return 0;
+        });
+    } catch (...) {
+        _mutex = false;
+        throw;
+    }
+}
+
 }
 
 extern "C" int sys_brk(va_list ap) {
