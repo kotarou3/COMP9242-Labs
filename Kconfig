@@ -38,6 +38,7 @@ menu "seL4 Libraries"
 endmenu
 
 menu "seL4 Applications"
+    source "apps/share_vm_test/Kconfig"
     source "apps/sos/Kconfig"
     source "apps/sosh/Kconfig"
     source "apps/thrasher/Kconfig"

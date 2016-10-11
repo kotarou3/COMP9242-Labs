@@ -1,0 +1,2 @@
+components-$(CONFIG_APP_SHARE_VM_TEST) += share_vm_test
+share_vm_test: $(libc) libsos libsel4 libc++ libboost

@@ -176,11 +176,22 @@ void sos_sys_usleep(int msec) {
 }
 
 int sos_share_vm(void *adr, size_t size, int writable) {
-    (void)adr;
-    (void)size;
-    (void)writable;
+    seL4_SetMR(0, SYS_sos_share_vm);
+    seL4_SetMR(1, (seL4_Word)adr);
+    seL4_SetMR(2, (seL4_Word)size);
+    seL4_SetMR(3, (seL4_Word)writable);
 
-    fprintf(stderr, "system call not implemented\n");
-    errno = ENOSYS;
-    return -1;
+    seL4_MessageInfo_t req = seL4_MessageInfo_new(seL4_NoFault, 0, 0, 4);
+    seL4_Call(SOS_IPC_EP_CAP, req);
+
+    int result = (int)seL4_GetMR(0);
+    if (result == -ERESTART)
+        return sos_share_vm(adr, size, writable);
+
+    if (result < 0) {
+        errno = -result;
+        return -1;
+    } else {
+        return result;
+    }
 }
