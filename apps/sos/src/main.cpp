@@ -205,11 +205,6 @@ int main() noexcept {
     });
 
     // Start init
-    process::getSosProcess()->onChildExit([](auto process) [[noreturn]] noexcept -> bool {
-        assert(process->getPid() == process::MIN_TID);
-        panic("init exited");
-        __builtin_unreachable();
-    });
     const char* initPath = CONFIG_SOS_STARTUP_APP;
     syscall::process_create(process::getSosProcess(), reinterpret_cast<memory::vaddr_t>(initPath))
         .then([](auto pid) noexcept {
