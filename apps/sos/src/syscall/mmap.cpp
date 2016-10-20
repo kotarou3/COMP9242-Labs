@@ -54,10 +54,6 @@ async::future<int> mmap2(std::weak_ptr<process::Process> process, memory::vaddr_
         }
     ));
 
-    // XXX: We shouldn't reserve pages, but currently our page table layout
-    // requires this
-    _process->pageDirectory.reservePages(map->getStart(), map->getEnd());
-
     async::future<void> future;
     if (flags & MAP_LOCKED) {
         future = _process->pageFaultMultiple(map->getStart(), map->getPages(), memory::Attributes{}, map);
@@ -163,15 +159,22 @@ async::future<int> sos_share_vm(std::weak_ptr<process::Process> process, memory:
                 }).unwrap().then([=](auto result) {
                     assert(static_cast<memory::vaddr_t>(result.get()) == pageStartAddress);
 
+                    std::vector<async::future<const memory::MappedPage&>> futures;
                     std::shared_ptr<process::Process> _process(process);
                     for (auto page = pageStart; page != pageEnd; ++page) {
-                        _process->pageDirectory.map(
+                        futures.push_back(_process->pageDirectory.map(
                             page->second.first.copy(),
                             page->first,
                             memory::Attributes{.read = true, .write = page->second.second}
-                        );
+                        ));
                         page->second.second &= isWritable;
                     }
+
+                    return async::when_all(futures.begin(), futures.end())
+                        .then([](auto futures) {
+                            for (auto& future : futures.get())
+                                future.get();
+                        });
                 });
 
                 addr = pageEndAddress;

@@ -322,10 +322,6 @@ Process::Process(std::shared_ptr<Process> parent):
     if (!_cspace)
         throw std::system_error(ENOMEM, std::system_category(), "Failed to create CSpace");
 
-    // XXX: We shouldn't reserve pages, but currently our page table layout
-    // requires this
-    pageDirectory.reservePages(memory::MMAP_START, memory::MMAP_STACK_END);
-
     kprintf(LOGLEVEL_DEBUG, "<Process %p> Created\n", this);
 }
 

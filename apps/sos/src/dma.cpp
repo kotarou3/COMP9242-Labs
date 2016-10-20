@@ -58,7 +58,7 @@ _dma_fill(seL4_Word pstart, seL4_Word pend, int cached){
     for (; pstart < pend; pstart += PAGE_SIZE) {
         auto page = process::getSosProcess()->pageDirectory.lookup(VIRT(pstart), true);
         if (!page) {
-            process::getSosProcess()->pageDirectory.map(
+            auto mapResult = process::getSosProcess()->pageDirectory.map(
                 memory::FrameTable::alloc(pstart), VIRT(pstart),
                 memory::Attributes{
                     .read = true,
@@ -68,6 +68,8 @@ _dma_fill(seL4_Word pstart, seL4_Word pend, int cached){
                     .notCacheable = !cached
                 }
             );
+            assert(mapResult.is_ready());
+            mapResult.get();
         }
     }
 }

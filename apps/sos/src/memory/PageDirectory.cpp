@@ -102,7 +102,9 @@ async::future<const MappedPage&> PageDirectory::makeResident(vaddr_t address, co
 
 async::future<const MappedPage&> PageDirectory::allocateAndMap(vaddr_t address, Mapping map) {
     return FrameTable::alloc().then([=](auto page) {
-        const MappedPage& result = this->map(page.get(), address, map.attributes);
+        return this->map(page.get(), address, map.attributes);
+    }).unwrap().then([=](auto result) {
+        const MappedPage& _result = result.get();
         if (map.file) {
             vaddr_t readTo = address;
             size_t readSize = PAGE_SIZE;
@@ -129,7 +131,7 @@ async::future<const MappedPage&> PageDirectory::allocateAndMap(vaddr_t address, 
                     .buffer = UserMemory(_process.shared_from_this(), readTo),
                     .length = readSize
                 }};
-                return map.file->read(iovs, fileStart, true).then([=](auto read) {
+                return map.file->read(iovs, fileStart, true).then([=](auto read) -> const MappedPage& {
                     if (static_cast<size_t>(read.get()) != readSize)
                         throw std::system_error(ENOSYS, std::system_category(), "Unable to load ELF file page from NFS");
 
@@ -140,17 +142,16 @@ async::future<const MappedPage&> PageDirectory::allocateAndMap(vaddr_t address, 
                         0, PAGE_SIZE
                     ) == seL4_NoError);
 
-                    return result;
+                    return *result;
                 });
             }
         }
-        return boost::make_ready_future(&result);
-    }).unwrap().then([](auto result) -> const MappedPage& {
-        return *result.get();
+
+        return async::make_ready_future<const MappedPage&>(_result);
     });
 }
 
-const MappedPage& PageDirectory::map(Page page, vaddr_t address, Attributes attributes) {
+async::future<const MappedPage&> PageDirectory::map(Page page, vaddr_t address, Attributes attributes) {
     auto table = _tables.find(_toIndex(address));
     if (table == _tables.end()) {
         table = _tables.emplace(
@@ -192,12 +193,9 @@ const MappedPage* PageDirectory::lookup(vaddr_t address, bool noThrow) const {
 
 PageTable::PageTable(PageDirectory& parent, vaddr_t baseAddress):
     _parent(parent),
-    _baseAddress(baseAddress)
-{
-    int err = seL4_ARM_PageTable_Map(_cap.get(), _parent.getCap(), baseAddress, seL4_ARM_Default_VMAttributes);
-    if (err != seL4_NoError)
-        throw std::system_error(ENOMEM, std::system_category(), "Failed to map in seL4 page table: " + std::to_string(err));
-}
+    _baseAddress(baseAddress),
+    _cap(0, 0) // Defer mapping in the table, since it can block
+{}
 
 PageTable::~PageTable() {
     // Clear the pages first, since they're using the page table
@@ -213,11 +211,36 @@ size_t PageTable::countPages() const noexcept {
 }
 
 void PageTable::reservePages() {
+    if (!_cap) {
+        decltype(_cap) cap;
+        int err = seL4_ARM_PageTable_Map(cap.get(), _parent.getCap(), _baseAddress, seL4_ARM_Default_VMAttributes);
+        if (err != seL4_NoError)
+            throw std::system_error(ENOMEM, std::system_category(), "Failed to map in seL4 page table: " + std::to_string(err));
+        _cap = std::move(cap);
+    }
+
     _pages.reserve(PAGE_TABLE_SIZE / PAGE_SIZE);
 }
 
-const MappedPage& PageTable::map(Page page, vaddr_t address, Attributes attributes) {
+async::future<const MappedPage&> PageTable::map(Page page, vaddr_t address, Attributes attributes) {
     _checkAddress(address);
+
+    if (!_cap) try {
+        decltype(_cap) cap;
+        int err = seL4_ARM_PageTable_Map(cap.get(), _parent.getCap(), _baseAddress, seL4_ARM_Default_VMAttributes);
+        if (err != seL4_NoError)
+            throw std::system_error(ENOMEM, std::system_category(), "Failed to map in seL4 page table: " + std::to_string(err));
+        _cap = std::move(cap);
+    } catch (const std::system_error& e) {
+        if (e.code().category() != std::system_category() || e.code().value() != ENOMEM)
+            throw;
+
+        auto pagePtr = std::make_shared<Page>(std::move(page));
+        return FrameTable::swapOldFrame().then([=](async::future<void> result) {
+            result.get();
+            return this->map(std::move(*pagePtr), address, attributes);
+        });
+    }
 
     if (_pages.count(_toIndex(address)) == 0) {
         auto result = _pages.emplace(
@@ -231,7 +254,7 @@ const MappedPage& PageTable::map(Page page, vaddr_t address, Attributes attribut
             )
         );
 
-        return result.first->second;
+        return async::make_ready_future<const MappedPage&>(static_cast<const MappedPage&>(result.first->second));
     } else {
         throw std::invalid_argument("Address is already mapped");
     }

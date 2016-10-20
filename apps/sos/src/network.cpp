@@ -78,10 +78,12 @@ sos_map_device(void* /*cookie*/, uintptr_t addr, size_t size, int cached, ps_mem
         );
 
         for (size_t offset = 0; offset < size; offset += PAGE_SIZE) {
-            process::getSosProcess()->pageDirectory.map(
+            auto mapResult = process::getSosProcess()->pageDirectory.map(
                 memory::FrameTable::alloc(addr + offset), map.getAddress() + offset,
                 attributes
             );
+            assert(mapResult.is_ready());
+            mapResult.get();
         }
 
         void* result = reinterpret_cast<void*>(map.getAddress());

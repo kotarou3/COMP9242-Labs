@@ -79,10 +79,12 @@ async::future<std::pair<uint8_t*, ScopedMapping>> UserMemory::_mapIn(size_t byte
                 result.get();
 
                 // Map in a copy of the process' page into the SOS process
-                process::getSosProcess()->pageDirectory.map(
+                auto mapResult = process::getSosProcess()->pageDirectory.map(
                     process->pageDirectory.lookup(srcAddr)->getPage().copy(),
                     destAddr, attributes
                 );
+                assert(mapResult.is_ready());
+                mapResult.get();
             });
         }
 

@@ -76,11 +76,13 @@ async::future<void> Swap::swapOut(FrameTable::Frame& frame) {
                 Attributes attributes = {0};
                 attributes.read = true;
                 attributes.locked = true;
-                process::getSosProcess()->pageDirectory.map(
+                auto mapResult = process::getSosProcess()->pageDirectory.map(
                     frame._pages->copy(),
                     _swapOutBufferMapping.getAddress(),
                     attributes
                 );
+                assert(mapResult.is_ready());
+                mapResult.get();
 
                 try {
                     _store->write(_swapOutBufferIoVectors, id * PAGE_SIZE).then([=, &frame](auto written) {
@@ -162,11 +164,13 @@ async::future<void> Swap::swapIn(const Page& page) {
                 attributes.read = true;
                 attributes.write = true;
                 attributes.locked = true;
-                process::getSosProcess()->pageDirectory.map(
+                auto mapResult = process::getSosProcess()->pageDirectory.map(
                     std::move(_bufferPage),
                     _swapInBufferMapping.getAddress(),
                     attributes
                 );
+                assert(mapResult.is_ready());
+                mapResult.get();
 
                 try {
                     _store->read(_swapInBufferIoVectors, targetPage->_swapId * PAGE_SIZE)

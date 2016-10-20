@@ -147,7 +147,9 @@ void init(paddr_t start, paddr_t end) {
         paddr_t phys = ut_alloc(seL4_PageBits);
         vaddr_t virt = tableMap.getAddress() + (p * PAGE_SIZE);
 
-        process::getSosProcess()->pageDirectory.map(Page(phys), virt, attributes);
+        auto mapResult = process::getSosProcess()->pageDirectory.map(Page(phys), virt, attributes);
+        assert(mapResult.is_ready());
+        mapResult.get();
 
         frameTableAddresses.push_back(std::make_pair(phys, virt));
     }
@@ -180,33 +182,10 @@ void init(paddr_t start, paddr_t end) {
 async::future<Page> alloc() {
     paddr_t address = ut_alloc(seL4_PageBits);
     if (!address) {
-        static size_t clock;
-
-        Frame* toSwap = nullptr;
-
-        size_t n = 1;
-        for (; n < _frameCount * 2; ++n) {
-            size_t f = (clock + n) % _frameCount;
-            if (!_table[f]._pages || _table[f]._isLocked)
-                continue;
-
-            if (_table[f]._isReferenced) {
-                _table[f].disableReference();
-            } else {
-                toSwap = &_table[f];
-                break;
-            }
-        }
-        clock = (clock + n) % _frameCount;
-
-        if (!toSwap)
-            throw std::bad_alloc();
-
-        return memory::Swap::get().swapOut(*toSwap)
-            .then([](async::future<void> result) {
-                result.get();
-                return alloc();
-            });
+        return swapOldFrame().then([](async::future<void> result) {
+            result.get();
+            return alloc();
+        });
     }
 
     return async::make_ready_future(Page(_getFrame(address)));
@@ -214,6 +193,32 @@ async::future<Page> alloc() {
 
 Page alloc(paddr_t address) {
     return Page(address);
+}
+
+async::future<void> swapOldFrame() {
+    static size_t clock;
+
+    Frame* toSwap = nullptr;
+
+    size_t n = 1;
+    for (; n < _frameCount * 2; ++n) {
+        size_t f = (clock + n) % _frameCount;
+        if (!_table[f]._pages || _table[f]._isLocked)
+            continue;
+
+        if (_table[f]._isReferenced) {
+            _table[f].disableReference();
+        } else {
+            toSwap = &_table[f];
+            break;
+        }
+    }
+    clock = (clock + n) % _frameCount;
+
+    if (!toSwap)
+        throw std::bad_alloc();
+
+    return memory::Swap::get().swapOut(*toSwap);
 }
 
 }

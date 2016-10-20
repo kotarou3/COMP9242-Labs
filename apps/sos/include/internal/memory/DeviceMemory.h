@@ -26,7 +26,7 @@ class DeviceMemory {
             ))
         {
             for (size_t offset = 0; offset < sizeof(T); offset += PAGE_SIZE) {
-                process::getSosProcess()->pageDirectory.map(
+                auto mapResult = process::getSosProcess()->pageDirectory.map(
                     FrameTable::alloc(address + offset), _map.getAddress() + offset,
                     Attributes{
                         .read = true,
@@ -36,6 +36,8 @@ class DeviceMemory {
                         .notCacheable = true
                     }
                 );
+                assert(mapResult.is_ready());
+                mapResult.get();
             }
         }
 

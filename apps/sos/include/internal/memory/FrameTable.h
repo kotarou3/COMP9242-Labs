@@ -66,13 +66,15 @@ namespace FrameTable {
             friend class ::memory::Page;
             friend class ::memory::Swap;
             friend void init(paddr_t start, paddr_t end);
-            friend async::future<Page> alloc();
+            friend async::future<void> swapOldFrame();
     };
 
     void init(paddr_t start, paddr_t end);
 
     async::future<Page> alloc();
     Page alloc(paddr_t address);
+
+    async::future<void> swapOldFrame();
 }
 
 bool isReady() noexcept;

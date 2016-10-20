@@ -61,7 +61,7 @@ class PageDirectory {
         async::future<const MappedPage&> makeResident(vaddr_t address, const Mapping& map);
         async::future<const MappedPage&> allocateAndMap(vaddr_t address, Mapping map);
 
-        const MappedPage& map(Page page, vaddr_t address, Attributes attributes);
+        async::future<const MappedPage&> map(Page page, vaddr_t address, Attributes attributes);
         void unmap(vaddr_t address) noexcept;
         void clear() noexcept;
 
@@ -95,7 +95,7 @@ class PageTable {
 
         void reservePages();
 
-        const MappedPage& map(Page page, vaddr_t address, Attributes attributes);
+        async::future<const MappedPage&> map(Page page, vaddr_t address, Attributes attributes);
         void unmap(vaddr_t address) noexcept;
 
         MappedPage* lookup(vaddr_t address, bool noThrow = false);
