@@ -635,8 +635,8 @@ boost::future<std::pair<const fhandle_t*, fattr_t*>> create(const fhandle_t& pfh
 boost::future<void> remove(const fhandle_t& pfh, const std::string& name);
 
 boost::future<const fattr_t*> getattr(const fhandle_t& fh);
-boost::future<size_t> read(const fhandle_t& fh, off_t offset, size_t count, uint8_t* data);
-boost::future<size_t> write(const fhandle_t& fh, off_t offset, size_t count, const uint8_t* data);
+boost::future<size_t> read(const fhandle_t& fh, off_t offset, size_t count, uint8_t* data, bool isCacheable);
+boost::future<size_t> write(const fhandle_t& fh, off_t offset, size_t count, const uint8_t* data, bool isCacheable);
 void flush(const fhandle_t& fh);
 
 }

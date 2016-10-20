@@ -196,6 +196,7 @@ int main() noexcept {
         fs::FileSystem::OpenFlags{
             .read = true,
             .write = true,
+            .direct = true,
             .createOnMissing = true,
             .mode = S_IRUSR | S_IWUSR
         }

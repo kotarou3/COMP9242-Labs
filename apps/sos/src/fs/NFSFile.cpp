@@ -20,9 +20,10 @@ namespace fs {
 // NFSFile //
 /////////////
 
-NFSFile::NFSFile(const nfs::fhandle_t& handle):
+NFSFile::NFSFile(const nfs::fhandle_t& handle, bool isCacheable):
     _handle(handle),
-    _currentOffset(0)
+    _currentOffset(0),
+    _isCacheable(isCacheable)
 {}
 
 NFSFile::~NFSFile() {
@@ -45,7 +46,7 @@ async::future<ssize_t> NFSFile::_readOne(const IoVector& iov, off64_t offset, bo
     ).then([this, iov, offset, actualOffset](auto map) {
         auto _map = std::make_shared<std::pair<uint8_t*, memory::ScopedMapping>>(std::move(map.get()));
 
-        return nfs::read(this->_handle, actualOffset, iov.length, _map->first)
+        return nfs::read(this->_handle, actualOffset, iov.length, _map->first, _isCacheable)
             .then([this, offset, _map](auto result) {
                 size_t read = result.get();
                 if (offset == fs::CURRENT_OFFSET)
@@ -73,7 +74,7 @@ async::future<ssize_t> NFSFile::_writeOne(const IoVector& iov, off64_t offset) {
 
         size_t parallelWrites = std::max(std::min(iov.length / NFS_WRITE_BLOCK_SIZE, WRITE_MAX_PIPELINE_DEPTH), 1U);
         if (parallelWrites == 1) {
-            return nfs::write(this->_handle, actualOffset, iov.length, _map->first)
+            return nfs::write(this->_handle, actualOffset, iov.length, _map->first, _isCacheable)
                 .then([this, offset, _map](auto result) {
                     size_t written = result.get();
                     if (offset == fs::CURRENT_OFFSET)
@@ -90,7 +91,7 @@ async::future<ssize_t> NFSFile::_writeOne(const IoVector& iov, off64_t offset) {
         size_t writeLength = iov.length / parallelWrites;
         for (size_t n = 0; n < parallelWrites; ++n) {
             writes.push_back(
-                nfs::write(this->_handle, actualOffset + writeOffset, writeLength, _map->first + writeOffset)
+                nfs::write(this->_handle, actualOffset + writeOffset, writeLength, _map->first + writeOffset, _isCacheable)
                     .then([this, offset, _map](auto result) {
                         size_t written = result.get();
                         if (offset == fs::CURRENT_OFFSET)

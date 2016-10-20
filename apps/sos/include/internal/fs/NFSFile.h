@@ -15,11 +15,12 @@ class NFSFile : public File {
         virtual async::future<ssize_t> _writeOne(const IoVector& iov, off64_t offset) override;
 
     private:
-        NFSFile(const nfs::fhandle_t& handle);
+        NFSFile(const nfs::fhandle_t& handle, bool isCacheable);
         friend class NFSFileSystem;
 
         nfs::fhandle_t _handle;
         off64_t _currentOffset;
+        bool _isCacheable;
 };
 
 class NFSDirectory : public Directory {

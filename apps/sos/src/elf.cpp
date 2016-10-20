@@ -15,7 +15,10 @@ extern "C" {
 namespace elf {
 
 async::future<memory::vaddr_t> load(std::shared_ptr<process::Process> process, const std::string& pathname) {
-    return fs::rootFileSystem->open(pathname, fs::FileSystem::OpenFlags{.read = true}).then([=] (auto file) {
+    fs::FileSystem::OpenFlags flags = {0};
+    flags.read = true;
+    flags.direct = true;
+    return fs::rootFileSystem->open(pathname, flags).then([=] (auto file) {
         std::shared_ptr<fs::File> _file = std::move(file.get());
         auto elfHeader = std::make_shared<std::array<uint8_t, PAGE_SIZE>>();
 

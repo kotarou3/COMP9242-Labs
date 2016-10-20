@@ -776,12 +776,13 @@ boost::future<const fattr_t*> getattr(const fhandle_t& fh) {
     return future;
 }
 
-boost::future<size_t> read(const fhandle_t& fh, off_t offset, size_t count, uint8_t* data) {
+boost::future<size_t> read(const fhandle_t& fh, off_t offset, size_t count, uint8_t* data, bool isCacheable) {
     if (count > std::numeric_limits<int>::max())
         throw std::invalid_argument("Count is bigger than what an int can store");
+    isCacheable &= ENABLE_CACHING;
 
     size_t cacheRead = 0;
-    if (ENABLE_CACHING) {
+    if (isCacheable) {
         cacheRead = _cache.read(fh, offset, count, data);
         if (cacheRead == count)
             return boost::make_ready_future<size_t>(count);
@@ -793,7 +794,7 @@ boost::future<size_t> read(const fhandle_t& fh, off_t offset, size_t count, uint
     auto& request = _readRequests[id] = {.handle = fh, .offset = offset, .count = count, .data = data, .readBytes = cacheRead};
     auto future = request.promise.get_future();
 
-    size_t toRead = ENABLE_CACHING ? std::max(count - cacheRead, NFS_READ_BLOCK_SIZE) : count - cacheRead;
+    size_t toRead = isCacheable ? std::max(count - cacheRead, NFS_READ_BLOCK_SIZE) : count - cacheRead;
     rpc_stat_t e = nfs_read(&request.handle, offset + cacheRead, toRead, _readCallback, id);
     if (e != RPC_OK) {
         _readRequests.erase(id);
@@ -803,11 +804,12 @@ boost::future<size_t> read(const fhandle_t& fh, off_t offset, size_t count, uint
     return future;
 }
 
-boost::future<size_t> write(const fhandle_t& fh, off_t offset, size_t count, const uint8_t* data) {
+boost::future<size_t> write(const fhandle_t& fh, off_t offset, size_t count, const uint8_t* data, bool isCacheable) {
     if (count > std::numeric_limits<int>::max())
         throw std::invalid_argument("Count is bigger than what an int can store");
+    isCacheable &= ENABLE_CACHING;
 
-    if (ENABLE_CACHING && _cache.write(fh, offset, count, data, true))
+    if (isCacheable && _cache.write(fh, offset, count, data, true))
         return boost::make_ready_future<size_t>(count);
 
     while (_writeRequests.count(_writeRequestsNextId) > 0)

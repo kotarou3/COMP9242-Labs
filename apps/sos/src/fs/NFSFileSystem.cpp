@@ -78,7 +78,7 @@ async::future<std::shared_ptr<File>> NFSFileSystem::open(const std::string& path
                     .mtime = {.seconds = -1U, .useconds = -1U}
                 });
             }
-        }).unwrap().then([](auto result) {
+        }).unwrap().then([=](auto result) {
             auto _result = result.get();
 
             // XXX: Would check permissions here, but we have no idea what user
@@ -90,7 +90,7 @@ async::future<std::shared_ptr<File>> NFSFileSystem::open(const std::string& path
             if (S_ISDIR(_result.second->mode))
                 return std::shared_ptr<File>(new NFSDirectory(*_result.first));
             else
-                return std::shared_ptr<File>(new NFSFile(*_result.first));
+                return std::shared_ptr<File>(new NFSFile(*_result.first, !flags.direct));
         });
 }
 
