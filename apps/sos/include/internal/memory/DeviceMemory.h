@@ -1,7 +1,7 @@
 #pragma once
 
 #include "internal/memory/Mappings.h"
-#include "internal/process/Thread.h"
+#include "internal/process/Process.h"
 
 extern "C" {
     #include <sel4/types.h>

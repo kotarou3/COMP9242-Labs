@@ -21,7 +21,7 @@
 
 #include "internal/memory/FrameTable.h"
 #include "internal/memory/Mappings.h"
-#include "internal/process/Thread.h"
+#include "internal/process/Process.h"
 
 extern "C" {
     #include "internal/dma.h"

@@ -4,7 +4,7 @@
 #include <string>
 
 #include "internal/async.h"
-#include "internal/process/Thread.h"
+#include "internal/process/Process.h"
 
 namespace elf {
 

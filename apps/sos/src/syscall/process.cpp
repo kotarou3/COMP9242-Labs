@@ -125,7 +125,7 @@ async::future<pid_t> process_create(std::weak_ptr<process::Process> process, mem
     }).unwrap().then([=](auto ep) {
         newProcess->fdTable = std::shared_ptr<process::Process>(process)->fdTable;
 
-        auto newThread = process::Thread::create(newProcess);
+        auto newThread = newProcess->createThread();
         pid_t tid = process::ThreadTable::get().insert(newThread);
         try {
             return newThread->start(tid, getIpcEndpoint(), tid, ep.get()).then([=](async::future<void> result) {

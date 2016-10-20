@@ -4,14 +4,14 @@
 #include <assert.h>
 #include <limits.h>
 
-#include "internal/memory/Mappings.h"
-#include "internal/memory/layout.h"
-#include "internal/process/Thread.h"
-#include "internal/RandomDevice.h"
-
 extern "C" {
     #include <sel4/types.h>
 }
+
+#include "internal/memory/Mappings.h"
+#include "internal/memory/layout.h"
+#include "internal/process/Process.h"
+#include "internal/RandomDevice.h"
 
 namespace memory {
 

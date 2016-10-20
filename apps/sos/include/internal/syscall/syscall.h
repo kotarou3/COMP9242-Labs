@@ -11,6 +11,7 @@ extern "C" {
 }
 
 #include "internal/async.h"
+#include "internal/process/Process.h"
 #include "internal/process/Thread.h"
 
 namespace syscall {

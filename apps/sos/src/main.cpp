@@ -34,7 +34,7 @@ extern "C" {
 #include "internal/memory/FrameTable.h"
 #include "internal/memory/Swap.h"
 #include "internal/process/Table.h"
-#include "internal/process/Thread.h"
+#include "internal/process/Process.h"
 #include "internal/syscall/process.h"
 #include "internal/timer/timer.h"
 

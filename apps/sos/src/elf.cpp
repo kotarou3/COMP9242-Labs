@@ -1,16 +1,16 @@
 #include <stdexcept>
 #include <stdint.h>
 
+extern "C" {
+    #include <elf/elf.h>
+    #include <sel4/types.h>
+}
+
 #include "internal/elf.h"
 #include "internal/fs/File.h"
 #include "internal/memory/Mappings.h"
 #include "internal/memory/PageDirectory.h"
 #include "internal/memory/UserMemory.h"
-
-extern "C" {
-    #include <elf/elf.h>
-    #include <sel4/types.h>
-}
 
 namespace elf {
 

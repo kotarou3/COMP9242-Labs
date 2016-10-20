@@ -10,7 +10,7 @@ extern "C" {
 #include "internal/memory/FrameTable.h"
 #include "internal/memory/Swap.h"
 #include "internal/memory/UserMemory.h"
-#include "internal/process/Thread.h"
+#include "internal/process/Process.h"
 
 namespace memory {
 
