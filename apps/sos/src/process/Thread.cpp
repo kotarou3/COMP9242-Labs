@@ -195,7 +195,7 @@ void Thread::handleFault(const seL4_MessageInfo_t& message) noexcept {
                     std::weak_ptr<Thread> thread = shared_from_this();
                     result.then([=](async::future<void> result) {
                         std::shared_ptr<Thread> _thread = thread.lock();
-                        if (_thread) {
+                        if (_thread) { // only reply if the thread's still alive
                             if (_thread->_status != Status::ZOMBIE) {
                                 try {
                                     result.get();
@@ -325,6 +325,7 @@ Process::Process(std::shared_ptr<Process> parent):
     kprintf(LOGLEVEL_DEBUG, "<Process %p> Created\n", this);
 }
 
+// isSosProcess is only there so we can have 2 different constructors - one for normal processes, one for sos
 Process::Process(bool isSosProcess):
     pageDirectory(*this, seL4_CapInitThreadPD),
     maps(*this),

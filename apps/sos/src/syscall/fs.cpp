@@ -179,6 +179,7 @@ async::future<int> pwritev(std::weak_ptr<process::Process> process, int fd, memo
 }
 
 async::future<int> getdents64(std::weak_ptr<process::Process> process, int fd, memory::vaddr_t dirp, size_t count) {
+    // getdents writes word by word, rather than byte by byte, and ARM refuses to do that if it isn't aligned.
     if (dirp & ~-alignof(dirent))
         throw std::system_error(EFAULT, std::system_category(), "Result buffer isn't aligned");
 

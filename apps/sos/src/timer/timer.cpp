@@ -28,7 +28,7 @@ namespace {
         TimerId id;
         bool operator<(const Interrupt& q) const {
             // reverse it so we get the smaller one off the PQ first
-            return this->time > q.time;
+            return time > q.time;
         }
     };
 
@@ -71,6 +71,8 @@ TimerId setTimer(Duration delay, const std::function<void (TimerId)>& callback, 
 
     auto now = getTimestamp();
     auto interruptTime = now + delay;
+    // if they ask for an interrupt infeasibly far into the future, tell them it worked but don't add it
+    // it requires 584,000 years since system start, so I think we're good
     if (interruptTime >= now) {
         interrupts.push(Interrupt{.time = interruptTime, .id = nextFree});
 
@@ -84,6 +86,7 @@ TimerId setTimer(Duration delay, const std::function<void (TimerId)>& callback, 
 
 void clearTimer(TimerId id) {
     // mark for removal. Actual removal only occurs upon removing the interrupt
+    // can't remove from the middle of a priority queue, so this is the next best solution
     if (timers.count(id) == 0)
         throw std::invalid_argument("Timer id #" + std::to_string(id) + " does not exist");
 
@@ -112,6 +115,9 @@ void handleIrq() noexcept {
                 if (skippedCallbacks > 0)
                     kprintf(LOGLEVEL_NOTICE, "Skipped %zu callbacks for id #%zu\n", skippedCallbacks, id);
 
+                // this could potentially overflow since it's recurring, but to be the interval to go over
+                // it has to be long enough to ensure that it overflows, but short enough to ensure that it doesn't
+                // overflow in the initial settimer. Worst case is 292,000 years till it breaks...
                 interrupts.push(Interrupt{
                     .time = nextInterrupt + (skippedCallbacks + 1) * timers[id].delay,
                     .id = id

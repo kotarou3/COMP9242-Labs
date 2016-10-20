@@ -44,56 +44,65 @@ namespace {
     }
 
     constexpr ProcessSyscall _getProcessSyscall(long number) {
-        #define ADD_SYSCALL(name) if (number == SYS_##name) return reinterpret_cast<ProcessSyscall>(syscall::name)
+        #define ADD_SYSCALL(name) case (SYS_##name): return reinterpret_cast<ProcessSyscall>(syscall::name)
+        switch (number) {
+            // fs
+            ADD_SYSCALL(stat64);
+            ADD_SYSCALL(open);
+            ADD_SYSCALL(close);
 
-        // fs
-        ADD_SYSCALL(stat64);
-        ADD_SYSCALL(open);
-        ADD_SYSCALL(close);
+            ADD_SYSCALL(read);
+            ADD_SYSCALL(readv);
+            ADD_SYSCALL(pread64);
+            ADD_SYSCALL(preadv);
 
-        ADD_SYSCALL(read);
-        ADD_SYSCALL(readv);
-        ADD_SYSCALL(pread64);
-        ADD_SYSCALL(preadv);
+            ADD_SYSCALL(write);
+            ADD_SYSCALL(writev);
+            ADD_SYSCALL(pwrite64);
+            ADD_SYSCALL(pwritev);
 
-        ADD_SYSCALL(write);
-        ADD_SYSCALL(writev);
-        ADD_SYSCALL(pwrite64);
-        ADD_SYSCALL(pwritev);
+            ADD_SYSCALL(getdents64);
 
-        ADD_SYSCALL(getdents64);
+            ADD_SYSCALL(fcntl64);
+            ADD_SYSCALL(ioctl);
 
-        ADD_SYSCALL(fcntl64);
-        ADD_SYSCALL(ioctl);
+            // mmap
+            ADD_SYSCALL(brk);
+            ADD_SYSCALL(mmap2);
+            ADD_SYSCALL(munmap);
+            ADD_SYSCALL(sos_share_vm);
 
-        // mmap
-        ADD_SYSCALL(brk);
-        ADD_SYSCALL(mmap2);
-        ADD_SYSCALL(munmap);
-        ADD_SYSCALL(sos_share_vm);
+            // process
+            ADD_SYSCALL(getpid);
+            ADD_SYSCALL(waitid);
+            ADD_SYSCALL(wait4);
+            ADD_SYSCALL(kill);
+            ADD_SYSCALL(exit_group);
+            ADD_SYSCALL(process_create);
+            ADD_SYSCALL(sos_process_status);
 
-        // process
-        ADD_SYSCALL(getpid);
-        ADD_SYSCALL(waitid);
-        ADD_SYSCALL(wait4);
-        ADD_SYSCALL(kill);
-        ADD_SYSCALL(exit_group);
-        ADD_SYSCALL(process_create);
-        ADD_SYSCALL(sos_process_status);
+            // time
+            ADD_SYSCALL(clock_gettime);
+            ADD_SYSCALL(nanosleep);
 
-        // time
-        ADD_SYSCALL(clock_gettime);
-        ADD_SYSCALL(nanosleep);
-
-        // thread
-        ADD_SYSCALL(tkill);
-        ADD_SYSCALL(tgkill);
-
+            // thread
+            ADD_SYSCALL(tkill);
+            ADD_SYSCALL(tgkill);
+        }
         #undef ADD_SYSCALL
         return nullptr;
     }
 }
 
+/*
+ * The handle functions take in something like this
+ * handle(Calling thread, SYS_kill, argc, argv)
+ * It copies the correct number of arguments across into args, and the other 6 are trash variables.
+ * According to the C compiler calling convention, the extra values go into the argument registers and the stack
+ * It then calls SYS_kill (this works because it's a reinterpret_cast, so it just treats it like a process syscall with 8 arguments).
+ * The args in the registers remain unused by sys_kill, and the args in the stack simply go at the bottom of SYS_kill's stack frame
+ * which it ignores and probably overwrites.
+ */
 async::future<int> handle(std::weak_ptr<process::Thread> thread, long number, size_t argc, seL4_Word* argv) {
     if (_getThreadSyscall(number)) {
         seL4_Word args[8] = {0};

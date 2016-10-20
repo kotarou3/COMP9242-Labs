@@ -32,7 +32,7 @@ async::future<memory::vaddr_t> load(std::shared_ptr<process::Process> process, c
             read.get();
 
             uint8_t* header = elfHeader->data();
-            if (elf_checkFile(header))
+            if (elf32_checkFile((Elf32_Header*)header))
                 throw std::invalid_argument("Invalid ELF file");
 
             size_t headers = elf_getNumProgramHeaders(header);
@@ -53,6 +53,8 @@ async::future<memory::vaddr_t> load(std::shared_ptr<process::Process> process, c
                 memory::vaddr_t start = to - startPadding;
                 size_t pages = memory::numPages(memorySize + startPadding);
 
+                // create a mapping that points to a file, rather than a normal mapping
+                // implicit lazy pagefaulting, yay!
                 process->maps.insert(
                     start, pages,
                     memory::Attributes{

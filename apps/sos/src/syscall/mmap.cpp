@@ -12,7 +12,7 @@
 namespace syscall {
 
 async::future<int> brk(std::weak_ptr<process::Process> /*process*/, memory::vaddr_t /*addr*/) {
-    // We don't actually implement this - we let malloc() use mmap2() instead
+    // We don't actually implement brk for user level - we let malloc() use mmap2() instead
     throw std::system_error(ENOSYS, std::system_category(), "brk() not implemented");
 }
 
@@ -92,6 +92,8 @@ async::future<int> sos_share_vm(std::weak_ptr<process::Process> process, memory:
     _mutex = true;
 
     try {
+        // this is relatively dodgy, and could do something dangerous (to the thread that started it),
+        // but the syscall is pretty badly designed, and this is the same way linux does it if you call mmap
         std::shared_ptr<process::Process>(process)->maps.erase(addr, length / PAGE_SIZE);
 
         async::promise<void> promise;

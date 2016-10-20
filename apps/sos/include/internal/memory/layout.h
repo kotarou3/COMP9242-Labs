@@ -18,7 +18,7 @@ constexpr const vaddr_t KERNEL_START = 0xe0000000;
 
 constexpr const size_t MMAP_RAND_ATTEMPTS = 4;
 
-constexpr const size_t STACK_PAGES = 256; // 1 MB
+constexpr const size_t STACK_PAGES = 4096; // 16 MB
 
 static_assert(SOS_BRK_END < MMAP_START, "SOS brk overlaps with mmap area");
 
