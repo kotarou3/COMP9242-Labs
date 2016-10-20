@@ -11,6 +11,7 @@ extern "C" {
 #include "internal/memory/PageDirectory.h"
 #include "internal/memory/Swap.h"
 #include "internal/process/Process.h"
+#include "internal/timer/timer.h"
 
 namespace memory {
 
@@ -182,6 +183,24 @@ void init(paddr_t start, paddr_t end) {
 async::future<Page> alloc() {
     paddr_t address = ut_alloc(seL4_PageBits);
     if (!address) {
+        // XXX: Sometimes the stack overflows due to the recursive call here,
+        // despite it not actually being recursion (due to the async-ness).
+        // No idea why it overflows, but we can prevent it by periodically
+        // putting the next call in a timer tick
+        constexpr const size_t MAX_RECURSIONS = 15;
+        static size_t _recursions;
+
+        ++_recursions;
+        if (_recursions > MAX_RECURSIONS) {
+            _recursions = 0;
+            auto promise = std::make_shared<async::promise<void>>();
+            timer::setTimer(std::chrono::microseconds(1), [=]() {promise->set_value();});
+            return promise->get_future().then([](async::future<void> result) {
+                result.get();
+                return alloc();
+            });
+        }
+
         return swapOldFrame().then([](async::future<void> result) {
             result.get();
             return alloc();
