@@ -10,7 +10,7 @@
 #define LOGLEVEL_INFO       6   // informational
 #define LOGLEVEL_DEBUG      7   // debug-level messages
 
-#define KPRINTF_VERBOSITY LOGLEVEL_DEBUG
+#define KPRINTF_VERBOSITY LOGLEVEL_ERR
 
 void _kprintf2(const char* colour, const char* fmt, ...);
 
