@@ -32,7 +32,7 @@ size_t hash_value(const fhandle_t& a) {
 namespace {
     constexpr const bool ENABLE_CACHING = true;
     constexpr const size_t MAX_CACHE_ENTRIES = 50;
-    constexpr const size_t MAX_CACHE_DATA_SIZE = 4 * NFS_WRITE_BLOCK_SIZE;
+    constexpr const size_t MAX_CACHE_DATA_SIZE = 10 * 1024 * 1024;
     constexpr const size_t MAX_CACHE_DATA_WRITE_MISSES = 4;
 
     struct CacheEntry {
@@ -49,7 +49,8 @@ namespace {
         off_t dataOffset;
         size_t dataWriteMisses = 0;
         bool isDataValid = false;
-        bool isDataDirty = false;
+        size_t dirtyStart = 0;
+        size_t dirtyEnd = 0;
 
         CacheEntry(const CacheEntry&) = delete;
         CacheEntry& operator=(const CacheEntry&) = delete;
@@ -58,25 +59,24 @@ namespace {
         CacheEntry& operator=(CacheEntry&&) = default;
 
         void flush() {
-            if (!isDataValid || !isDataDirty)
+            if (!isDataValid || dirtyStart == dirtyEnd)
                 return;
 
             // XXX: We assume always-successful NFS ops for caching, so no
             // error handling is performed
-            for (size_t offset = 0; offset < data.size(); offset += NFS_WRITE_BLOCK_SIZE) {
+            for (size_t offset = dirtyStart; offset < dirtyEnd; offset += NFS_WRITE_BLOCK_SIZE) {
                 nfs_write(
                     &handle,
                     dataOffset + offset,
-                    std::min(data.size() - offset, NFS_WRITE_BLOCK_SIZE),
+                    std::min(dirtyEnd - offset, NFS_WRITE_BLOCK_SIZE),
                     data.data() + offset,
                     [](size_t, nfs_stat_t, fattr_t*, int) {}, 0
                 );
             }
 
             // nfs_write() copies the buffer to it's own buffer, so we are free
-            // to trash the buffer
-            data.clear();
-            isDataValid = false;
+            // to trash the buffer afterwards
+            dirtyStart = dirtyEnd = 0;
         }
     };
 
@@ -98,7 +98,7 @@ namespace {
                     return begin();
                 } else if (size() > MAX_CACHE_ENTRIES) {
                     // Cache full - remove LRU entry
-                    if (back().isDataValid && back().isDataDirty)
+                    if (back().isDataValid && back().dirtyStart != back().dirtyEnd)
                         modify(--end(), [](auto& entry) {entry.flush();});
                     pop_back();
                 }
@@ -147,7 +147,7 @@ namespace {
                         break;
                 }
 
-                if (entry->isDataDirty)
+                if (entry->dirtyStart != entry->dirtyEnd)
                     modify(entry, [](auto& entry) {entry.flush();});
                 return false;
             }
@@ -161,16 +161,20 @@ namespace {
 
                 if (!entry->isDataValid || entry->dataWriteMisses >= MAX_CACHE_DATA_WRITE_MISSES) {
                     modify(entry, [=](auto& entry) {
-                        if (entry.isDataValid && entry.isDataDirty)
+                        if (entry.isDataValid && entry.dirtyStart != entry.dirtyEnd)
                             entry.flush();
 
                         entry.data.clear();
-                        entry.data.reserve(MAX_CACHE_DATA_SIZE);
                         entry.data.insert(entry.data.begin(), from, from + length);
                         entry.dataOffset = offset;
                         entry.dataWriteMisses = 0;
                         entry.isDataValid = true;
-                        entry.isDataDirty = markDataDirty;
+                        if (markDataDirty) {
+                            entry.dirtyStart = 0;
+                            entry.dirtyEnd = entry.data.size();
+                        } else {
+                            entry.dirtyStart = entry.dirtyEnd = 0;
+                        }
                     });
 
                     return true;
@@ -183,6 +187,13 @@ namespace {
                             entry.data.insert(entry.data.begin(), from, from + length);
                             entry.dataOffset = offset;
                             entry.dataWriteMisses = 0;
+
+                            if (markDataDirty) {
+                                entry.dirtyStart = 0;
+                                entry.dirtyEnd = entry.data.size();
+                            } else {
+                                assert(entry.dirtyStart == entry.dirtyEnd);
+                            }
                         });
                         break;
 
@@ -197,6 +208,24 @@ namespace {
                             std::copy(from, from + length, entry.data.begin());
                             entry.dataOffset = offset;
                             entry.dataWriteMisses = 0;
+
+                            if (markDataDirty) {
+                                if (entry.dirtyStart < overlapSize) {
+                                    entry.dirtyStart = 0;
+                                    entry.dirtyEnd += length - overlapSize;
+                                } else {
+                                    entry.flush();
+                                    entry.dirtyStart = 0;
+                                    entry.dirtyEnd = length;
+                                }
+                            } else {
+                                if (entry.dirtyStart >= overlapSize) {
+                                    entry.dirtyStart += length - overlapSize;
+                                    entry.dirtyEnd += length - overlapSize;
+                                } else {
+                                    assert(entry.dirtyStart == entry.dirtyEnd);
+                                }
+                            }
                         });
                         break;
 
@@ -205,6 +234,35 @@ namespace {
                             size_t overlapStart = offset - entry.dataOffset;
                             std::copy(from, from + length, entry.data.begin() + overlapStart);
                             entry.dataWriteMisses = 0;
+
+                            auto dirtyOverlap = _classifyOverlap(overlapStart, overlapStart + length, entry.dirtyStart, entry.dirtyEnd);
+                            if (markDataDirty) {
+                                switch (dirtyOverlap) {
+                                    case OverlapType::Complete:
+                                        entry.dirtyStart = overlapStart;
+                                        entry.dirtyEnd = overlapStart + length;
+                                        break;
+
+                                    case OverlapType::Start:
+                                        entry.dirtyStart = overlapStart;
+                                        break;
+
+                                    case OverlapType::Middle:
+                                        break;
+
+                                    case OverlapType::End:
+                                        entry.dirtyEnd = overlapStart + length;
+                                        break;
+
+                                    case OverlapType::None:
+                                        entry.flush();
+                                        entry.dirtyStart = overlapStart;
+                                        entry.dirtyEnd = overlapStart + length;
+                                        break;
+                                }
+                            } else {
+                                assert(dirtyOverlap == OverlapType::None);
+                            }
                         });
                         break;
 
@@ -226,39 +284,41 @@ namespace {
 
                             std::copy(from, from + length, entry.data.begin() + overlapStart);
                             entry.dataWriteMisses = 0;
+
+                            if (markDataDirty) {
+                                if (entry.dirtyEnd >= overlapStart) {
+                                    entry.dirtyEnd = overlapStart + length;
+                                } else {
+                                    entry.flush();
+                                    entry.dirtyStart = overlapStart;
+                                    entry.dirtyEnd = overlapStart + length;
+                                }
+                            } else {
+                                if (entry.dirtyEnd < overlapStart) {
+                                    // Do nothing
+                                } else {
+                                    assert(entry.dirtyStart == entry.dirtyEnd);
+                                }
+                            }
                         });
                         break;
                 }
 
-                modify(entry, [=](auto& entry) {
-                    if (entry.data.size() > MAX_CACHE_DATA_SIZE - NFS_WRITE_BLOCK_SIZE) {
-                        if (entry.isDataDirty || markDataDirty)
-                            entry.flush();
-
-                        entry.data.clear();
-                        entry.isDataValid = false;
-                    } else {
-                        entry.isDataDirty = markDataDirty;
-                    }
-                });
+                if (entry->dirtyEnd - entry->dirtyStart >= NFS_WRITE_BLOCK_SIZE)
+                    modify(entry, [=](auto& entry) {entry.flush();});
+                if (entry->data.size() >= MAX_CACHE_DATA_SIZE - NFS_WRITE_BLOCK_SIZE)
+                    modify(entry, [=](auto& entry) {entry.data.erase(entry.data.begin(), entry.data.end() - NFS_WRITE_BLOCK_SIZE);});
 
                 return true;
             }
 
         private:
             enum class OverlapType {None, Complete, Start, Middle, End};
-            static OverlapType _classifyOverlap(off_t offset, size_t length, const CacheEntry& entry) noexcept {
-                assert(entry.isDataValid);
-
-                off_t start = offset;
-                off_t end = start + length;
-                off_t entryStart = entry.dataOffset;
-                off_t entryEnd = entry.dataOffset + entry.data.size();
-
-                bool startsBefore = start <= entryStart;
-                bool startsInside = entryStart < start && start < entryEnd;
-                bool endsAfter = entryEnd <= end;
-                bool endsInside = entryStart < end && end < entryEnd;
+            static OverlapType _classifyOverlap(off_t ofStart, off_t ofEnd, off_t onStart, off_t onEnd) noexcept {
+                bool startsBefore = ofStart <= onStart;
+                bool startsInside = onStart < ofStart && ofStart < onEnd;
+                bool endsAfter = onEnd <= ofEnd;
+                bool endsInside = onStart < ofEnd && ofEnd < onEnd;
 
                 if (startsBefore && endsAfter)
                     return OverlapType::Complete;
@@ -270,6 +330,16 @@ namespace {
                     return OverlapType::End;
                 else
                     return OverlapType::None;
+            }
+            static OverlapType _classifyOverlap(off_t offset, size_t length, const CacheEntry& entry) noexcept {
+                assert(entry.isDataValid);
+
+                off_t start = offset;
+                off_t end = start + length;
+                off_t entryStart = entry.dataOffset;
+                off_t entryEnd = entry.dataOffset + entry.data.size();
+
+                return _classifyOverlap(start, end, entryStart, entryEnd);
             }
     } _cache;
 
@@ -758,7 +828,7 @@ boost::future<size_t> write(const fhandle_t& fh, off_t offset, size_t count, con
 void flush(const fhandle_t& fh) {
     if (ENABLE_CACHING) {
         auto entry = _cache.find(fh);
-        if (entry != _cache.end() && entry->isDataValid && entry->isDataDirty)
+        if (entry != _cache.end() && entry->isDataValid)
             _cache.modify(entry, [](auto& entry) {entry.flush();});
     }
 }
