@@ -48,7 +48,8 @@ namespace {
     constexpr seL4_Word IRQ_BADGE_NETWORK = (1 << 0);
     constexpr seL4_Word IRQ_BADGE_TIMER =   (1 << 1);
 
-    constexpr size_t SWAP_SIZE = memory::pageAlign(static_cast<size_t>(std::numeric_limits<off_t>::max()));
+    // NFSv2 limits us to 2 GiB - 1 B
+    constexpr size_t SWAP_SIZE = memory::pageAlign(2U * 1024 * 1024 * 1024 - 1);
 
     const Capability<seL4_AsyncEndpointObject, seL4_EndpointBits>& _getIrqEndpoint() noexcept {
         static Capability<seL4_AsyncEndpointObject, seL4_EndpointBits> _irqEndpoint;

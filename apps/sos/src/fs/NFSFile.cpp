@@ -7,6 +7,9 @@
 #include "internal/fs/NFSFile.h"
 
 namespace {
+    // NFSv2 limits us to a file size of 2 GiB - 1 B
+    constexpr const off64_t MAX_FILE_SIZE = 2U * 1024 * 1024 * 1024 - 1;
+
     // No read pipelining because our ethernet driver sucks
     constexpr const size_t WRITE_MAX_PIPELINE_DEPTH = 16;
 }
@@ -31,9 +34,9 @@ async::future<ssize_t> NFSFile::_readOne(const IoVector& iov, off64_t offset, bo
     if (offset == fs::CURRENT_OFFSET)
         actualOffset = _currentOffset;
 
-    if (iov.length > std::numeric_limits<off_t>::max() ||
-        actualOffset > std::numeric_limits<off_t>::max() - iov.length)
-        throw std::invalid_argument("Final file offset overflows a off_t");
+    if (iov.length > MAX_FILE_SIZE ||
+        actualOffset > MAX_FILE_SIZE - iov.length)
+        throw std::invalid_argument("Final file offset is larger than what NFSv2 supports");
 
     return memory::UserMemory(iov.buffer).mapIn<uint8_t>(
         iov.length,
@@ -58,9 +61,9 @@ async::future<ssize_t> NFSFile::_writeOne(const IoVector& iov, off64_t offset) {
     if (offset == fs::CURRENT_OFFSET)
         actualOffset = _currentOffset;
 
-    if (iov.length > std::numeric_limits<off_t>::max() ||
-        actualOffset > std::numeric_limits<off_t>::max() - iov.length)
-        throw std::invalid_argument("Final file offset overflows a off_t");
+    if (iov.length > MAX_FILE_SIZE ||
+        actualOffset > MAX_FILE_SIZE - iov.length)
+        throw std::invalid_argument("Final file offset is larger than what NFSv2 supports");
 
     return memory::UserMemory(iov.buffer).mapIn<uint8_t>(
         iov.length,
