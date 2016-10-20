@@ -266,8 +266,9 @@ extern "C" int sys_mmap2(va_list ap) {
         auto result = syscall::handle(process::getSosProcess(), SYS_mmap2, argc, argv);
         assert(result.is_ready());
 
+        int _result = result.get();
         --_recursionDepth;
-        return result.get();
+        return _result;
     } catch (...) {
         --_recursionDepth;
         return -syscall::exceptionToErrno(std::current_exception());
